@@ -10,7 +10,7 @@ Usage:
 
 from clearml import Task
 
-DEFAULT_DOCKER_IMAGE = "vllm/vllm-openai:qwen3_5"
+DEFAULT_DOCKER_IMAGE = "vllm/vllm-openai:v0.8.5.post1"
 DEFAULT_DOCKER_ARGS = "--entrypoint= --network=host --shm-size=16g --gpus all"
 
 VLLM_SERVE_SCRIPT = r"""
@@ -86,8 +86,9 @@ DOCKER_BASH_SETUP = r"""
 echo "=== GPU Info ==="
 nvidia-smi
 nvidia-smi -L
-echo "=== Installing ClearML agent deps ==="
+echo "=== Installing/upgrading deps ==="
 pip install clearml
+pip install --upgrade vllm transformers
 echo "================"
 """
 
