@@ -48,7 +48,7 @@ echo "================"
 def create_qwen3_task(
     project_name: str = "llm-tts-service",
     task_name: str = "vLLM Qwen3.5-9B",
-    queue_name: str = "high_q",
+    queue_name: str = "high_q_2xA100_80",
     model_name: str = "Qwen/Qwen3-8B",
     port: int = 8001,
     gpu_memory_utilization: float = 0.90,
@@ -104,7 +104,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--project", default="llm-tts-service")
     parser.add_argument("--name", default="vLLM Qwen3.5-9B")
-    parser.add_argument("--queue", default="high_q")
+    parser.add_argument("--queue", default="high_q_2xA100_80")
     parser.add_argument("--model", default="Qwen/Qwen3-8B")
     parser.add_argument("--port", type=int, default=8001)
     parser.add_argument("--gpu-mem", type=float, default=0.90,
