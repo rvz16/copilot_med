@@ -10,12 +10,12 @@ Usage:
 
 from clearml import Task
 
-DEFAULT_DOCKER_IMAGE = "vllm/vllm-openai:latest"
+DEFAULT_DOCKER_IMAGE = "vllm/vllm-openai:qwen3_5"
 DEFAULT_DOCKER_ARGS = "--entrypoint= --network=host --shm-size=16g --gpus all"
 
 VLLM_SERVE_SCRIPT = r"""
 import subprocess
-import sys
+import shutil
 
 model = "{model_name}"
 port = {port}
@@ -23,16 +23,30 @@ gpu_memory_utilization = {gpu_memory_utilization}
 max_model_len = {max_model_len}
 tensor_parallel_size = {tensor_parallel_size}
 
-cmd = [
-    sys.executable, "-m", "vllm.entrypoints.openai.api_server",
-    "--model", model,
-    "--port", str(port),
-    "--dtype", "auto",
-    "--gpu-memory-utilization", str(gpu_memory_utilization),
-    "--max-model-len", str(max_model_len),
-    "--tensor-parallel-size", str(tensor_parallel_size),
-    "--disable-log-requests",
-]
+# Use the system vllm binary from the Docker image, not ClearML's venv python
+vllm_bin = shutil.which("vllm")
+if vllm_bin:
+    cmd = [
+        vllm_bin, "serve", model,
+        "--port", str(port),
+        "--dtype", "auto",
+        "--gpu-memory-utilization", str(gpu_memory_utilization),
+        "--max-model-len", str(max_model_len),
+        "--tensor-parallel-size", str(tensor_parallel_size),
+        "--disable-log-requests",
+    ]
+else:
+    # Fallback: call system python3 directly (not ClearML venv)
+    cmd = [
+        "/usr/bin/python3", "-m", "vllm.entrypoints.openai.api_server",
+        "--model", model,
+        "--port", str(port),
+        "--dtype", "auto",
+        "--gpu-memory-utilization", str(gpu_memory_utilization),
+        "--max-model-len", str(max_model_len),
+        "--tensor-parallel-size", str(tensor_parallel_size),
+        "--disable-log-requests",
+    ]
 
 print(f"Starting vLLM server: {{' '.join(cmd)}}")
 subprocess.run(cmd, check=True)
@@ -42,9 +56,8 @@ DOCKER_BASH_SETUP = r"""
 echo "=== GPU Info ==="
 nvidia-smi
 nvidia-smi -L
-echo "=== Installing/upgrading deps ==="
+echo "=== Installing ClearML agent deps ==="
 pip install clearml
-pip install --upgrade transformers
 echo "================"
 """
 
