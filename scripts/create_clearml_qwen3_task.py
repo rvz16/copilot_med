@@ -5,7 +5,7 @@ Create a ClearML task for serving Qwen3.5-9B via vLLM.
 Usage:
     python scripts/create_clearml_qwen3_task.py --queue high_q
     python scripts/create_clearml_qwen3_task.py --queue high_q --port 8001
-    python scripts/create_clearml_qwen3_task.py --queue high_q --model Qwen/Qwen3-8B --port 8001
+    python scripts/create_clearml_qwen3_task.py --queue high_q --model Qwen/Qwen3.5-9B --port 8001
 """
 
 from clearml import Task
@@ -51,7 +51,7 @@ def create_qwen3_task(
     project_name: str = "llm-tts-service",
     task_name: str = "vLLM Qwen3.5-9B",
     queue_name: str = "high_q_2xA100_80",
-    model_name: str = "Qwen/Qwen3-8B",
+    model_name: str = "Qwen/Qwen3.5-9B",
     port: int = 8001,
     gpu_memory_utilization: float = 0.90,
     max_model_len: int = 4096,
@@ -107,7 +107,7 @@ if __name__ == "__main__":
     parser.add_argument("--project", default="llm-tts-service")
     parser.add_argument("--name", default="vLLM Qwen3.5-9B")
     parser.add_argument("--queue", default="high_q_2xA100_80")
-    parser.add_argument("--model", default="Qwen/Qwen3-8B")
+    parser.add_argument("--model", default="Qwen/Qwen3.5-9B")
     parser.add_argument("--port", type=int, default=8001)
     parser.add_argument("--gpu-mem", type=float, default=0.90,
                         help="GPU memory utilization (0.0-1.0)")
