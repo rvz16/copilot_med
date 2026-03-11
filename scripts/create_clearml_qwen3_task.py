@@ -42,8 +42,9 @@ DOCKER_BASH_SETUP = r"""
 echo "=== GPU Info ==="
 nvidia-smi
 nvidia-smi -L
-echo "=== Installing ClearML agent deps ==="
+echo "=== Installing/upgrading deps ==="
 pip install clearml
+pip install --upgrade transformers
 echo "================"
 """
 
