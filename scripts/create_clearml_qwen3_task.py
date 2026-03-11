@@ -75,6 +75,8 @@ def create_qwen3_task(
     task = Task.create(
         project_name=project_name,
         task_name=task_name,
+        repo="https://github.com/rvz16/copilot_med.git",
+        branch="dev-victor",
         script=script_path,
         docker=f"{DEFAULT_DOCKER_IMAGE} {docker_args}" if use_docker else None,
         docker_bash_setup_script=DOCKER_BASH_SETUP if use_docker else None,
