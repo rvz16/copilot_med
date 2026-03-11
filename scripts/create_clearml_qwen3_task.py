@@ -11,7 +11,7 @@ Usage:
 from clearml import Task
 
 DEFAULT_DOCKER_IMAGE = "vllm/vllm-openai:latest"
-DEFAULT_DOCKER_ARGS = "--entrypoint= --network=host --shm-size=8g --gpus all"
+DEFAULT_DOCKER_ARGS = "--entrypoint= --network=host --shm-size=16g --gpus all"
 
 VLLM_SERVE_SCRIPT = r"""
 import subprocess
@@ -21,15 +21,16 @@ model = "{model_name}"
 port = {port}
 gpu_memory_utilization = {gpu_memory_utilization}
 max_model_len = {max_model_len}
+tensor_parallel_size = {tensor_parallel_size}
 
 cmd = [
     sys.executable, "-m", "vllm.entrypoints.openai.api_server",
     "--model", model,
     "--port", str(port),
-    "--dtype", "half",
+    "--dtype", "auto",
     "--gpu-memory-utilization", str(gpu_memory_utilization),
     "--max-model-len", str(max_model_len),
-    "--enforce-eager",
+    "--tensor-parallel-size", str(tensor_parallel_size),
     "--disable-log-requests",
 ]
 
@@ -55,6 +56,7 @@ def create_qwen3_task(
     port: int = 8001,
     gpu_memory_utilization: float = 0.90,
     max_model_len: int = 4096,
+    tensor_parallel_size: int = 2,
     use_docker: bool = True,
 ):
     # Write the inline serve script
@@ -63,6 +65,7 @@ def create_qwen3_task(
         port=port,
         gpu_memory_utilization=gpu_memory_utilization,
         max_model_len=max_model_len,
+        tensor_parallel_size=tensor_parallel_size,
     )
 
     import tempfile
@@ -91,7 +94,7 @@ def create_qwen3_task(
     print(f"\nOnce running, endpoint: http://<AGENT_IP>:{port}/v1")
     print(f"Model: {model_name}")
     print(f"Max context length: {max_model_len}")
-    print(f"\nvLLM flags: --dtype half --enforce-eager --gpu-memory-utilization {gpu_memory_utilization}")
+    print(f"\nvLLM flags: --dtype auto --tensor-parallel-size {tensor_parallel_size} --gpu-memory-utilization {gpu_memory_utilization}")
     print("\nUsage from other scripts:")
     print(f'  client = OpenAI(base_url="http://<AGENT_IP>:{port}/v1", api_key="unused")')
     print(f'  client.chat.completions.create(model="{model_name}", messages=[...])')
@@ -113,6 +116,8 @@ if __name__ == "__main__":
                         help="GPU memory utilization (0.0-1.0)")
     parser.add_argument("--max-model-len", type=int, default=4096,
                         help="Max context length (lower = faster, less VRAM)")
+    parser.add_argument("--tp", type=int, default=2,
+                        help="Tensor parallel size (number of GPUs)")
     parser.add_argument("--no-docker", action="store_true", help="Run without Docker")
     args = parser.parse_args()
 
@@ -124,5 +129,6 @@ if __name__ == "__main__":
         port=args.port,
         gpu_memory_utilization=args.gpu_mem,
         max_model_len=args.max_model_len,
+        tensor_parallel_size=args.tp,
         use_docker=not args.no_docker,
     )
