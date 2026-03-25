@@ -10,6 +10,7 @@ class AssistContext(BaseModel):
     speaker_labels: bool = False
     timestamp: str | None = None
     session_id: str | None = None
+    fhir_base_url: str | None = None
 
     model_config = ConfigDict(extra="ignore")
 
@@ -25,7 +26,7 @@ class AssistRequest(BaseModel):
 
 class ModelInfo(BaseModel):
     name: str
-    quantization: Literal["4bit", "8bit", "none"]
+    quantization: Literal["4bit", "8bit", "none"] = "none"
 
     model_config = ConfigDict(extra="forbid")
 
@@ -91,6 +92,18 @@ class KnowledgeRef(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class PatientContext(BaseModel):
+    """FHIR-derived patient context included in the response."""
+    patient_name: str | None = None
+    gender: str | None = None
+    birth_date: str | None = None
+    conditions: list[str] = Field(default_factory=list)
+    medications: list[str] = Field(default_factory=list)
+    allergies: list[str] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class AssistResponse(BaseModel):
     request_id: str
     latency_ms: int = Field(ge=0)
@@ -99,6 +112,7 @@ class AssistResponse(BaseModel):
     drug_interactions: list[DrugInteraction] = Field(default_factory=list)
     extracted_facts: ExtractedFacts = Field(default_factory=ExtractedFacts)
     knowledge_refs: list[KnowledgeRef] = Field(default_factory=list)
+    patient_context: PatientContext | None = None
     errors: list[str] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="forbid")

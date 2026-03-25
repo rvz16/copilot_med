@@ -7,6 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter
 
+from app.fhir_client import FHIRClient
 from app.heuristics import (
     build_knowledge_refs,
     clamp_confidence,
@@ -16,12 +17,14 @@ from app.heuristics import (
     merge_extracted_facts,
     normalize_text_list,
 )
+from app.llm_client import LLMClient
 from app.schemas import AssistRequest, AssistResponse
 
 
 class AssistController:
-    def __init__(self, runner: Any) -> None:
-        self.runner = runner
+    def __init__(self, llm: LLMClient, fhir: FHIRClient) -> None:
+        self.llm = llm
+        self.fhir = fhir
         self.router = APIRouter(tags=["assist"])
         self._logger = logging.getLogger("medcopilot.assist")
         self._register_routes()
@@ -38,26 +41,55 @@ class AssistController:
     async def health(self) -> dict[str, Any]:
         return {
             "status": "ok",
-            "model": {
-                "name": getattr(self.runner, "model_name", "unknown"),
-                "quantization": getattr(self.runner, "quantization", "none"),
-                "loaded": bool(getattr(self.runner, "is_loaded", False)),
-                "load_error": getattr(self.runner, "load_error", None),
-            },
+            "model": self.llm.model_name,
+            "vllm_url": self.llm.base_url,
+            "fhir_url": self.fhir.base_url,
         }
 
     async def assist(self, payload: AssistRequest) -> AssistResponse:
+        import asyncio
         started = time.perf_counter()
         transcript = payload.transcript_chunk
+        language = payload.context.language
         evidence_defaults = extract_evidence_quotes(transcript, max_quotes=2)
 
-        model_result = self.runner.generate_structured(
-            transcript_chunk=transcript,
-            language=payload.context.language,
-        )
-        model_errors = model_result.get("errors", [])
-        errors = normalize_text_list(model_errors)
+        # --- Run FHIR fetch and LLM call in parallel ---
+        async def fetch_fhir() -> dict[str, Any] | None:
+            if not payload.patient_id:
+                return None
+            fhir_url = payload.context.fhir_base_url or self.fhir.base_url
+            fhir = FHIRClient(base_url=fhir_url, timeout=3.0) if fhir_url != self.fhir.base_url else self.fhir
+            try:
+                return await fhir.get_patient_context(payload.patient_id)
+            except Exception as exc:
+                self._logger.warning("FHIR error: %s", exc)
+                return None
+            finally:
+                if fhir is not self.fhir:
+                    await fhir.close()
 
+        async def call_llm(patient_context_text: str | None = None) -> dict[str, Any]:
+            return await self.llm.generate_structured(
+                transcript_chunk=transcript,
+                language=language,
+                patient_context=patient_context_text,
+            )
+
+        # Run FHIR and LLM concurrently — LLM starts without waiting for FHIR
+        patient_ctx, model_result = await asyncio.gather(
+            fetch_fhir(),
+            call_llm(None),
+        )
+
+        # If FHIR returned context, format it for the response
+        if patient_ctx:
+            patient_context_text = FHIRClient.format_context_for_prompt(patient_ctx)
+        else:
+            patient_context_text = None
+
+        errors = normalize_text_list(model_result.get("errors", []))
+
+        # --- Heuristics ---
         heuristic_facts = extract_facts(transcript)
         merged_facts = merge_extracted_facts(heuristic_facts, model_result.get("extracted_facts", {}))
 
@@ -77,33 +109,33 @@ class AssistController:
         )
 
         latency_ms = int((time.perf_counter() - started) * 1000)
+
         response = AssistResponse(
             request_id=payload.request_id,
             latency_ms=latency_ms,
-            model={
-                "name": getattr(self.runner, "model_name", "unknown"),
-                "quantization": getattr(self.runner, "quantization", "none"),
-            },
+            model={"name": self.llm.model_name, "quantization": "none"},
             suggestions=suggestions,
             drug_interactions=interactions,
             extracted_facts=merged_facts,
             knowledge_refs=knowledge_refs,
+            patient_context=patient_ctx,
             errors=errors,
         )
 
         self._logger.info(
-            json.dumps(
-                {
-                    "event": "assist_completed",
-                    "request_id": payload.request_id,
-                    "latency_ms": latency_ms,
-                    "suggestions_count": len(response.suggestions),
-                    "drug_interactions_count": len(response.drug_interactions),
-                    "errors_count": len(response.errors),
-                }
-            )
+            json.dumps({
+                "event": "assist_completed",
+                "request_id": payload.request_id,
+                "latency_ms": latency_ms,
+                "suggestions_count": len(response.suggestions),
+                "drug_interactions_count": len(response.drug_interactions),
+                "has_patient_context": patient_ctx is not None,
+                "errors_count": len(response.errors),
+            })
         )
         return response
+
+    # --- Merge helpers (unchanged logic) ---
 
     def _merge_suggestions(
         self,
@@ -129,29 +161,23 @@ class AssistController:
                 evidence = normalize_text_list(item.get("evidence", []))[:2]
                 if not evidence:
                     evidence = fallback_evidence
-                suggestions.append(
-                    {
-                        "type": suggestion_type,
-                        "text": " ".join(text.split()),
-                        "confidence": clamp_confidence(item.get("confidence"), 0.5),
-                        "evidence": evidence,
-                    }
-                )
+                suggestions.append({
+                    "type": suggestion_type,
+                    "text": " ".join(text.split()),
+                    "confidence": clamp_confidence(item.get("confidence"), 0.5),
+                    "evidence": evidence,
+                })
 
         if suggestions:
             return suggestions
 
         fallback_text = "Clarify symptom onset, severity, and red-flag progression."
-        if not fallback_evidence:
-            fallback_evidence = []
-        return [
-            {
-                "type": "question_to_ask",
-                "text": fallback_text,
-                "confidence": 0.35,
-                "evidence": fallback_evidence,
-            }
-        ]
+        return [{
+            "type": "question_to_ask",
+            "text": fallback_text,
+            "confidence": 0.35,
+            "evidence": fallback_evidence or [],
+        }]
 
     def _merge_interactions(self, heuristic: Any, model: Any) -> list[dict[str, Any]]:
         merged: dict[tuple[str, str], dict[str, Any]] = {}
@@ -180,11 +206,7 @@ class AssistController:
                 a = item.get("drug_a")
                 b = item.get("drug_b")
                 rationale = item.get("rationale")
-                if not isinstance(a, str) or not a.strip():
-                    continue
-                if not isinstance(b, str) or not b.strip():
-                    continue
-                if not isinstance(rationale, str) or not rationale.strip():
+                if not all(isinstance(v, str) and v.strip() for v in (a, b, rationale)):
                     continue
                 key = tuple(sorted((a.casefold(), b.casefold())))
                 existing = merged.get(key)
@@ -229,12 +251,11 @@ class AssistController:
                 if key in seen:
                     continue
                 seen.add(key)
-                ref = {
+                refs.append({
                     "source": item.get("source") if isinstance(item.get("source"), str) else "mock_kb",
                     "title": " ".join(title.split()),
                     "snippet": " ".join(snippet.split()),
                     "url": item.get("url") if isinstance(item.get("url"), str) else None,
                     "confidence": clamp_confidence(item.get("confidence"), 0.5),
-                }
-                refs.append(ref)
+                })
         return refs
