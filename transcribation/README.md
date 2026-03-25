@@ -1,108 +1,148 @@
 # Whisper STT API
 
-Lightweight Speech-To-Text REST API powered by [faster-whisper](https://github.com/SYSTRAN/faster-whisper) and the [antony66/whisper-large-v3-russian](https://huggingface.co/antony66/whisper-large-v3-russian) model pre-converted with CTranslate2.
+Lightweight Speech-To-Text REST API powered by [faster-whisper](https://github.com/SYSTRAN/faster-whisper) and the Kaggle dataset [`danchik575/whisper-ct2-ru`](https://www.kaggle.com/datasets/danchik575/whisper-ct2-ru).
 
 ## Features
 
-- Single `/transcribe` endpoint — upload `.mp3` or `.wav`, get text back
-- Automatic GPU/CPU detection
-- Fast inference via CTranslate2 (float16 on GPU, int8 on CPU)
-- Docker-ready with separate GPU and CPU configurations
+- `/transcribe` for direct file transcription
+- `/transcribe-chunk` and `/finalize-session-transcript` for Session Manager integration
+- Automatic GPU/CPU detection via CTranslate2
+- Automatic model bootstrap from Kaggle on container startup
+- Docker-ready GPU and CPU variants
 
 ## Prerequisites
 
-- **Model**: place the CTranslate2-converted model folder as `whisper-ct2-ru/` in the project root
-- **ffmpeg**: required at runtime (installed automatically in Docker)
-- **NVIDIA GPU** (optional): CUDA 12.x + drivers for GPU acceleration
+- Kaggle credentials in one of these forms:
+  - `~/.kaggle/kaggle.json`
+  - `~/.kaggle/access_token`
+  - `KAGGLE_API_TOKEN`
+  - `KAGGLE_USERNAME` and `KAGGLE_KEY`
+- `ffmpeg` available locally if you run the app outside Docker
+- NVIDIA GPU only if you want the GPU Docker image
 
-## Run Locally (uv)
+## Run Locally
 
 ```bash
 uv venv --python 3.11 .venv
-
-# Linux / macOS
 source .venv/bin/activate
-
-# Windows
-.venv\Scripts\activate
-
 uv pip install -r pyproject.toml
-
+python scripts/ensure_model.py
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
+`scripts/ensure_model.py` checks whether the model exists at `MODEL_PATH` and downloads it from Kaggle if it does not.
+
 ## Run with Docker
-### GPU Version (Recommended)
+
+### GPU Version
+
 ```bash
 docker compose up --build
 ```
 
 ### CPU Version
+
 ```bash
 docker compose -f docker-compose.cpu.yml up --build
 ```
 
+Both Docker variants:
+
+- mount your local `~/.kaggle` credentials into the container
+- persist the model in a Docker volume at `/models/whisper-ct2-ru`
+- download the model automatically on first startup if missing
+
 ## API
 
-### Health Check
+### Health
+
 ```
 GET /health
 ```
 
+Example response:
+
 ```json
-{"status": "ok", "device": "cuda"}
+{
+  "status": "ok",
+  "service": "transcribation",
+  "device": "cpu",
+  "model_path": "/models/whisper-ct2-ru"
+}
 ```
 
-### Transcribe
+### Direct Transcription
+
 ```
 POST /transcribe
 Content-Type: multipart/form-data
 ```
 
-**cURL example:**
 ```bash
 curl -X POST http://localhost:8000/transcribe \
-  -F "file=@recording.mp3"
+  -F "file=@recording.webm"
 ```
 
-**Response**
+Example response:
 
 ```json
 {
   "text": "Привет, это тестовая запись.",
   "language": "ru",
   "language_probability": 0.9987,
-  "duration": 4.52,
+  "audio_file_duration": 4.52,
   "processing_time_sec": 0.83
 }
 ```
 
+### Session Manager Chunk Transcription
+
+```
+POST /transcribe-chunk
+Content-Type: multipart/form-data
+```
+
+Fields:
+
+- `session_id`
+- `seq`
+- `mime_type`
+- `is_final`
+- `existing_stable_text`
+- `file`
+
+Example response:
+
+```json
+{
+  "session_id": "sess_123",
+  "seq": 1,
+  "mime_type": "audio/webm",
+  "delta_text": "Пациент жалуется на головную боль.",
+  "stable_text": "Пациент жалуется на головную боль.",
+  "source": "whisper_ct2_ru",
+  "event_type": "stable",
+  "language": "ru",
+  "language_probability": 0.9987,
+  "audio_file_duration": 4.52,
+  "processing_time_sec": 0.83
+}
+```
+
+### Finalize Transcript
+
+```
+POST /finalize-session-transcript
+Content-Type: application/json
+```
+
+```json
+{
+  "session_id": "sess_123",
+  "transcript": "Полный накопленный текст."
+}
+```
+
 ## Interactive API Docs
-Open http://localhost:8000/docs for Swagger UI.
 
-
----
-
-## Команды uv для настройки
-
-```bash
-# 1. Create venv with Python 3.11
-uv venv --python 3.11 .venv
-
-# 2. Activate environment
-# Linux / macOS:
-source .venv/bin/activate
-# Windows (PowerShell):
-.venv\Scripts\activate
-
-# 3. Install dependencies
-uv pip install -r pyproject.toml
-
-# 4. Ensure ffmpeg is installed
-
-# Ubuntu/Debian: sudo apt install ffmpeg
-# macOS: brew install ffmpeg
-# Windows: winget install ffmpeg
-
-# 5. Run the server
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+Open [http://localhost:8000/docs](http://localhost:8000/docs).

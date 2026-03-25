@@ -16,10 +16,10 @@ RUN uv venv --python 3.11 .venv && \
     uv pip install --python .venv/bin/python -r pyproject.toml
 
 COPY app/ app/
-COPY whisper-ct2-ru/ whisper-ct2-ru/
+COPY scripts/ scripts/
 
 ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["./scripts/start.sh"]

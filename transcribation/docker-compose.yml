@@ -3,8 +3,27 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    environment:
+      MODEL_PATH: /models/whisper-ct2-ru
+      MODEL_KAGGLE_DATASET: danchik575/whisper-ct2-ru
+      KAGGLE_API_TOKEN: ${KAGGLE_API_TOKEN:-}
+      KAGGLE_USERNAME: ${KAGGLE_USERNAME:-}
+      KAGGLE_KEY: ${KAGGLE_KEY:-}
     ports:
       - "8000:8000"
+    volumes:
+      - transcribation-model:/models
+      - ${HOME}/.kaggle:/root/.kaggle:ro
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status == 200 else 1)
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 180s
     deploy:
       resources:
         reservations:
@@ -13,3 +32,6 @@ services:
               count: 1
               capabilities: [gpu]
     restart: unless-stopped
+
+volumes:
+  transcribation-model:

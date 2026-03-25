@@ -18,6 +18,7 @@ class HttpAsrClient:
         mime_type: str,
         is_final: bool,
         file_path: Path,
+        existing_stable_text: str,
     ) -> dict:
         with httpx.Client(timeout=self.timeout_seconds) as client:
             with file_path.open("rb") as file_stream:
@@ -28,6 +29,7 @@ class HttpAsrClient:
                         "seq": seq,
                         "mime_type": mime_type,
                         "is_final": str(is_final).lower(),
+                        "existing_stable_text": existing_stable_text,
                     },
                     files={"file": (file_path.name, file_stream, mime_type)},
                 )

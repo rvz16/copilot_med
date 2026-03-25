@@ -99,6 +99,7 @@ class HttpAsrProvider:
             mime_type=mime_type,
             is_final=is_final,
             file_path=file_path,
+            existing_stable_text=existing_stable_text,
         )
         stable_text = response.get("stable_text")
         if stable_text is None:

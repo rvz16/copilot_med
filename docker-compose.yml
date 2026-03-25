@@ -1,16 +1,47 @@
 name: medcopilot
 
 services:
+  transcribation:
+    build:
+      context: ./transcribation
+      dockerfile: Dockerfile.cpu
+    environment:
+      MODEL_PATH: /models/whisper-ct2-ru
+      MODEL_KAGGLE_DATASET: danchik575/whisper-ct2-ru
+      KAGGLE_API_TOKEN: ${KAGGLE_API_TOKEN:-}
+      KAGGLE_USERNAME: ${KAGGLE_USERNAME:-}
+      KAGGLE_KEY: ${KAGGLE_KEY:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - transcribation-model:/models
+      - ${HOME}/.kaggle:/root/.kaggle:ro
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status == 200 else 1)
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 180s
+
   session-manager:
     build:
       context: ./backend-session-manager
+    depends_on:
+      transcribation:
+        condition: service_healthy
     environment:
       APP_ENV: container
       HOST: 0.0.0.0
       PORT: 8080
-      ASR_PROVIDER: mock
+      ASR_PROVIDER: http
+      ASR_BASE_URL: http://transcribation:8000
       KNOWLEDGE_EXTRACTOR_MODE: mock
       KNOWLEDGE_EXTRACTOR_ENABLED: "true"
+      HTTP_TIMEOUT_SECONDS: 120
       CORS_ORIGINS: http://localhost:3000,http://localhost:5173
     ports:
       - "8080:8080"
@@ -43,3 +74,4 @@ services:
 
 volumes:
   session-manager-data:
+  transcribation-model:

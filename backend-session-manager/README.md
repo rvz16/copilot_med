@@ -55,7 +55,7 @@ docker run --rm -p 8080:8080 \
 
 ## Docker Compose
 
-From the repository root, run the frontend and backend together with:
+From the repository root, run the full stack with:
 
 ```bash
 docker compose up --build
@@ -65,8 +65,9 @@ This starts:
 
 - frontend on `http://localhost:3000`
 - Session Manager API on `http://localhost:8080`
+- ASR service on `http://localhost:8000`
 
-The compose setup intentionally keeps ASR and knowledge extraction in mock mode so the current missing upstream containers do not block local development.
+In the repository-level compose stack, Session Manager uses the `transcribation` service as its HTTP ASR provider at `http://transcribation:8000`. On first boot that service downloads the Kaggle model `danchik575/whisper-ct2-ru` into a Docker volume if it is not already present. Knowledge extraction remains in mock mode so missing downstream analytics services do not block local development.
 
 ## Tests
 
@@ -88,7 +89,7 @@ pytest
 | `MAX_IN_FLIGHT_REQUESTS` | `1` | Returned in `upload_config` |
 | `ACCEPTED_MIME_TYPES` | `audio/webm,audio/wav` | Advertised upload MIME types |
 | `ASR_PROVIDER` | `mock` | `mock` or HTTP-backed fallback |
-| `ASR_BASE_URL` | empty | Required when `ASR_PROVIDER` is not `mock` |
+| `ASR_BASE_URL` | empty | Required when `ASR_PROVIDER` is not `mock`; in Docker Compose this is `http://transcribation:8000` |
 | `KNOWLEDGE_EXTRACTOR_ENABLED` | `true` | Enables post-session analytics on close |
 | `KNOWLEDGE_EXTRACTOR_MODE` | `mock` | `mock` for local DX, `http` for real external service |
 | `KNOWLEDGE_EXTRACTOR_URL` | `http://localhost:8000/extract` | HTTP extractor endpoint |

@@ -1,13 +1,14 @@
-from faster_whisper import WhisperModel
 from app.config import MODEL_PATH, DEVICE, COMPUTE_TYPE, BEAM_SIZE, LANGUAGE
 
 
-_model: WhisperModel | None = None
+_model = None
 
 
-def load_model() -> WhisperModel:
+def load_model():
     global _model
     if _model is None:
+        from faster_whisper import WhisperModel
+
         _model = WhisperModel(
             model_size_or_path=str(MODEL_PATH),
             device=DEVICE,
