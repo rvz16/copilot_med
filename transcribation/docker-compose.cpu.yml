@@ -1,0 +1,8 @@
+services:
+  stt:
+    build:
+      context: .
+      dockerfile: Dockerfile.cpu
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
