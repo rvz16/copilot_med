@@ -53,6 +53,21 @@ docker run --rm -p 8080:8080 \
   session-manager
 ```
 
+## Docker Compose
+
+From the repository root, run the frontend and backend together with:
+
+```bash
+docker compose up --build
+```
+
+This starts:
+
+- frontend on `http://localhost:3000`
+- Session Manager API on `http://localhost:8080`
+
+The compose setup intentionally keeps ASR and knowledge extraction in mock mode so the current missing upstream containers do not block local development.
+
 ## Tests
 
 ```bash
