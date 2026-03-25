@@ -1,0 +1,16 @@
+services:
+  realtime-insight:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_NAME=qwen3:4b
+      - LLM_BASE_URL=http://host.docker.internal:11434
+      - FHIR_BASE_URL=http://158.160.84.63:8092/hapi-fhir-jpaserver/fhir
+      - MAX_TOKENS=256
+      - TEMPERATURE=0.0
+      - LLM_TIMEOUT=10.0
+      - LOG_LEVEL=INFO
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
