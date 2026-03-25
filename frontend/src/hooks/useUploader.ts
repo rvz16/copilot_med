@@ -7,7 +7,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { api } from '../api';
-import type { Hint } from '../types/types';
+import type { Hint, RealtimeAnalysis } from '../types/types';
 
 export type UploadStatus = 'idle' | 'uploading';
 type QueuedChunk = { blob: Blob; isFinal: boolean };
@@ -15,6 +15,7 @@ type QueuedChunk = { blob: Blob; isFinal: boolean };
 export function useUploader(sessionId: string | null) {
   const [transcript, setTranscript] = useState('');
   const [hints, setHints] = useState<Hint[]>([]);
+  const [latestAnalysis, setLatestAnalysis] = useState<RealtimeAnalysis | null>(null);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [chunksUploaded, setChunksUploaded] = useState(0);
@@ -48,6 +49,9 @@ export function useUploader(sessionId: string | null) {
 
         if (res.transcript_update?.stable_text) {
           setTranscript(res.transcript_update.stable_text);
+        }
+        if (res.realtime_analysis) {
+          setLatestAnalysis(res.realtime_analysis);
         }
         if (res.new_hints && res.new_hints.length > 0) {
           setHints((prev) => [...prev, ...res.new_hints]);
@@ -83,6 +87,7 @@ export function useUploader(sessionId: string | null) {
     isProcessingRef.current = false;
     setTranscript('');
     setHints([]);
+    setLatestAnalysis(null);
     setUploadStatus('idle');
     setUploadError(null);
     setChunksUploaded(0);
@@ -91,6 +96,7 @@ export function useUploader(sessionId: string | null) {
   return {
     transcript,
     hints,
+    latestAnalysis,
     uploadStatus,
     uploadError,
     chunksUploaded,

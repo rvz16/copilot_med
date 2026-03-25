@@ -98,7 +98,7 @@ export default function App() {
 
         <div className="column column-right">
           <TranscriptPanel transcript={uploader.transcript} />
-          <HintsPanel hints={uploader.hints} />
+          <HintsPanel hints={uploader.hints} analysis={uploader.latestAnalysis} />
         </div>
       </main>
 

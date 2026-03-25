@@ -7,6 +7,7 @@ FastAPI-based MVP backend for the MedCoPilot Session Manager. It owns consultati
 - `app/main.py` boots the FastAPI app, CORS, error handlers, and DB lifecycle.
 - `app/services/session_manager.py` contains the session workflow and state transitions.
 - `app/services/asr.py` provides mock and HTTP-backed ASR providers.
+- `app/services/realtime_analysis.py` provides mock and HTTP-backed realtime-analysis providers.
 - `app/services/knowledge_extractor.py` provides mock and HTTP-backed post-session analytics.
 - SQLite stores session state and artifacts; audio chunks are written under `storage/`.
 
@@ -66,8 +67,9 @@ This starts:
 - frontend on `http://localhost:3000`
 - Session Manager API on `http://localhost:8080`
 - ASR service on `http://localhost:8000`
+- Realtime analysis service on `http://localhost:8001`
 
-In the repository-level compose stack, Session Manager uses the `transcribation` service as its HTTP ASR provider at `http://transcribation:8000`. On first boot that service downloads the Kaggle model `danchik575/whisper-ct2-ru` into a Docker volume if it is not already present. Knowledge extraction remains in mock mode so missing downstream analytics services do not block local development.
+In the repository-level compose stack, Session Manager uses the `transcribation` service as its HTTP ASR provider at `http://transcribation:8000` and the `realtime-analysis` service at `http://realtime-analysis:8000/v1/assist` for per-chunk clinical analysis. On first boot the ASR service downloads the Kaggle model `danchik575/whisper-ct2-ru` into a Docker volume if it is not already present. The realtime-analysis container expects Ollama on the host by default but still degrades to heuristic output if the LLM endpoint is unavailable. Knowledge extraction remains in mock mode so missing downstream analytics services do not block local development.
 
 ## Tests
 
@@ -90,6 +92,11 @@ pytest
 | `ACCEPTED_MIME_TYPES` | `audio/webm,audio/wav` | Advertised upload MIME types |
 | `ASR_PROVIDER` | `mock` | `mock` or HTTP-backed fallback |
 | `ASR_BASE_URL` | empty | Required when `ASR_PROVIDER` is not `mock`; in Docker Compose this is `http://transcribation:8000` |
+| `REALTIME_ANALYSIS_ENABLED` | `false` | Enables realtime analysis during chunk uploads |
+| `REALTIME_ANALYSIS_MODE` | `mock` | `mock` for local DX, `http` for the realtime-analysis container |
+| `REALTIME_ANALYSIS_URL` | `http://localhost:8001/v1/assist` | HTTP realtime-analysis endpoint |
+| `REALTIME_ANALYSIS_LANGUAGE` | `ru` | Language sent in the realtime-analysis request context |
+| `REALTIME_ANALYSIS_TIMEOUT_SECONDS` | `8` | Timeout budget for each realtime-analysis call |
 | `KNOWLEDGE_EXTRACTOR_ENABLED` | `true` | Enables post-session analytics on close |
 | `KNOWLEDGE_EXTRACTOR_MODE` | `mock` | `mock` for local DX, `http` for real external service |
 | `KNOWLEDGE_EXTRACTOR_URL` | `http://localhost:8000/extract` | HTTP extractor endpoint |

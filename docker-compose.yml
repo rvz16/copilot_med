@@ -27,11 +27,39 @@ services:
       retries: 20
       start_period: 180s
 
+  realtime-analysis:
+    build:
+      context: ./real_time_analysis
+    environment:
+      MODEL_NAME: ${REALTIME_ANALYSIS_MODEL_NAME:-qwen3:4b}
+      LLM_BASE_URL: ${REALTIME_ANALYSIS_LLM_BASE_URL:-http://host.docker.internal:11434}
+      FHIR_BASE_URL: ${REALTIME_ANALYSIS_FHIR_BASE_URL:-http://158.160.84.63:8092/hapi-fhir-jpaserver/fhir}
+      MAX_TOKENS: ${REALTIME_ANALYSIS_MAX_TOKENS:-256}
+      TEMPERATURE: ${REALTIME_ANALYSIS_TEMPERATURE:-0.0}
+      LLM_TIMEOUT: ${REALTIME_ANALYSIS_LLM_TIMEOUT:-8.0}
+      LOG_LEVEL: ${REALTIME_ANALYSIS_LOG_LEVEL:-INFO}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8001:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status == 200 else 1)
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
   session-manager:
     build:
       context: ./backend-session-manager
     depends_on:
       transcribation:
+        condition: service_healthy
+      realtime-analysis:
         condition: service_healthy
     environment:
       APP_ENV: container
@@ -39,6 +67,11 @@ services:
       PORT: 8080
       ASR_PROVIDER: http
       ASR_BASE_URL: http://transcribation:8000
+      REALTIME_ANALYSIS_ENABLED: "true"
+      REALTIME_ANALYSIS_MODE: http
+      REALTIME_ANALYSIS_URL: http://realtime-analysis:8000/v1/assist
+      REALTIME_ANALYSIS_LANGUAGE: ${REALTIME_ANALYSIS_LANGUAGE:-ru}
+      REALTIME_ANALYSIS_TIMEOUT_SECONDS: ${REALTIME_ANALYSIS_TIMEOUT_SECONDS:-8}
       KNOWLEDGE_EXTRACTOR_MODE: mock
       KNOWLEDGE_EXTRACTOR_ENABLED: "true"
       HTTP_TIMEOUT_SECONDS: 120

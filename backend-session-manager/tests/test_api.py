@@ -75,6 +75,7 @@ def test_upload_chunk_success_for_seq_one(client: TestClient):
     assert body["recording_state"] == "recording"
     assert body["ack"]["received_seq"] == 1
     assert body["transcript_update"]["stable_text"].startswith("Patient reports headache")
+    assert body["realtime_analysis"] is None
 
 
 def test_upload_chunk_invalid_session_returns_404(client: TestClient):
@@ -198,6 +199,43 @@ def test_hints_retrieval_endpoint_works(client: TestClient):
     assert body["session_id"] == session_id
     assert len(body["items"]) == 1
     assert body["items"][0]["type"] == "followup_hint"
+
+
+def test_upload_chunk_includes_realtime_analysis_when_enabled(app_factory):
+    app = app_factory(
+        REALTIME_ANALYSIS_ENABLED=True,
+        REALTIME_ANALYSIS_MODE="mock",
+    )
+    with TestClient(app) as client:
+        session_id = create_session(client)
+
+        response = upload_chunk(client, session_id, seq=1)
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["realtime_analysis"] is not None
+        assert body["realtime_analysis"]["model"]["name"] == "mock-realtime-analysis"
+        assert body["realtime_analysis"]["suggestions"][0]["type"] == "question_to_ask"
+        assert len(body["new_hints"]) >= 1
+
+
+def test_realtime_analysis_failure_falls_back_to_local_hints(app_factory):
+    app = app_factory(
+        REALTIME_ANALYSIS_ENABLED=True,
+        REALTIME_ANALYSIS_MODE="http",
+        REALTIME_ANALYSIS_URL="http://127.0.0.1:1/v1/assist",
+        REALTIME_ANALYSIS_TIMEOUT_SECONDS=1,
+    )
+    with TestClient(app) as client:
+        session_id = create_session(client)
+
+        response = upload_chunk(client, session_id, seq=1)
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["realtime_analysis"] is None
+        assert len(body["new_hints"]) == 1
+        assert body["new_hints"][0]["type"] == "followup_hint"
 
 
 def test_repeated_stop_is_idempotent(client: TestClient):

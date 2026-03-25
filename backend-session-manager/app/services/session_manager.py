@@ -18,6 +18,7 @@ from app.schemas.session import (
     HintResponse,
     HintsResponse,
     ListSessionsResponse,
+    RealtimeAnalysisResponse,
     SessionDetailResponse,
     StopRecordingResponse,
     TranscriptEventResponse,
@@ -28,6 +29,7 @@ from app.schemas.session import (
 from app.services.asr import AsrProvider
 from app.services.hints import HintService
 from app.services.knowledge_extractor import KnowledgeExtractorProvider
+from app.services.realtime_analysis import RealtimeAnalysisProvider
 from app.services.storage import StorageService
 
 logger = logging.getLogger(__name__)
@@ -48,6 +50,7 @@ class SessionService:
         storage_service: StorageService,
         asr_provider: AsrProvider,
         hint_service: HintService,
+        realtime_analysis: RealtimeAnalysisProvider,
         knowledge_extractor: KnowledgeExtractorProvider,
     ) -> None:
         self.db = db
@@ -55,6 +58,7 @@ class SessionService:
         self.storage_service = storage_service
         self.asr_provider = asr_provider
         self.hint_service = hint_service
+        self.realtime_analysis = realtime_analysis
         self.knowledge_extractor = knowledge_extractor
 
     def create_session(self, doctor_id: str, patient_id: str) -> CreateSessionResponse:
@@ -118,6 +122,7 @@ class SessionService:
             session.recording_state = "recording"
 
         transcript_update: TranscriptUpdate | None = None
+        realtime_analysis_response: RealtimeAnalysisResponse | None = None
         new_hints: list[HintResponse] = []
         last_error: str | None = None
 
@@ -160,10 +165,59 @@ class SessionService:
                     )
                 )
                 existing_pairs = {(hint.type, hint.message) for hint in session.hints}
-                hints_payload = self.hint_service.generate(
-                    session_id=session.session_id,
-                    stable_text=transcription.stable_text,
-                    existing_pairs=existing_pairs,
+                hints_payload: list[dict] = []
+                if self.settings.realtime_analysis_enabled and transcription.stable_text.strip():
+                    analysis_payload = {
+                        "request_id": f"{session.session_id}-seq-{seq}",
+                        "patient_id": session.patient_id,
+                        "transcript_chunk": transcription.stable_text,
+                        "context": {
+                            "language": self.settings.realtime_analysis_language,
+                            "session_id": session.session_id,
+                        },
+                    }
+                    try:
+                        analysis_raw = self.realtime_analysis.analyze(analysis_payload)
+                        realtime_analysis_response = RealtimeAnalysisResponse.model_validate(analysis_raw)
+                        self._log_external_call(
+                            session=session,
+                            service_name=self.realtime_analysis.service_name,
+                            endpoint=self.realtime_analysis.endpoint,
+                            request_payload=analysis_payload,
+                            response_payload=realtime_analysis_response.model_dump(mode="json"),
+                            status="success",
+                            error_message=None,
+                        )
+                        hints_payload.extend(
+                            self.hint_service.generate_from_realtime_analysis(
+                                session_id=session.session_id,
+                                analysis=realtime_analysis_response.model_dump(mode="json"),
+                                existing_pairs=existing_pairs,
+                            )
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "Realtime analysis failed for session %s seq %s: %s",
+                            session.session_id,
+                            seq,
+                            exc,
+                        )
+                        self._log_external_call(
+                            session=session,
+                            service_name=self.realtime_analysis.service_name,
+                            endpoint=self.realtime_analysis.endpoint,
+                            request_payload=analysis_payload,
+                            response_payload=None,
+                            status="failed",
+                            error_message=str(exc),
+                        )
+
+                hints_payload.extend(
+                    self.hint_service.generate(
+                        session_id=session.session_id,
+                        stable_text=transcription.stable_text,
+                        existing_pairs=existing_pairs,
+                    )
                 )
                 for payload in hints_payload:
                     hint = Hint(
@@ -204,6 +258,7 @@ class SessionService:
             recording_state=session.recording_state,
             ack=Ack(received_seq=seq),
             transcript_update=transcript_update,
+            realtime_analysis=realtime_analysis_response,
             new_hints=new_hints,
             last_error=last_error,
         )

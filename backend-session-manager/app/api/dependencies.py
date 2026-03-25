@@ -8,6 +8,7 @@ from app.db.session import Database
 from app.services.asr import build_asr_provider
 from app.services.hints import HintService
 from app.services.knowledge_extractor import build_knowledge_extractor_provider
+from app.services.realtime_analysis import build_realtime_analysis_provider
 from app.services.session_manager import SessionService
 from app.services.storage import StorageService
 
@@ -39,5 +40,6 @@ def get_session_service(
         storage_service=StorageService(settings.storage_dir),
         asr_provider=build_asr_provider(settings),
         hint_service=HintService(),
+        realtime_analysis=build_realtime_analysis_provider(settings),
         knowledge_extractor=build_knowledge_extractor_provider(settings),
     )

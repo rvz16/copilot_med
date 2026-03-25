@@ -38,8 +38,74 @@ export interface Hint {
   hint_id: string;
   type: string;
   message: string;
-  confidence: number;
+  confidence: number | null;
   severity?: string;
+}
+
+export interface RealtimeModelInfo {
+  name: string;
+  quantization: string;
+}
+
+export interface RealtimeSuggestion {
+  type: string;
+  text: string;
+  confidence: number;
+  evidence: string[];
+}
+
+export interface RealtimeDrugInteraction {
+  drug_a: string;
+  drug_b: string;
+  severity: string;
+  rationale: string;
+  confidence: number;
+}
+
+export interface RealtimeVitals {
+  age: number | null;
+  weight_kg: number | null;
+  height_cm: number | null;
+  bp: string | null;
+  hr: number | null;
+  temp_c: number | null;
+}
+
+export interface RealtimeExtractedFacts {
+  symptoms: string[];
+  conditions: string[];
+  medications: string[];
+  allergies: string[];
+  vitals: RealtimeVitals;
+}
+
+export interface RealtimeKnowledgeRef {
+  source: string;
+  title: string;
+  snippet: string;
+  url: string | null;
+  confidence: number;
+}
+
+export interface RealtimePatientContext {
+  patient_name: string | null;
+  gender: string | null;
+  birth_date: string | null;
+  conditions: string[];
+  medications: string[];
+  allergies: string[];
+}
+
+export interface RealtimeAnalysis {
+  request_id: string;
+  latency_ms: number;
+  model: RealtimeModelInfo;
+  suggestions: RealtimeSuggestion[];
+  drug_interactions: RealtimeDrugInteraction[];
+  extracted_facts: RealtimeExtractedFacts;
+  knowledge_refs: RealtimeKnowledgeRef[];
+  patient_context: RealtimePatientContext | null;
+  errors: string[];
 }
 
 export interface AudioChunkResponse {
@@ -50,6 +116,7 @@ export interface AudioChunkResponse {
   recording_state: string;
   ack: Ack;
   transcript_update: TranscriptUpdate | null;
+  realtime_analysis: RealtimeAnalysis | null;
   new_hints: Hint[];
   last_error: string | null;
 }

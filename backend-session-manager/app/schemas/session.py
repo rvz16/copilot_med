@@ -52,6 +52,72 @@ class TranscriptUpdate(ApiBaseModel):
     stable_text: str
 
 
+class RealtimeModelInfo(ApiBaseModel):
+    name: str
+    quantization: str
+
+
+class RealtimeSuggestion(ApiBaseModel):
+    type: str
+    text: str
+    confidence: float
+    evidence: list[str]
+
+
+class RealtimeDrugInteraction(ApiBaseModel):
+    drug_a: str
+    drug_b: str
+    severity: str
+    rationale: str
+    confidence: float
+
+
+class RealtimeVitals(ApiBaseModel):
+    age: int | None = None
+    weight_kg: float | None = None
+    height_cm: float | None = None
+    bp: str | None = None
+    hr: int | None = None
+    temp_c: float | None = None
+
+
+class RealtimeExtractedFacts(ApiBaseModel):
+    symptoms: list[str] = Field(default_factory=list)
+    conditions: list[str] = Field(default_factory=list)
+    medications: list[str] = Field(default_factory=list)
+    allergies: list[str] = Field(default_factory=list)
+    vitals: RealtimeVitals = Field(default_factory=RealtimeVitals)
+
+
+class RealtimeKnowledgeRef(ApiBaseModel):
+    source: str
+    title: str
+    snippet: str
+    url: str | None = None
+    confidence: float
+
+
+class RealtimePatientContext(ApiBaseModel):
+    patient_name: str | None = None
+    gender: str | None = None
+    birth_date: str | None = None
+    conditions: list[str] = Field(default_factory=list)
+    medications: list[str] = Field(default_factory=list)
+    allergies: list[str] = Field(default_factory=list)
+
+
+class RealtimeAnalysisResponse(ApiBaseModel):
+    request_id: str
+    latency_ms: int
+    model: RealtimeModelInfo
+    suggestions: list[RealtimeSuggestion] = Field(default_factory=list)
+    drug_interactions: list[RealtimeDrugInteraction] = Field(default_factory=list)
+    extracted_facts: RealtimeExtractedFacts = Field(default_factory=RealtimeExtractedFacts)
+    knowledge_refs: list[RealtimeKnowledgeRef] = Field(default_factory=list)
+    patient_context: RealtimePatientContext | None = None
+    errors: list[str] = Field(default_factory=list)
+
+
 class HintResponse(ApiBaseModel):
     hint_id: str
     type: str
@@ -68,6 +134,7 @@ class AudioChunkResponse(ApiBaseModel):
     recording_state: str
     ack: Ack
     transcript_update: TranscriptUpdate | None = None
+    realtime_analysis: RealtimeAnalysisResponse | None = None
     new_hints: list[HintResponse]
     last_error: str | None = None
 

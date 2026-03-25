@@ -68,6 +68,7 @@ describe('sessionApi', () => {
       recording_state: 'recording',
       ack: { received_seq: 1 },
       transcript_update: { delta_text: 'Hello', stable_text: 'Hello' },
+      realtime_analysis: null,
       new_hints: [],
       last_error: null,
     };

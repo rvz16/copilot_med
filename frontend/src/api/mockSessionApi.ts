@@ -9,6 +9,7 @@ import type {
   CloseSessionResponse,
   CreateSessionResponse,
   Hint,
+  RealtimeAnalysis,
   SessionApi,
   StopRecordingResponse,
 } from '../types/types';
@@ -54,6 +55,43 @@ const SAMPLE_HINTS: Hint[] = [
 
 let mockSessionCounter = 0;
 
+function buildRealtimeAnalysis(stableText: string, seq: number): RealtimeAnalysis {
+  return {
+    request_id: `mock-analysis-${seq}`,
+    latency_ms: 25,
+    model: {
+      name: 'mock-realtime-analysis',
+      quantization: 'none',
+    },
+    suggestions: [
+      {
+        type: 'question_to_ask',
+        text: 'Clarify symptom severity and progression.',
+        confidence: 0.8,
+        evidence: [stableText],
+      },
+    ],
+    drug_interactions: [],
+    extracted_facts: {
+      symptoms: stableText.toLowerCase().includes('headache') ? ['headache'] : [],
+      conditions: [],
+      medications: [],
+      allergies: [],
+      vitals: {
+        age: null,
+        weight_kg: null,
+        height_cm: null,
+        bp: null,
+        hr: null,
+        temp_c: null,
+      },
+    },
+    knowledge_refs: [],
+    patient_context: null,
+    errors: [],
+  };
+}
+
 export const mockSessionApi: SessionApi = {
   async createSession(doctorId, patientId) {
     void doctorId;
@@ -98,6 +136,7 @@ export const mockSessionApi: SessionApi = {
       recording_state: 'recording',
       ack: { received_seq: seq },
       transcript_update: { delta_text: deltaText, stable_text: stableText },
+      realtime_analysis: buildRealtimeAnalysis(stableText, seq),
       new_hints: newHints,
       last_error: null,
     };

@@ -31,6 +31,17 @@ class Settings(BaseSettings):
     )
     asr_provider: str = Field(default="mock", alias="ASR_PROVIDER")
     asr_base_url: str | None = Field(default=None, alias="ASR_BASE_URL")
+    realtime_analysis_enabled: bool = Field(default=False, alias="REALTIME_ANALYSIS_ENABLED")
+    realtime_analysis_mode: str = Field(default="mock", alias="REALTIME_ANALYSIS_MODE")
+    realtime_analysis_url: str = Field(
+        default="http://localhost:8001/v1/assist",
+        alias="REALTIME_ANALYSIS_URL",
+    )
+    realtime_analysis_language: str = Field(default="ru", alias="REALTIME_ANALYSIS_LANGUAGE")
+    realtime_analysis_timeout_seconds: int = Field(
+        default=8,
+        alias="REALTIME_ANALYSIS_TIMEOUT_SECONDS",
+    )
     knowledge_extractor_enabled: bool = Field(default=True, alias="KNOWLEDGE_EXTRACTOR_ENABLED")
     knowledge_extractor_mode: str = Field(default="mock", alias="KNOWLEDGE_EXTRACTOR_MODE")
     knowledge_extractor_url: str = Field(
