@@ -12,7 +12,7 @@ FastAPI-based MVP backend for the MedCoPilot Session Manager. It owns consultati
 
 ## Local Setup
 
-Run everything from the `backend/` directory:
+Run everything from the `backend-session-manager/` directory:
 
 ```bash
 python -m venv .venv
@@ -28,6 +28,45 @@ uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
 The frontend already defaults to `http://localhost:8080`, so no frontend URL override is needed for local integration.
+
+## Docker
+
+Build the image from the repository root:
+
+```bash
+docker build -t session-manager ./backend-session-manager
+```
+
+Run the container with the backend exposed on port `8080`:
+
+```bash
+docker run --rm -p 8080:8080 -v session-manager-data:/app/data session-manager
+```
+
+The image stores the SQLite database and uploaded chunks under `/app/data`, so the named volume keeps session state across container restarts. Override environment variables with `-e KEY=value` when needed, for example:
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e CORS_ORIGINS=http://localhost:5173 \
+  -e KNOWLEDGE_EXTRACTOR_MODE=mock \
+  -v session-manager-data:/app/data \
+  session-manager
+```
+
+## Docker Compose
+
+From the repository root, run the frontend and backend together with:
+
+```bash
+docker compose up --build
+```
+
+This starts:
+
+- frontend on `http://localhost:3000`
+- Session Manager API on `http://localhost:8080`
+
+The compose setup intentionally keeps ASR and knowledge extraction in mock mode so the current missing upstream containers do not block local development.
 
 ## Tests
 

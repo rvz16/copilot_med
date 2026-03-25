@@ -12,7 +12,12 @@ import type {
   StopRecordingResponse,
 } from '../types/types';
 
-const BASE_URL = import.meta.env.VITE_SESSION_MANAGER_URL ?? 'http://localhost:8080';
+const configuredBaseUrl = import.meta.env.VITE_SESSION_MANAGER_URL?.trim() ?? '';
+const BASE_URL = configuredBaseUrl.replace(/\/+$/, '');
+
+function withBaseUrl(path: string): string {
+  return `${BASE_URL}${path}`;
+}
 
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -26,7 +31,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 export const sessionApi: SessionApi = {
   async createSession(doctorId, patientId) {
-    const res = await fetch(`${BASE_URL}/api/v1/sessions`, {
+    const res = await fetch(withBaseUrl('/api/v1/sessions'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ doctor_id: doctorId, patient_id: patientId }),
@@ -42,39 +47,33 @@ export const sessionApi: SessionApi = {
     form.append('mime_type', mimeType);
     form.append('is_final', String(isFinal));
 
-    const res = await fetch(
-      `${BASE_URL}/api/v1/sessions/${sessionId}/audio-chunks`,
-      { method: 'POST', body: form },
-    );
+    const res = await fetch(withBaseUrl(`/api/v1/sessions/${sessionId}/audio-chunks`), {
+      method: 'POST',
+      body: form,
+    });
     return handleResponse<AudioChunkResponse>(res);
   },
 
   async stopRecording(sessionId) {
-    const res = await fetch(
-      `${BASE_URL}/api/v1/sessions/${sessionId}/stop`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: 'user_stopped_recording' }),
-      },
-    );
+    const res = await fetch(withBaseUrl(`/api/v1/sessions/${sessionId}/stop`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'user_stopped_recording' }),
+    });
     return handleResponse<StopRecordingResponse>(res);
   },
 
   async closeSession(sessionId) {
-    const res = await fetch(
-      `${BASE_URL}/api/v1/sessions/${sessionId}/close`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trigger_post_session_analytics: true }),
-      },
-    );
+    const res = await fetch(withBaseUrl(`/api/v1/sessions/${sessionId}/close`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trigger_post_session_analytics: true }),
+    });
     return handleResponse<CloseSessionResponse>(res);
   },
 
   async healthCheck() {
-    const res = await fetch(`${BASE_URL}/health`);
+    const res = await fetch(withBaseUrl('/health'));
     return handleResponse<HealthResponse>(res);
   },
 };

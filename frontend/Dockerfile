@@ -9,8 +9,10 @@ RUN npm ci
 COPY . .
 
 # Set default env vars for the Vite build (since .env is in .dockerignore)
+# Leave VITE_SESSION_MANAGER_URL empty to keep API requests same-origin and let
+# Nginx proxy them to the backend container at runtime.
 ARG VITE_USE_MOCK=true
-ARG VITE_SESSION_MANAGER_URL=http://localhost:8080
+ARG VITE_SESSION_MANAGER_URL=
 ENV VITE_USE_MOCK=$VITE_USE_MOCK
 ENV VITE_SESSION_MANAGER_URL=$VITE_SESSION_MANAGER_URL
 

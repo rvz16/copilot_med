@@ -45,6 +45,14 @@ npm run build
 npm run preview   # serve the built files locally
 ```
 
+For a full frontend + backend stack, use Docker Compose from the repository root:
+
+```bash
+docker compose up --build
+```
+
+The frontend is then available at [http://localhost:3000](http://localhost:3000), and the backend API remains exposed at [http://localhost:8080](http://localhost:8080).
+
 ### Docker
 
 ```bash
@@ -52,22 +60,27 @@ npm run preview   # serve the built files locally
 docker build -t medcopilot-frontend .
 
 # Run (mock mode — frontend handles mocking client-side)
-docker run -p 8080:80 medcopilot-frontend
+docker run -p 3000:80 medcopilot-frontend
+
+# Build against a real Session Manager
+docker build -t medcopilot-frontend-real \
+  --build-arg VITE_USE_MOCK=false \
+  .
 
 # Run with a real Session Manager
-docker run -p 8080:80 \
+docker run -p 3000:80 \
   -e SESSION_MANAGER_UPSTREAM=http://host.docker.internal:8080 \
-  medcopilot-frontend
+  medcopilot-frontend-real
 ```
 
-Visit [http://localhost:8080](http://localhost:8080).
+Visit [http://localhost:3000](http://localhost:3000).
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
-| `VITE_SESSION_MANAGER_URL` | `http://localhost:8080` | Session Manager base URL (used by the Vite dev server) |
-| `VITE_USE_MOCK` | `true` | Set to `true` to use the built-in mock API (no backend needed) |
+| `VITE_SESSION_MANAGER_URL` | empty | Optional build-time API base URL override. Leave empty for same-origin requests; during `npm run dev`, the Vite proxy targets `http://localhost:8080` unless overridden. |
+| `VITE_USE_MOCK` | `true` | Build-time flag. Set to `true` to use the built-in mock API (no backend needed). |
 | `SESSION_MANAGER_UPSTREAM` | `http://session-manager:8080` | Nginx reverse-proxy upstream (Docker only) |
 
 ## Mock Mode
@@ -82,8 +95,10 @@ When `VITE_USE_MOCK=true` (the default), the frontend uses a deterministic mock 
 To switch to the real backend:
 
 ```bash
-VITE_USE_MOCK=false VITE_SESSION_MANAGER_URL=http://localhost:8080 npm run dev
+VITE_USE_MOCK=false npm run dev
 ```
+
+If the backend is not running at `http://localhost:8080`, also set `VITE_SESSION_MANAGER_URL` to the correct base URL before starting Vite.
 
 ## User Flow
 
