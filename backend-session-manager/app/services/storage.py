@@ -19,6 +19,21 @@ class StorageService:
         file_path.write_bytes(content)
         return file_path
 
+    def append_to_recording(self, session_id: str, seq: int, mime_type: str, content: bytes) -> Path:
+        session_dir = self.base_dir / "sessions" / session_id
+        session_dir.mkdir(parents=True, exist_ok=True)
+        file_path = session_dir / f"recording{self._recording_extension(session_dir, mime_type)}"
+        mode = "wb" if seq == 1 else "ab"
+        with file_path.open(mode) as file_obj:
+            file_obj.write(content)
+        return file_path
+
+    def _recording_extension(self, session_dir: Path, mime_type: str) -> str:
+        existing_recording = next(session_dir.glob("recording.*"), None)
+        if existing_recording is not None:
+            return existing_recording.suffix
+        return self._extension_for_mime_type(mime_type)
+
     @staticmethod
     def _extension_for_mime_type(mime_type: str) -> str:
         normalized = mime_type.lower()

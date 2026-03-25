@@ -45,6 +45,71 @@ def merge_transcripts(existing_stable_text: str, delta_text: str) -> str:
     return f"{existing} {delta}"
 
 
+def normalize_text(text: str) -> str:
+    return " ".join(text.split())
+
+
+def tokenize(text: str) -> list[str]:
+    normalized = normalize_text(text)
+    if not normalized:
+        return []
+    return normalized.split(" ")
+
+
+def token_signature(token: str) -> str:
+    return token.strip(".,!?;:").casefold()
+
+
+def count_prefix_matches(left: list[str], right: list[str]) -> int:
+    matches = 0
+    for left_token, right_token in zip(left, right):
+        if token_signature(left_token) != token_signature(right_token):
+            break
+        matches += 1
+    return matches
+
+
+def longest_suffix_prefix_overlap(left: list[str], right: list[str]) -> int:
+    max_overlap = min(len(left), len(right))
+    for overlap in range(max_overlap, 0, -1):
+        left_tail = left[-overlap:]
+        right_head = right[:overlap]
+        if all(
+            token_signature(left_token) == token_signature(right_token)
+            for left_token, right_token in zip(left_tail, right_head)
+        ):
+            return overlap
+    return 0
+
+
+def compute_transcript_update(existing_stable_text: str, current_text: str) -> tuple[str, str]:
+    existing_tokens = tokenize(existing_stable_text)
+    current_tokens = tokenize(current_text)
+
+    if not current_tokens:
+        return "", normalize_text(existing_stable_text)
+    if not existing_tokens:
+        normalized_current = " ".join(current_tokens)
+        return normalized_current, normalized_current
+
+    prefix_matches = count_prefix_matches(existing_tokens, current_tokens)
+
+    if prefix_matches == len(current_tokens):
+        return "", " ".join(existing_tokens)
+
+    if prefix_matches == len(existing_tokens):
+        delta_tokens = current_tokens[len(existing_tokens) :]
+        return " ".join(delta_tokens), " ".join(current_tokens)
+
+    overlap = longest_suffix_prefix_overlap(existing_tokens, current_tokens)
+    delta_tokens = current_tokens[overlap:]
+    if overlap > 0:
+        return " ".join(delta_tokens), " ".join(existing_tokens + delta_tokens)
+
+    normalized_current = " ".join(current_tokens)
+    return normalized_current, merge_transcripts(" ".join(existing_tokens), normalized_current)
+
+
 def run_transcription(file_content: bytes, extension: str) -> tuple[dict, float]:
     with tempfile.NamedTemporaryFile(suffix=extension, delete=True) as tmp:
         tmp.write(file_content)
@@ -79,8 +144,7 @@ async def transcribe_chunk(
     content = await file.read()
     ext = validate_upload(file, content)
     result, elapsed = run_transcription(content, ext)
-    delta_text = result["text"].strip()
-    stable_text = merge_transcripts(existing_stable_text, delta_text)
+    delta_text, stable_text = compute_transcript_update(existing_stable_text, result["text"])
 
     return {
         "session_id": session_id,

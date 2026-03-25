@@ -8,7 +8,7 @@ import { useCallback, useRef, useState } from 'react';
 
 export interface UseRecorderOptions {
   chunkMs?: number;
-  onChunk: (blob: Blob) => void;
+  onChunk: (blob: Blob, isFinal: boolean) => void;
 }
 
 export function useRecorder({ chunkMs = 4000, onChunk }: UseRecorderOptions) {
@@ -16,6 +16,7 @@ export function useRecorder({ chunkMs = 4000, onChunk }: UseRecorderOptions) {
   const [micError, setMicError] = useState<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const stopRequestedRef = useRef(false);
 
   const startRecording = useCallback(async () => {
     try {
@@ -30,11 +31,20 @@ export function useRecorder({ chunkMs = 4000, onChunk }: UseRecorderOptions) {
 
       const recorder = new MediaRecorder(stream, { mimeType });
       recorderRef.current = recorder;
+      stopRequestedRef.current = false;
 
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
-          onChunk(e.data);
+          const isFinalChunk = stopRequestedRef.current;
+          onChunk(e.data, isFinalChunk);
+          if (isFinalChunk) {
+            stopRequestedRef.current = false;
+          }
         }
+      };
+      recorder.onstop = () => {
+        recorderRef.current = null;
+        stopRequestedRef.current = false;
       };
 
       recorder.start(chunkMs);
@@ -52,13 +62,13 @@ export function useRecorder({ chunkMs = 4000, onChunk }: UseRecorderOptions) {
 
   const stopRecording = useCallback(() => {
     if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+      stopRequestedRef.current = true;
       recorderRef.current.stop();
     }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
-    recorderRef.current = null;
     setIsRecording(false);
   }, []);
 

@@ -10,6 +10,7 @@ import { api } from '../api';
 import type { Hint } from '../types/types';
 
 export type UploadStatus = 'idle' | 'uploading';
+type QueuedChunk = { blob: Blob; isFinal: boolean };
 
 export function useUploader(sessionId: string | null) {
   const [transcript, setTranscript] = useState('');
@@ -18,7 +19,7 @@ export function useUploader(sessionId: string | null) {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [chunksUploaded, setChunksUploaded] = useState(0);
 
-  const queueRef = useRef<Blob[]>([]);
+  const queueRef = useRef<QueuedChunk[]>([]);
   const seqRef = useRef(0);
   const isProcessingRef = useRef(false);
 
@@ -30,10 +31,9 @@ export function useUploader(sessionId: string | null) {
     setUploadStatus('uploading');
 
     while (queueRef.current.length > 0) {
-      const blob = queueRef.current.shift()!;
+      const { blob, isFinal } = queueRef.current.shift()!;
       seqRef.current += 1;
       const seq = seqRef.current;
-      const isFinal = queueRef.current.length === 0;
 
       try {
         setUploadError(null);
@@ -52,6 +52,9 @@ export function useUploader(sessionId: string | null) {
         if (res.new_hints && res.new_hints.length > 0) {
           setHints((prev) => [...prev, ...res.new_hints]);
         }
+        if (res.last_error) {
+          setUploadError(res.last_error);
+        }
         setChunksUploaded(seq);
       } catch (err) {
         setUploadError(
@@ -67,8 +70,8 @@ export function useUploader(sessionId: string | null) {
   }, [sessionId]);
 
   const enqueueChunk = useCallback(
-    (blob: Blob) => {
-      queueRef.current.push(blob);
+    (blob: Blob, isFinal = false) => {
+      queueRef.current.push({ blob, isFinal });
       processQueue();
     },
     [processQueue],

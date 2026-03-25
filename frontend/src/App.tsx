@@ -3,7 +3,7 @@
    Single-page layout with five panels.
    ────────────────────────────────────────────── */
 
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 import { SessionControls } from './components/SessionControls';
 import { RecordingControls } from './components/RecordingControls';
 import { TranscriptPanel } from './components/TranscriptPanel';
@@ -19,12 +19,9 @@ export default function App() {
   const session = useSession();
   const uploader = useUploader(session.sessionId);
 
-  const onChunk = useCallback(
-    (blob: Blob) => {
-      uploader.enqueueChunk(blob);
-    },
-    [uploader.enqueueChunk],
-  );
+  const onChunk = (blob: Blob, isFinal: boolean) => {
+    uploader.enqueueChunk(blob, isFinal);
+  };
 
   const recorder = useRecorder({
     chunkMs: session.uploadConfig?.recommended_chunk_ms ?? 4000,
@@ -33,31 +30,28 @@ export default function App() {
 
   // ── Handlers ──────────────────────────────
 
-  const handleStartSession = useCallback(
-    async (doctorId: string, patientId: string) => {
-      await session.createSession(doctorId, patientId);
-    },
-    [session.createSession],
-  );
+  const handleStartSession = async (doctorId: string, patientId: string) => {
+    await session.createSession(doctorId, patientId);
+  };
 
-  const handleStartRecording = useCallback(async () => {
+  const handleStartRecording = async () => {
     await recorder.startRecording();
     session.setRecordingState('recording');
     session.setSessionStatus('active');
-  }, [recorder.startRecording, session.setRecordingState, session.setSessionStatus]);
+  };
 
-  const handleStopRecording = useCallback(async () => {
+  const handleStopRecording = async () => {
     recorder.stopRecording();
     await session.stopRecording();
-  }, [recorder.stopRecording, session.stopRecording]);
+  };
 
-  const handleCloseSession = useCallback(async () => {
+  const handleCloseSession = async () => {
     if (recorder.isRecording) {
       recorder.stopRecording();
     }
     await session.closeSession();
     uploader.resetUploader();
-  }, [recorder.isRecording, recorder.stopRecording, session.closeSession, uploader.resetUploader]);
+  };
 
   // ── Errors ────────────────────────────────
 

@@ -55,7 +55,9 @@ const SAMPLE_HINTS: Hint[] = [
 let mockSessionCounter = 0;
 
 export const mockSessionApi: SessionApi = {
-  async createSession(_doctorId, _patientId) {
+  async createSession(doctorId, patientId) {
+    void doctorId;
+    void patientId;
     await delay(MOCK_DELAY_MS);
     mockSessionCounter += 1;
     const session: CreateSessionResponse = {
@@ -71,7 +73,11 @@ export const mockSessionApi: SessionApi = {
     return session;
   },
 
-  async uploadAudioChunk(sessionId, _file, seq, _durationMs, _mimeType, _isFinal) {
+  async uploadAudioChunk(sessionId, file, seq, durationMs, mimeType, isFinal) {
+    void file;
+    void durationMs;
+    void mimeType;
+    void isFinal;
     await delay(MOCK_DELAY_MS);
 
     const fragmentIndex = (seq - 1) % TRANSCRIPT_FRAGMENTS.length;
