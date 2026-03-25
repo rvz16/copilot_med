@@ -1,0 +1,97 @@
+/* ──────────────────────────────────────────────
+   useUploader – sequential audio chunk upload queue.
+   Accepts blobs, assigns incrementing seq numbers,
+   uploads one at a time, and accumulates transcript
+   + hint data from each response.
+   ────────────────────────────────────────────── */
+
+import { useCallback, useRef, useState } from 'react';
+import { api } from '../api';
+import type { Hint } from '../types/types';
+
+export type UploadStatus = 'idle' | 'uploading';
+
+export function useUploader(sessionId: string | null) {
+  const [transcript, setTranscript] = useState('');
+  const [hints, setHints] = useState<Hint[]>([]);
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [chunksUploaded, setChunksUploaded] = useState(0);
+
+  const queueRef = useRef<Blob[]>([]);
+  const seqRef = useRef(0);
+  const isProcessingRef = useRef(false);
+
+  const processQueue = useCallback(async () => {
+    if (isProcessingRef.current) return;
+    if (!sessionId) return;
+
+    isProcessingRef.current = true;
+    setUploadStatus('uploading');
+
+    while (queueRef.current.length > 0) {
+      const blob = queueRef.current.shift()!;
+      seqRef.current += 1;
+      const seq = seqRef.current;
+      const isFinal = queueRef.current.length === 0;
+
+      try {
+        setUploadError(null);
+        const res = await api.uploadAudioChunk(
+          sessionId,
+          blob,
+          seq,
+          4000,                       // duration_ms – fixed chunk duration
+          blob.type || 'audio/webm',
+          isFinal,
+        );
+
+        if (res.transcript_update?.stable_text) {
+          setTranscript(res.transcript_update.stable_text);
+        }
+        if (res.new_hints && res.new_hints.length > 0) {
+          setHints((prev) => [...prev, ...res.new_hints]);
+        }
+        setChunksUploaded(seq);
+      } catch (err) {
+        setUploadError(
+          err instanceof Error ? err.message : 'Chunk upload failed',
+        );
+        // On error, stop processing. User can retry by adding more chunks.
+        break;
+      }
+    }
+
+    isProcessingRef.current = false;
+    setUploadStatus('idle');
+  }, [sessionId]);
+
+  const enqueueChunk = useCallback(
+    (blob: Blob) => {
+      queueRef.current.push(blob);
+      processQueue();
+    },
+    [processQueue],
+  );
+
+  const resetUploader = useCallback(() => {
+    queueRef.current = [];
+    seqRef.current = 0;
+    isProcessingRef.current = false;
+    setTranscript('');
+    setHints([]);
+    setUploadStatus('idle');
+    setUploadError(null);
+    setChunksUploaded(0);
+  }, []);
+
+  return {
+    transcript,
+    hints,
+    uploadStatus,
+    uploadError,
+    chunksUploaded,
+    enqueueChunk,
+    resetUploader,
+  };
+}
