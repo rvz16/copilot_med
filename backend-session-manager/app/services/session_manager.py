@@ -137,7 +137,7 @@ class SessionService:
                 seq=seq,
                 mime_type=normalized_mime_type,
                 is_final=is_final,
-                file_path=recording_path,
+                file_path=file_path,
                 existing_stable_text=session.stable_transcript or "",
             )
             if transcription.delta_text is not None:
