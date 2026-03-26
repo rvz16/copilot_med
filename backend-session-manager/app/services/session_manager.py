@@ -39,6 +39,10 @@ def utcnow() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
+def normalize_transcript_text(text: str | None) -> str:
+    return " ".join((text or "").split())
+
+
 class SessionService:
     """Application service that owns session lifecycle orchestration."""
 
@@ -125,6 +129,7 @@ class SessionService:
         realtime_analysis_response: RealtimeAnalysisResponse | None = None
         new_hints: list[HintResponse] = []
         last_error: str | None = None
+        speech_detected = False
 
         chunk = AudioChunk(
             session_db_id=session.id,
@@ -145,9 +150,18 @@ class SessionService:
                 file_path=file_path,
                 existing_stable_text=session.stable_transcript or "",
             )
+            speech_detected = transcription.speech_detected
             if transcription.delta_text is not None:
                 chunk.transcript_delta = transcription.delta_text
-            if transcription.stable_text is not None:
+            existing_stable_text = session.stable_transcript or ""
+            has_new_delta = bool((transcription.delta_text or "").strip())
+            stable_text_changed = (
+                transcription.stable_text is not None
+                and normalize_transcript_text(transcription.stable_text)
+                != normalize_transcript_text(existing_stable_text)
+            )
+            has_transcript_update = transcription.speech_detected and (has_new_delta or stable_text_changed)
+            if has_transcript_update and transcription.stable_text is not None:
                 session.current_transcript = transcription.stable_text
                 session.stable_transcript = transcription.stable_text
                 transcript_update = TranscriptUpdate(
@@ -257,6 +271,7 @@ class SessionService:
             status=session.status,
             recording_state=session.recording_state,
             ack=Ack(received_seq=seq),
+            speech_detected=speech_detected,
             transcript_update=transcript_update,
             realtime_analysis=realtime_analysis_response,
             new_hints=new_hints,

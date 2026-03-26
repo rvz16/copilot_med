@@ -67,6 +67,7 @@ describe('sessionApi', () => {
       status: 'active',
       recording_state: 'recording',
       ack: { received_seq: 1 },
+      speech_detected: true,
       transcript_update: { delta_text: 'Hello', stable_text: 'Hello' },
       realtime_analysis: null,
       new_hints: [],

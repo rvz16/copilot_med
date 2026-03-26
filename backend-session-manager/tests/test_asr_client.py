@@ -27,6 +27,7 @@ def test_transcribe_chunk_sends_existing_transcript(monkeypatch, tmp_path: Path)
             {
                 "delta_text": "fragment",
                 "stable_text": "existing fragment",
+                "speech_detected": True,
                 "source": "whisper_ct2_ru",
                 "event_type": "stable",
             }
@@ -51,6 +52,7 @@ def test_transcribe_chunk_sends_existing_transcript(monkeypatch, tmp_path: Path)
     assert captured["kwargs"]["data"]["existing_stable_text"] == "existing"
     assert captured["kwargs"]["data"]["session_id"] == "sess_123"
     assert captured["kwargs"]["files"]["file"][0] == "chunk.webm"
+    assert result["speech_detected"] is True
     assert result["stable_text"] == "existing fragment"
 
 

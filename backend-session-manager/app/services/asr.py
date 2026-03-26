@@ -22,6 +22,7 @@ class ChunkTranscriptionResult:
     stable_text: str | None
     source: str
     event_type: str = "stable"
+    speech_detected: bool = True
 
 
 @dataclass(frozen=True)
@@ -71,6 +72,7 @@ class MockAsrProvider:
             stable_text=stable_text,
             source="mock_asr",
             event_type="final" if is_final else "stable",
+            speech_detected=True,
         )
 
     def finalize_session_transcript(self, *, session_id: str, stable_text: str) -> FinalizeTranscriptionResult:
@@ -109,6 +111,7 @@ class HttpAsrProvider:
             stable_text=stable_text,
             source=response.get("source", "external_asr"),
             event_type=response.get("event_type", "stable"),
+            speech_detected=response.get("speech_detected", bool((response.get("delta_text") or "").strip())),
         )
 
     def finalize_session_transcript(self, *, session_id: str, stable_text: str) -> FinalizeTranscriptionResult:

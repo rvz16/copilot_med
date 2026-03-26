@@ -15,3 +15,17 @@ BEAM_SIZE = int(os.getenv("BEAM_SIZE", "5"))
 LANGUAGE = os.getenv("LANGUAGE", "ru")
 ALLOWED_EXTENSIONS = {".mp3", ".wav", ".webm"}
 MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "50"))
+
+
+def env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+VAD_FILTER = env_bool("VAD_FILTER", True)
+VAD_THRESHOLD = float(os.getenv("VAD_THRESHOLD", "0.5"))
+VAD_MIN_SILENCE_DURATION_MS = int(os.getenv("VAD_MIN_SILENCE_DURATION_MS", "500"))
+VAD_MIN_SPEECH_DURATION_MS = int(os.getenv("VAD_MIN_SPEECH_DURATION_MS", "250"))
+VAD_SPEECH_PAD_MS = int(os.getenv("VAD_SPEECH_PAD_MS", "200"))

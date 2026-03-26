@@ -25,6 +25,7 @@ describe('mockSessionApi', () => {
     expect(res.accepted).toBe(true);
     expect(res.seq).toBe(1);
     expect(res.ack.received_seq).toBe(1);
+    expect(res.speech_detected).toBe(true);
     expect(res.transcript_update).not.toBeNull();
     expect(typeof res.transcript_update!.delta_text).toBe('string');
     expect(typeof res.transcript_update!.stable_text).toBe('string');

@@ -136,6 +136,7 @@ export const mockSessionApi: SessionApi = {
       status: 'active',
       recording_state: 'recording',
       ack: { received_seq: seq },
+      speech_detected: true,
       transcript_update: { delta_text: deltaText, stable_text: stableText },
       realtime_analysis: buildRealtimeAnalysis(stableText, seq),
       new_hints: newHints,
