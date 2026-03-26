@@ -23,18 +23,41 @@ export function useUploader(sessionId: string | null) {
   const queueRef = useRef<QueuedChunk[]>([]);
   const seqRef = useRef(0);
   const isProcessingRef = useRef(false);
+  const activeRunIdRef = useRef(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const idleWaitersRef = useRef<
+    Array<{ resolve: () => void; reject: (error: Error) => void }>
+  >([]);
+
+  const settleIdleWaiters = useCallback(() => {
+    if (isProcessingRef.current) return;
+
+    const waiters = idleWaitersRef.current.splice(0);
+    if (waiters.length === 0) return;
+
+    if (queueRef.current.length === 0) {
+      waiters.forEach(({ resolve }) => resolve());
+      return;
+    }
+
+    const error = new Error('Pending audio chunks could not be uploaded.');
+    waiters.forEach(({ reject }) => reject(error));
+  }, []);
 
   const processQueue = useCallback(async () => {
     if (isProcessingRef.current) return;
     if (!sessionId) return;
 
+    const runId = activeRunIdRef.current;
     isProcessingRef.current = true;
     setUploadStatus('uploading');
 
-    while (queueRef.current.length > 0) {
+    while (queueRef.current.length > 0 && runId === activeRunIdRef.current) {
       const { blob, isFinal } = queueRef.current.shift()!;
       seqRef.current += 1;
       const seq = seqRef.current;
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
 
       try {
         setUploadError(null);
@@ -45,7 +68,11 @@ export function useUploader(sessionId: string | null) {
           4000,                       // duration_ms – fixed chunk duration
           blob.type || 'audio/webm',
           isFinal,
+          abortController.signal,
         );
+        if (runId !== activeRunIdRef.current) {
+          break;
+        }
 
         if (res.transcript_update?.stable_text) {
           setTranscript(res.transcript_update.stable_text);
@@ -61,37 +88,70 @@ export function useUploader(sessionId: string | null) {
         }
         setChunksUploaded(seq);
       } catch (err) {
+        if (abortController.signal.aborted || runId !== activeRunIdRef.current) {
+          break;
+        }
         setUploadError(
           err instanceof Error ? err.message : 'Chunk upload failed',
         );
         // On error, stop processing. User can retry by adding more chunks.
         break;
+      } finally {
+        if (abortControllerRef.current === abortController) {
+          abortControllerRef.current = null;
+        }
       }
     }
 
-    isProcessingRef.current = false;
-    setUploadStatus('idle');
-  }, [sessionId]);
+    if (runId === activeRunIdRef.current) {
+      isProcessingRef.current = false;
+      setUploadStatus('idle');
+      settleIdleWaiters();
+    }
+  }, [sessionId, settleIdleWaiters]);
 
   const enqueueChunk = useCallback(
     (blob: Blob, isFinal = false) => {
+      if (!sessionId) return;
       queueRef.current.push({ blob, isFinal });
       processQueue();
     },
-    [processQueue],
+    [processQueue, sessionId],
   );
 
+  const waitForIdle = useCallback(() => {
+    if (!isProcessingRef.current) {
+      if (queueRef.current.length === 0) {
+        return Promise.resolve();
+      }
+      return Promise.reject(new Error('Pending audio chunks could not be uploaded.'));
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      idleWaitersRef.current.push({ resolve, reject });
+    });
+  }, []);
+
+  const discardPending = useCallback(() => {
+    activeRunIdRef.current += 1;
+    queueRef.current = [];
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    isProcessingRef.current = false;
+    setUploadStatus('idle');
+    setUploadError(null);
+    settleIdleWaiters();
+  }, [settleIdleWaiters]);
+
   const resetUploader = useCallback(() => {
+    discardPending();
     queueRef.current = [];
     seqRef.current = 0;
-    isProcessingRef.current = false;
     setTranscript('');
     setHints([]);
     setLatestAnalysis(null);
-    setUploadStatus('idle');
-    setUploadError(null);
     setChunksUploaded(0);
-  }, []);
+  }, [discardPending]);
 
   return {
     transcript,
@@ -101,6 +161,8 @@ export function useUploader(sessionId: string | null) {
     uploadError,
     chunksUploaded,
     enqueueChunk,
+    waitForIdle,
+    discardPending,
     resetUploader,
   };
 }

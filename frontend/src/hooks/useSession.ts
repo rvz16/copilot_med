@@ -25,8 +25,11 @@ export function useSession() {
       setSessionStatus(res.status as SessionStatus);
       setRecordingState(res.recording_state as RecordingState);
       setUploadConfig(res.upload_config);
+      return res;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create session');
+      const error = err instanceof Error ? err : new Error('Failed to create session');
+      setError(error.message);
+      throw error;
     }
   }, []);
 
@@ -37,8 +40,11 @@ export function useSession() {
       const res = await api.stopRecording(sessionId);
       setSessionStatus(res.status as SessionStatus);
       setRecordingState(res.recording_state as RecordingState);
+      return res;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to stop recording');
+      const error = err instanceof Error ? err : new Error('Failed to stop recording');
+      setError(error.message);
+      throw error;
     }
   }, [sessionId]);
 
@@ -49,8 +55,11 @@ export function useSession() {
       const res = await api.closeSession(sessionId);
       setSessionStatus(res.status as SessionStatus);
       setRecordingState(res.recording_state as RecordingState);
+      return res;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to close session');
+      const error = err instanceof Error ? err : new Error('Failed to close session');
+      setError(error.message);
+      throw error;
     }
   }, [sessionId]);
 

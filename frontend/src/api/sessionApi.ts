@@ -39,7 +39,7 @@ export const sessionApi: SessionApi = {
     return handleResponse<CreateSessionResponse>(res);
   },
 
-  async uploadAudioChunk(sessionId, file, seq, durationMs, mimeType, isFinal) {
+  async uploadAudioChunk(sessionId, file, seq, durationMs, mimeType, isFinal, signal) {
     const form = new FormData();
     form.append('file', file);
     form.append('seq', String(seq));
@@ -50,6 +50,7 @@ export const sessionApi: SessionApi = {
     const res = await fetch(withBaseUrl(`/api/v1/sessions/${sessionId}/audio-chunks`), {
       method: 'POST',
       body: form,
+      signal,
     });
     return handleResponse<AudioChunkResponse>(res);
   },

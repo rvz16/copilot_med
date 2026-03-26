@@ -173,6 +173,7 @@ export interface SessionApi {
     durationMs: number,
     mimeType: string,
     isFinal: boolean,
+    signal?: AbortSignal,
   ): Promise<AudioChunkResponse>;
   stopRecording(sessionId: string): Promise<StopRecordingResponse>;
   closeSession(sessionId: string): Promise<CloseSessionResponse>;
