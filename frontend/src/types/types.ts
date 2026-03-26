@@ -115,6 +115,7 @@ export interface AudioChunkResponse {
   status: string;
   recording_state: string;
   ack: Ack;
+  speech_detected: boolean;
   transcript_update: TranscriptUpdate | null;
   realtime_analysis: RealtimeAnalysis | null;
   new_hints: Hint[];

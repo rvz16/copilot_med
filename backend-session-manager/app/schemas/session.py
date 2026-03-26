@@ -133,6 +133,7 @@ class AudioChunkResponse(ApiBaseModel):
     status: str
     recording_state: str
     ack: Ack
+    speech_detected: bool
     transcript_update: TranscriptUpdate | None = None
     realtime_analysis: RealtimeAnalysisResponse | None = None
     new_hints: list[HintResponse]

@@ -89,6 +89,7 @@ Uploads a single audio chunk. The frontend sends chunks sequentially, one at a t
   "ack": {
     "received_seq": 1
   },
+  "speech_detected": true,
   "transcript_update": {
     "delta_text": "Patient reports headache for two days.",
     "stable_text": "Patient reports headache for two days."
@@ -113,7 +114,8 @@ Uploads a single audio chunk. The frontend sends chunks sequentially, one at a t
 | `status` | string | Current session status |
 | `recording_state` | string | Current recording state |
 | `ack.received_seq` | integer | Confirmed sequence number |
-| `transcript_update` | object \| null | May be `null` if no transcript is ready yet |
+| `speech_detected` | boolean | `true` when ASR detected speech in the uploaded chunk |
+| `transcript_update` | object \| null | May be `null` when no new transcript was produced, including silent chunks |
 | `transcript_update.delta_text` | string | New text added in this chunk |
 | `transcript_update.stable_text` | string | Full accumulated stable transcript |
 | `new_hints` | Hint[] | New realtime hints (may be empty `[]`) |
@@ -136,6 +138,7 @@ Uploads a single audio chunk. The frontend sends chunks sequentially, one at a t
 - Chunks are sent in strict order.
 - The backend must not assume chunks arrive on a fixed schedule.
 - If the backend cannot process a chunk, return an error response; the frontend will not retry automatically.
+- Silent chunks should still be acknowledged, but should return `speech_detected: false` and usually `transcript_update: null`.
 
 ---
 

@@ -88,6 +88,7 @@ Example response:
 ```json
 {
   "text": "Привет, это тестовая запись.",
+  "speech_detected": true,
   "language": "ru",
   "language_probability": 0.9987,
   "audio_file_duration": 4.52,
@@ -120,6 +121,7 @@ Example response:
   "mime_type": "audio/webm",
   "delta_text": "Пациент жалуется на головную боль.",
   "stable_text": "Пациент жалуется на головную боль.",
+  "speech_detected": true,
   "source": "whisper_ct2_ru",
   "event_type": "stable",
   "language": "ru",
@@ -128,6 +130,8 @@ Example response:
   "processing_time_sec": 0.83
 }
 ```
+
+If VAD classifies a chunk as silence, the response keeps the previous `stable_text`, returns an empty `delta_text`, and sets `speech_detected` to `false`.
 
 ### Finalize Transcript
 

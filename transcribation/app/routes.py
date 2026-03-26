@@ -144,7 +144,10 @@ async def transcribe_chunk(
     content = await file.read()
     ext = validate_upload(file, content)
     result, elapsed = run_transcription(content, ext)
-    delta_text, stable_text = compute_transcript_update(existing_stable_text, result["text"])
+    if result["speech_detected"]:
+        delta_text, stable_text = compute_transcript_update(existing_stable_text, result["text"])
+    else:
+        delta_text, stable_text = "", normalize_text(existing_stable_text)
 
     return {
         "session_id": session_id,
@@ -152,6 +155,7 @@ async def transcribe_chunk(
         "mime_type": mime_type,
         "delta_text": delta_text,
         "stable_text": stable_text,
+        "speech_detected": result["speech_detected"],
         "source": "whisper_ct2_ru",
         "event_type": "final" if is_final else "stable",
         "language": result["language"],

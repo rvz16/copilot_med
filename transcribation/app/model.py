@@ -1,4 +1,15 @@
-from app.config import MODEL_PATH, DEVICE, COMPUTE_TYPE, BEAM_SIZE, LANGUAGE
+from app.config import (
+    BEAM_SIZE,
+    COMPUTE_TYPE,
+    DEVICE,
+    LANGUAGE,
+    MODEL_PATH,
+    VAD_FILTER,
+    VAD_MIN_SILENCE_DURATION_MS,
+    VAD_MIN_SPEECH_DURATION_MS,
+    VAD_SPEECH_PAD_MS,
+    VAD_THRESHOLD,
+)
 
 
 _model = None
@@ -19,16 +30,29 @@ def load_model():
 
 def transcribe(audio_path: str) -> dict:
     model = load_model()
+    transcribe_kwargs = {
+        "language": LANGUAGE,
+        "without_timestamps": True,
+        "beam_size": BEAM_SIZE,
+        "vad_filter": VAD_FILTER,
+    }
+    if VAD_FILTER:
+        transcribe_kwargs["vad_parameters"] = {
+            "threshold": VAD_THRESHOLD,
+            "min_silence_duration_ms": VAD_MIN_SILENCE_DURATION_MS,
+            "min_speech_duration_ms": VAD_MIN_SPEECH_DURATION_MS,
+            "speech_pad_ms": VAD_SPEECH_PAD_MS,
+        }
+
     segments, info = model.transcribe(
         audio_path,
-        language=LANGUAGE,
-        without_timestamps=True,
-        beam_size=BEAM_SIZE,
-        vad_filter=False,
+        **transcribe_kwargs,
     )
-    text = "".join([segment.text for segment in segments])
+    segment_list = list(segments)
+    text = "".join(segment.text for segment in segment_list)
     return {
         "text": text.strip(),
+        "speech_detected": any((segment.end - segment.start) > 0 for segment in segment_list),
         "language": info.language,
         "language_probability": round(info.language_probability, 4),
         "audio_file_duration": round(info.duration, 2),

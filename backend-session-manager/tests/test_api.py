@@ -1,5 +1,7 @@
 from fastapi.testclient import TestClient
 
+from app.services.asr import ChunkTranscriptionResult, MockAsrProvider
+
 
 def create_session(client: TestClient) -> str:
     response = client.post(
@@ -74,8 +76,58 @@ def test_upload_chunk_success_for_seq_one(client: TestClient):
     assert body["status"] == "active"
     assert body["recording_state"] == "recording"
     assert body["ack"]["received_seq"] == 1
+    assert body["speech_detected"] is True
     assert body["transcript_update"]["stable_text"].startswith("Patient reports headache")
     assert body["realtime_analysis"] is None
+
+
+def test_silent_chunk_is_acknowledged_without_transcript_or_analysis(app_factory, monkeypatch):
+    def fake_transcribe_chunk(
+        self,
+        *,
+        session_id: str,
+        seq: int,
+        mime_type: str,
+        is_final: bool,
+        file_path,
+        existing_stable_text: str,
+    ) -> ChunkTranscriptionResult:
+        del self, session_id, seq, mime_type, is_final, file_path
+        return ChunkTranscriptionResult(
+            delta_text="",
+            stable_text=existing_stable_text,
+            source="mock_asr",
+            event_type="stable",
+            speech_detected=False,
+        )
+
+    monkeypatch.setattr(MockAsrProvider, "transcribe_chunk", fake_transcribe_chunk)
+
+    app = app_factory(
+        REALTIME_ANALYSIS_ENABLED=True,
+        REALTIME_ANALYSIS_MODE="mock",
+    )
+    with TestClient(app) as client:
+        session_id = create_session(client)
+
+        response = upload_chunk(client, session_id, seq=1)
+        transcript_response = client.get(f"/api/v1/sessions/{session_id}/transcript")
+        hints_response = client.get(f"/api/v1/sessions/{session_id}/hints")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["accepted"] is True
+        assert body["speech_detected"] is False
+        assert body["transcript_update"] is None
+        assert body["realtime_analysis"] is None
+        assert body["new_hints"] == []
+
+        assert transcript_response.status_code == 200
+        assert transcript_response.json()["stable_text"] == ""
+        assert transcript_response.json()["events"] == []
+
+        assert hints_response.status_code == 200
+        assert hints_response.json()["items"] == []
 
 
 def test_upload_chunk_invalid_session_returns_404(client: TestClient):
