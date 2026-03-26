@@ -13,12 +13,29 @@ class RealtimeAnalysisProvider(Protocol):
     def analyze(self, payload: dict) -> dict:
         ...
 
+    def fetch_patient_context(self, patient_id: str) -> dict | None:
+        ...
+
 
 class MockRealtimeAnalysisProvider:
     """Deterministic local realtime analysis for tests and offline development."""
 
     service_name = "realtime_analysis"
     endpoint = "mock://realtime-analysis"
+
+    def fetch_patient_context(self, patient_id: str) -> dict | None:
+        return {
+            "patient_name": f"Mock Patient {patient_id}",
+            "gender": "female",
+            "birth_date": "1990-05-29",
+            "conditions": [
+                "Hypertension",
+                "Type 2 Diabetes",
+                "Body mass index 30+ - obesity (finding)",
+            ],
+            "medications": ["Metformin 500 MG", "Hydrochlorothiazide 25 MG"],
+            "allergies": [],
+        }
 
     def analyze(self, payload: dict) -> dict:
         transcript = payload.get("transcript_chunk", "")
@@ -103,6 +120,9 @@ class HttpRealtimeAnalysisProvider:
 
     def analyze(self, payload: dict) -> dict:
         return self.client.analyze(payload)
+
+    def fetch_patient_context(self, patient_id: str) -> dict | None:
+        return self.client.fetch_patient_context(patient_id)
 
 
 def build_realtime_analysis_provider(settings: Settings) -> RealtimeAnalysisProvider:

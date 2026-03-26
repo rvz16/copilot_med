@@ -50,6 +50,8 @@ def test_create_session_success(client: TestClient):
     assert body["session_id"].startswith("sess_")
     assert body["status"] == "created"
     assert body["recording_state"] == "idle"
+    assert body["patient_context"] is not None
+    assert body["patient_context"]["patient_name"].startswith("Mock Patient")
     assert body["upload_config"]["recommended_chunk_ms"] == 4000
     assert "audio/webm" in body["upload_config"]["accepted_mime_types"]
 
@@ -288,6 +290,22 @@ def test_realtime_analysis_failure_falls_back_to_local_hints(app_factory):
         assert body["realtime_analysis"] is None
         assert len(body["new_hints"]) == 1
         assert body["new_hints"][0]["type"] == "followup_hint"
+
+
+def test_create_session_survives_patient_context_fetch_failure(app_factory):
+    app = app_factory(
+        REALTIME_ANALYSIS_MODE="http",
+        REALTIME_ANALYSIS_URL="http://127.0.0.1:1/v1/assist",
+        REALTIME_ANALYSIS_TIMEOUT_SECONDS=1,
+    )
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/sessions",
+            json={"doctor_id": "doc_001", "patient_id": "pat_001"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["patient_context"] is None
 
 
 def test_repeated_stop_is_idempotent(client: TestClient):

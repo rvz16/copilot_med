@@ -5,7 +5,7 @@
 
 import { useCallback, useState } from 'react';
 import { api } from '../api';
-import type { UploadConfig } from '../types/types';
+import type { RealtimePatientContext, UploadConfig } from '../types/types';
 
 export type SessionStatus = 'idle' | 'created' | 'active' | 'closed';
 export type RecordingState = 'idle' | 'recording' | 'stopped';
@@ -15,6 +15,7 @@ export function useSession() {
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>('idle');
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [uploadConfig, setUploadConfig] = useState<UploadConfig | null>(null);
+  const [patientContext, setPatientContext] = useState<RealtimePatientContext | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const createSession = useCallback(async (doctorId: string, patientId: string) => {
@@ -25,6 +26,7 @@ export function useSession() {
       setSessionStatus(res.status as SessionStatus);
       setRecordingState(res.recording_state as RecordingState);
       setUploadConfig(res.upload_config);
+      setPatientContext(res.patient_context ?? null);
       return res;
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Failed to create session');
@@ -68,6 +70,7 @@ export function useSession() {
     setSessionStatus('idle');
     setRecordingState('idle');
     setUploadConfig(null);
+    setPatientContext(null);
     setError(null);
   }, []);
 
@@ -76,6 +79,7 @@ export function useSession() {
     sessionStatus,
     recordingState,
     uploadConfig,
+    patientContext,
     error,
     setRecordingState,
     setSessionStatus,

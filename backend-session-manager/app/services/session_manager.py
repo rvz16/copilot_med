@@ -77,11 +77,13 @@ class SessionService:
         self.db.add(session)
         self.db.commit()
         self.db.refresh(session)
+        patient_context = self._fetch_startup_patient_context(session.patient_id)
         return CreateSessionResponse(
             session_id=session.session_id,
             status=session.status,
             recording_state=session.recording_state,
             upload_config=self._upload_config(),
+            patient_context=patient_context,
         )
 
     def upload_audio_chunk(
@@ -484,6 +486,13 @@ class SessionService:
             )
             session.processing_state = "failed"
             session.last_error = str(exc)
+
+    def _fetch_startup_patient_context(self, patient_id: str) -> dict | None:
+        try:
+            return self.realtime_analysis.fetch_patient_context(patient_id)
+        except Exception as exc:
+            logger.warning("Patient context fetch failed for patient %s: %s", patient_id, exc)
+            return None
 
     def _log_external_call(
         self,

@@ -36,7 +36,6 @@ export function HintsPanel({ hints, analysis }: Props) {
       analysis.drug_interactions.length > 0 ||
       analysis.knowledge_refs.length > 0 ||
       analysis.errors.length > 0 ||
-      analysis.patient_context !== null ||
       FACT_SECTIONS.some(({ key }) => analysis.extracted_facts[key].length > 0)
     );
 
@@ -102,32 +101,6 @@ export function HintsPanel({ hints, analysis }: Props) {
                       </li>
                     ))}
                   </ul>
-                </div>
-              )}
-
-              {analysis.patient_context && (
-                <div className="analysis-section">
-                  <h3 className="analysis-title">Patient Context</h3>
-                  <div className="analysis-grid">
-                    {analysis.patient_context.patient_name && (
-                      <div className="analysis-stat">
-                        <span className="analysis-stat-label">Name</span>
-                        <span>{analysis.patient_context.patient_name}</span>
-                      </div>
-                    )}
-                    {analysis.patient_context.gender && (
-                      <div className="analysis-stat">
-                        <span className="analysis-stat-label">Gender</span>
-                        <span>{analysis.patient_context.gender}</span>
-                      </div>
-                    )}
-                    {analysis.patient_context.birth_date && (
-                      <div className="analysis-stat">
-                        <span className="analysis-stat-label">Birth Date</span>
-                        <span>{analysis.patient_context.birth_date}</span>
-                      </div>
-                    )}
-                  </div>
                 </div>
               )}
 

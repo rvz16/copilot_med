@@ -39,6 +39,14 @@ describe('sessionApi', () => {
       session_id: 'sess_1',
       status: 'created',
       recording_state: 'idle',
+      patient_context: {
+        patient_name: 'Jane Doe',
+        gender: 'female',
+        birth_date: '1990-05-29',
+        conditions: ['Hypertension'],
+        medications: [],
+        allergies: [],
+      },
       upload_config: {
         recommended_chunk_ms: 4000,
         accepted_mime_types: ['audio/webm'],

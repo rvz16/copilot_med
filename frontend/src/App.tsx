@@ -9,6 +9,7 @@ import { RecordingControls } from './components/RecordingControls';
 import { TranscriptPanel } from './components/TranscriptPanel';
 import { HintsPanel } from './components/HintsPanel';
 import { StatusPanel } from './components/StatusPanel';
+import { PatientSummaryPanel } from './components/PatientSummaryPanel';
 import { useSession } from './hooks/useSession';
 import { useRecorder } from './hooks/useRecorder';
 import { useUploader } from './hooks/useUploader';
@@ -125,6 +126,7 @@ export default function App() {
     (session.sessionStatus === 'created' || session.sessionStatus === 'active') &&
     session.recordingState !== 'stopped';
   const hasSession = session.sessionId !== null;
+  const patientContext = uploader.latestAnalysis?.patient_context ?? session.patientContext;
   const sessionControlsDisabled = isCreatingSession || isClosingSession;
   const recordingControlsDisabled = isClosingSession;
 
@@ -144,6 +146,9 @@ export default function App() {
             onCloseSession={handleCloseSession}
             disabled={sessionControlsDisabled}
           />
+          {hasSession && (
+            <PatientSummaryPanel patientContext={patientContext} />
+          )}
           {hasSession && (
             <RecordingControls
               recordingState={session.recordingState}

@@ -13,6 +13,7 @@ describe('mockSessionApi', () => {
     expect(res.session_id).toMatch(/^mock_sess_/);
     expect(res.status).toBe('created');
     expect(res.recording_state).toBe('idle');
+    expect(res.patient_context?.patient_name).toBe('Mock Patient');
     expect(res.upload_config.recommended_chunk_ms).toBe(4000);
     expect(res.upload_config.accepted_mime_types).toContain('audio/webm');
     expect(res.upload_config.max_in_flight_requests).toBe(1);

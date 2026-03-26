@@ -151,3 +151,16 @@ def test_health_endpoint() -> None:
     data = response.json()
     assert data["status"] == "ok"
     assert "model" in data
+
+
+def test_patient_context_endpoint() -> None:
+    app = create_app(llm=_make_stub_llm(), fhir=_make_stub_fhir_with_context())
+    client = TestClient(app)
+
+    response = client.get("/v1/patient-context/pt-002")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["patient_name"] == "John Doe"
+    assert data["birth_date"] == "1979-05-12"
+    assert "Type 2 Diabetes" in data["conditions"]

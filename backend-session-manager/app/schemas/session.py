@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Any
 
@@ -41,6 +43,7 @@ class CreateSessionResponse(ApiBaseModel):
     status: str
     recording_state: str
     upload_config: UploadConfig
+    patient_context: RealtimePatientContext | None = None
 
 
 class Ack(ApiBaseModel):

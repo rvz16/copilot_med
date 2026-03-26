@@ -21,6 +21,7 @@ export interface CreateSessionResponse {
   status: string;
   recording_state: string;
   upload_config: UploadConfig;
+  patient_context?: RealtimePatientContext | null;
 }
 
 // ── Audio chunk upload ──────────────────────

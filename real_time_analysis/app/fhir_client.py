@@ -27,6 +27,8 @@ class FHIRClient:
         """Fetch patient data and return structured context dict, or None on failure."""
         try:
             patient, conditions, medications, allergies = await self._fetch_all(patient_id)
+            if not patient and not conditions and not medications and not allergies:
+                return None
             return self._build_context(patient, conditions, medications, allergies)
         except Exception as exc:
             logger.warning("FHIR fetch failed for patient %s: %s", patient_id, exc)

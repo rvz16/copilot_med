@@ -36,6 +36,11 @@ class AssistController:
             methods=["POST"],
             response_model=AssistResponse,
         )
+        self.router.add_api_route(
+            "/v1/patient-context/{patient_id}",
+            self.patient_context,
+            methods=["GET"],
+        )
         self.router.add_api_route("/health", self.health, methods=["GET"])
 
     async def health(self) -> dict[str, Any]:
@@ -45,6 +50,9 @@ class AssistController:
             "vllm_url": self.llm.base_url,
             "fhir_url": self.fhir.base_url,
         }
+
+    async def patient_context(self, patient_id: str) -> dict[str, Any] | None:
+        return await self.fhir.get_patient_context(patient_id)
 
     async def assist(self, payload: AssistRequest) -> AssistResponse:
         import asyncio

@@ -102,6 +102,14 @@ export const mockSessionApi: SessionApi = {
       session_id: `mock_sess_${mockSessionCounter}`,
       status: 'created',
       recording_state: 'idle',
+      patient_context: {
+        patient_name: 'Mock Patient',
+        gender: 'female',
+        birth_date: '1990-05-29',
+        conditions: ['Hypertension', 'Type 2 Diabetes', 'Body mass index 30+ - obesity (finding)'],
+        medications: ['Metformin 500 MG', 'Hydrochlorothiazide 25 MG'],
+        allergies: [],
+      },
       upload_config: {
         recommended_chunk_ms: 4000,
         accepted_mime_types: ['audio/webm', 'audio/wav'],
