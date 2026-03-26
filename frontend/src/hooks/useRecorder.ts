@@ -21,6 +21,10 @@ export interface UseRecorderOptions {
   onChunk: (blob: Blob, isFinal: boolean) => void;
 }
 
+interface StopRecordingOptions {
+  discardCurrentChunk?: boolean;
+}
+
 export function useRecorder({ chunkMs = 4000, onChunk }: UseRecorderOptions) {
   const [isRecording, setIsRecording] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
@@ -28,11 +32,21 @@ export function useRecorder({ chunkMs = 4000, onChunk }: UseRecorderOptions) {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopRequestedRef = useRef(false);
+  const stopPendingRef = useRef(false);
+  const discardCurrentChunkRef = useRef(false);
+  const stopWaitersRef = useRef<Array<() => void>>([]);
+
+  const resolveStopWaiters = () => {
+    const waiters = stopWaitersRef.current.splice(0);
+    waiters.forEach((resolve) => resolve());
+  };
 
   const startRecording = useCallback(async () => {
     try {
       setMicError(null);
       stopRequestedRef.current = false;
+      stopPendingRef.current = false;
+      discardCurrentChunkRef.current = false;
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -52,13 +66,17 @@ export function useRecorder({ chunkMs = 4000, onChunk }: UseRecorderOptions) {
         };
 
         recorder.onstop = () => {
-          if (parts.length > 0) {
+          if (parts.length > 0 && !discardCurrentChunkRef.current) {
             const blob = new Blob(parts, { type: mimeType });
             onChunk(blob, stopRequestedRef.current);
           }
           if (!stopRequestedRef.current) {
             startChunkRecorder();
+            return;
           }
+          discardCurrentChunkRef.current = false;
+          stopPendingRef.current = false;
+          resolveStopWaiters();
         };
 
         recorderRef.current = recorder;
@@ -73,6 +91,7 @@ export function useRecorder({ chunkMs = 4000, onChunk }: UseRecorderOptions) {
 
       startChunkRecorder();
       setIsRecording(true);
+      return true;
     } catch (err) {
       const msg =
         err instanceof DOMException && err.name === 'NotAllowedError'
@@ -81,25 +100,66 @@ export function useRecorder({ chunkMs = 4000, onChunk }: UseRecorderOptions) {
             ? err.message
             : 'Failed to start recording';
       setMicError(msg);
+      return false;
     }
   }, [chunkMs, onChunk]);
 
-  const stopRecording = useCallback(() => {
+  const stopRecording = useCallback((options: StopRecordingOptions = {}) => {
     stopRequestedRef.current = true;
+    discardCurrentChunkRef.current = options.discardCurrentChunk ?? false;
     if (chunkTimerRef.current) {
       clearTimeout(chunkTimerRef.current);
       chunkTimerRef.current = null;
     }
-    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
-      recorderRef.current.stop();
+
+    const recorder = recorderRef.current;
+    if (!recorder || recorder.state === 'inactive') {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+      setIsRecording(false);
+      discardCurrentChunkRef.current = false;
+      stopPendingRef.current = false;
+      resolveStopWaiters();
+      return Promise.resolve();
     }
+
+    const stopPromise = new Promise<void>((resolve) => {
+      stopWaitersRef.current.push(resolve);
+    });
+
+    if (!stopPendingRef.current) {
+      stopPendingRef.current = true;
+      recorder.stop();
+    }
+
     recorderRef.current = null;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
     setIsRecording(false);
+    return stopPromise;
   }, []);
 
-  return { isRecording, micError, startRecording, stopRecording };
+  const resetRecorder = useCallback(() => {
+    stopRequestedRef.current = false;
+    stopPendingRef.current = false;
+    discardCurrentChunkRef.current = false;
+    if (chunkTimerRef.current) {
+      clearTimeout(chunkTimerRef.current);
+      chunkTimerRef.current = null;
+    }
+    recorderRef.current = null;
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    stopWaitersRef.current = [];
+    setIsRecording(false);
+    setMicError(null);
+  }, []);
+
+  return { isRecording, micError, startRecording, stopRecording, resetRecorder };
 }

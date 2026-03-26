@@ -111,11 +111,12 @@ export const mockSessionApi: SessionApi = {
     return session;
   },
 
-  async uploadAudioChunk(sessionId, file, seq, durationMs, mimeType, isFinal) {
+  async uploadAudioChunk(sessionId, file, seq, durationMs, mimeType, isFinal, signal) {
     void file;
     void durationMs;
     void mimeType;
     void isFinal;
+    void signal;
     await delay(MOCK_DELAY_MS);
 
     const fragmentIndex = (seq - 1) % TRANSCRIPT_FRAGMENTS.length;

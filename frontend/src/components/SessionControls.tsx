@@ -3,7 +3,7 @@
    start session button, session info display.
    ────────────────────────────────────────────── */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { SessionStatus } from '../hooks/useSession';
 
 interface Props {
@@ -23,6 +23,20 @@ export function SessionControls({
 }: Props) {
   const [doctorId, setDoctorId] = useState('doc_001');
   const [patientId, setPatientId] = useState('pat_001');
+  const hadSessionRef = useRef(false);
+
+  useEffect(() => {
+    if (sessionId) {
+      hadSessionRef.current = true;
+      return;
+    }
+
+    if (hadSessionRef.current && sessionStatus === 'idle') {
+      setDoctorId('doc_001');
+      setPatientId('pat_001');
+      hadSessionRef.current = false;
+    }
+  }, [sessionId, sessionStatus]);
 
   const canStart = sessionStatus === 'idle';
   const canClose = sessionStatus === 'created' || sessionStatus === 'active';

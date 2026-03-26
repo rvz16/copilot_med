@@ -3,7 +3,7 @@
    Single-page layout with five panels.
    ────────────────────────────────────────────── */
 
-import { useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { SessionControls } from './components/SessionControls';
 import { RecordingControls } from './components/RecordingControls';
 import { TranscriptPanel } from './components/TranscriptPanel';
@@ -18,6 +18,9 @@ const IS_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
 export default function App() {
   const session = useSession();
   const uploader = useUploader(session.sessionId);
+  const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [isClosingSession, setIsClosingSession] = useState(false);
+  const pendingStopRequestRef = useRef<Promise<unknown> | null>(null);
 
   const onChunk = (blob: Blob, isFinal: boolean) => {
     uploader.enqueueChunk(blob, isFinal);
@@ -31,26 +34,79 @@ export default function App() {
   // ── Handlers ──────────────────────────────
 
   const handleStartSession = async (doctorId: string, patientId: string) => {
-    await session.createSession(doctorId, patientId);
+    try {
+      setIsCreatingSession(true);
+      await session.createSession(doctorId, patientId);
+    } catch {
+      // useSession stores the user-visible error state.
+    } finally {
+      setIsCreatingSession(false);
+    }
   };
 
   const handleStartRecording = async () => {
-    await recorder.startRecording();
+    const started = await recorder.startRecording();
+    if (!started) return;
     session.setRecordingState('recording');
     session.setSessionStatus('active');
   };
 
   const handleStopRecording = async () => {
-    recorder.stopRecording();
-    await session.stopRecording();
+    const hadActiveRecording = recorder.isRecording || session.recordingState === 'recording';
+    if (!hadActiveRecording || pendingStopRequestRef.current) return;
+
+    if (recorder.isRecording) {
+      void recorder.stopRecording({ discardCurrentChunk: true });
+    }
+
+    uploader.discardPending();
+    session.setRecordingState('stopped');
+
+    const stopRequest = session.stopRecording().catch(() => {
+      // useSession stores the user-visible error state.
+    });
+    pendingStopRequestRef.current = stopRequest;
+    await stopRequest.finally(() => {
+      if (pendingStopRequestRef.current === stopRequest) {
+        pendingStopRequestRef.current = null;
+      }
+    });
   };
 
   const handleCloseSession = async () => {
-    if (recorder.isRecording) {
-      recorder.stopRecording();
+    const hadActiveRecording = recorder.isRecording || session.recordingState === 'recording';
+
+    try {
+      setIsClosingSession(true);
+      if (recorder.isRecording) {
+        void recorder.stopRecording({ discardCurrentChunk: true });
+      }
+      uploader.discardPending();
+      if (hadActiveRecording) {
+        session.setRecordingState('stopped');
+      }
+
+      if (!pendingStopRequestRef.current && hadActiveRecording) {
+        const stopRequest = session.stopRecording().catch(() => {
+          // Closing still has a chance to succeed even if stop fails.
+        });
+        pendingStopRequestRef.current = stopRequest;
+      }
+
+      if (pendingStopRequestRef.current) {
+        await pendingStopRequestRef.current.finally(() => {
+          pendingStopRequestRef.current = null;
+        });
+      }
+      await session.closeSession();
+      recorder.resetRecorder();
+      uploader.resetUploader();
+      session.resetSession();
+    } catch {
+      // useSession/useUploader store the user-visible error state.
+    } finally {
+      setIsClosingSession(false);
     }
-    await session.closeSession();
-    uploader.resetUploader();
   };
 
   // ── Errors ────────────────────────────────
@@ -68,6 +124,9 @@ export default function App() {
   const canRecord =
     (session.sessionStatus === 'created' || session.sessionStatus === 'active') &&
     session.recordingState !== 'stopped';
+  const hasSession = session.sessionId !== null;
+  const sessionControlsDisabled = isCreatingSession || isClosingSession;
+  const recordingControlsDisabled = isClosingSession;
 
   return (
     <div className="app">
@@ -83,23 +142,28 @@ export default function App() {
             sessionStatus={session.sessionStatus}
             onStartSession={handleStartSession}
             onCloseSession={handleCloseSession}
-            disabled={false}
+            disabled={sessionControlsDisabled}
           />
-          <RecordingControls
-            recordingState={session.recordingState}
-            isRecording={recorder.isRecording}
-            uploadStatus={uploader.uploadStatus}
-            chunksUploaded={uploader.chunksUploaded}
-            canRecord={canRecord}
-            onStartRecording={handleStartRecording}
-            onStopRecording={handleStopRecording}
-          />
+          {hasSession && (
+            <RecordingControls
+              recordingState={session.recordingState}
+              isRecording={recorder.isRecording}
+              uploadStatus={uploader.uploadStatus}
+              chunksUploaded={uploader.chunksUploaded}
+              canRecord={canRecord}
+              disabled={recordingControlsDisabled}
+              onStartRecording={handleStartRecording}
+              onStopRecording={handleStopRecording}
+            />
+          )}
         </div>
 
-        <div className="column column-right">
-          <TranscriptPanel transcript={uploader.transcript} />
-          <HintsPanel hints={uploader.hints} analysis={uploader.latestAnalysis} />
-        </div>
+        {hasSession && (
+          <div className="column column-right">
+            <TranscriptPanel transcript={uploader.transcript} />
+            <HintsPanel hints={uploader.hints} analysis={uploader.latestAnalysis} />
+          </div>
+        )}
       </main>
 
       <StatusPanel errors={errors} />

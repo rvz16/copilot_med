@@ -12,6 +12,7 @@ interface Props {
   uploadStatus: UploadStatus;
   chunksUploaded: number;
   canRecord: boolean;
+  disabled?: boolean;
   onStartRecording: () => void;
   onStopRecording: () => void;
 }
@@ -22,6 +23,7 @@ export function RecordingControls({
   uploadStatus,
   chunksUploaded,
   canRecord,
+  disabled = false,
   onStartRecording,
   onStopRecording,
 }: Props) {
@@ -33,7 +35,7 @@ export function RecordingControls({
         <button
           id="btn-start-recording"
           onClick={onStartRecording}
-          disabled={!canRecord || isRecording}
+          disabled={disabled || !canRecord || isRecording}
         >
           🎙️ Start Recording
         </button>
@@ -41,7 +43,7 @@ export function RecordingControls({
         <button
           id="btn-stop-recording"
           onClick={onStopRecording}
-          disabled={!isRecording}
+          disabled={disabled || !isRecording}
           className="btn-secondary"
         >
           ⏹️ Stop Recording
