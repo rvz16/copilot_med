@@ -17,9 +17,9 @@ RUN uv venv --python 3.11 .venv && \
 
 COPY app/ app/
 COPY scripts/ scripts/
+RUN chmod +x scripts/start.sh
 
 ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8000
-
 CMD ["./scripts/start.sh"]
