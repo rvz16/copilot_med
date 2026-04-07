@@ -12,7 +12,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.config import MODEL_KAGGLE_DATASET, MODEL_PATH
 
-
 MODEL_MARKERS = ("model.bin", "config.json")
 
 
@@ -64,11 +63,9 @@ def remove_path(path: Path) -> None:
 def find_model_dir(search_root: Path) -> Path | None:
     if is_model_dir(search_root):
         return search_root
-
     direct_candidate = search_root / MODEL_PATH.name
     if is_model_dir(direct_candidate):
         return direct_candidate
-
     for candidate in search_root.rglob("*"):
         if is_model_dir(candidate):
             return candidate
@@ -81,6 +78,7 @@ def download_model() -> None:
         return
 
     ensure_kaggle_credentials()
+
     if not has_kaggle_credentials():
         raise RuntimeError(
             "Kaggle credentials not found. Provide ~/.kaggle/kaggle.json, ~/.kaggle/access_token, "
@@ -90,12 +88,16 @@ def download_model() -> None:
     from kaggle.api.kaggle_api_extended import KaggleApi
 
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+
     with tempfile.TemporaryDirectory(prefix="whisper-ct2-", dir=str(MODEL_PATH.parent)) as tmp_dir:
         temp_root = Path(tmp_dir)
         print(f"Downloading {MODEL_KAGGLE_DATASET} into {temp_root} ...")
+
         api = KaggleApi()
         api.authenticate()
-        api.dataset_download_files(MODEL_KAGGLE_DATASET, path=str(temp_root), unzip=True, quiet=False, force=True)
+        api.dataset_download_files(
+            MODEL_KAGGLE_DATASET, path=str(temp_root), unzip=True, quiet=False, force=True,
+        )
 
         downloaded_model_dir = find_model_dir(temp_root)
         if downloaded_model_dir is None:
