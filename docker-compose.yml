@@ -27,13 +27,25 @@ services:
       retries: 20
       start_period: 180s
 
+  fhir:
+    build:
+      context: ./fhir
+    user: "0:0"
+    ports:
+      - "8092:8092"
+    volumes:
+      - fhir-data:/data/hapi
+
   realtime-analysis:
     build:
       context: ./real_time_analysis
+    depends_on:
+      fhir:
+        condition: service_started
     environment:
       MODEL_NAME: ${REALTIME_ANALYSIS_MODEL_NAME:-qwen3:4b}
       LLM_BASE_URL: ${REALTIME_ANALYSIS_LLM_BASE_URL:-http://host.docker.internal:11434}
-      FHIR_BASE_URL: ${REALTIME_ANALYSIS_FHIR_BASE_URL:-http://158.160.84.63:8092/hapi-fhir-jpaserver/fhir}
+      FHIR_BASE_URL: ${REALTIME_ANALYSIS_FHIR_BASE_URL:-http://fhir:8092/fhir}
       MAX_TOKENS: ${REALTIME_ANALYSIS_MAX_TOKENS:-256}
       TEMPERATURE: ${REALTIME_ANALYSIS_TEMPERATURE:-0.0}
       LLM_TIMEOUT: ${REALTIME_ANALYSIS_LLM_TIMEOUT:-8.0}
@@ -106,5 +118,6 @@ services:
       - "3000:80"
 
 volumes:
+  fhir-data:
   session-manager-data:
   transcribation-model:
