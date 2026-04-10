@@ -243,7 +243,7 @@ class AssistController:
                     continue
                 seen.add(key)
                 refs.append({
-                    "source": item.get("source") if isinstance(item.get("source"), str) else "mock_kb",
+                    "source": item.get("source") if isinstance(item.get("source"), str) else "heuristic_rules",
                     "title": " ".join(title.split()),
                     "snippet": " ".join(snippet.split()),
                     "url": item.get("url") if isinstance(item.get("url"), str) else None,

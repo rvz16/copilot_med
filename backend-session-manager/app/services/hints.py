@@ -1,6 +1,9 @@
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 import hashlib
 from typing import Any
+
+_FUZZY_SIMILARITY_THRESHOLD = 0.85
 
 
 @dataclass(frozen=True)
@@ -40,6 +43,22 @@ class HintService:
         ),
     )
 
+    @staticmethod
+    def _is_fuzzy_duplicate(
+        hint_type: str,
+        message: str,
+        existing_pairs: set[tuple[str, str]],
+    ) -> bool:
+        """Check if a message is a near-duplicate of any existing hint of the same type."""
+        normalized = " ".join(message.lower().split())
+        for existing_type, existing_message in existing_pairs:
+            if existing_type != hint_type:
+                continue
+            existing_normalized = " ".join(existing_message.lower().split())
+            if SequenceMatcher(None, normalized, existing_normalized).ratio() >= _FUZZY_SIMILARITY_THRESHOLD:
+                return True
+        return False
+
     def generate(
         self,
         *,
@@ -54,6 +73,8 @@ class HintService:
                 continue
             pair = (rule.hint_type, rule.message)
             if pair in existing_pairs:
+                continue
+            if self._is_fuzzy_duplicate(rule.hint_type, rule.message, existing_pairs):
                 continue
             digest = hashlib.sha1(f"{session_id}:{rule.hint_type}:{rule.message}".encode("utf-8")).hexdigest()[:10]
             generated.append(
@@ -89,6 +110,8 @@ class HintService:
                 hint_type = "next_step"
             pair = (hint_type, text.strip())
             if pair in existing_pairs:
+                continue
+            if self._is_fuzzy_duplicate(hint_type, text.strip(), existing_pairs):
                 continue
             generated.append(
                 {

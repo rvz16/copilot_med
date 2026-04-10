@@ -3,7 +3,8 @@
    hints from Session Manager.
    ────────────────────────────────────────────── */
 
-import type { Hint, RealtimeAnalysis, RecommendedDocument } from '../types/types';
+import { useMemo } from 'react';
+import type { Hint, RealtimeAnalysis, RecommendedDocument, RealtimeSuggestion } from '../types/types';
 
 interface Props {
   hints: Hint[];
@@ -17,12 +18,56 @@ const SEVERITY_COLORS: Record<string, string> = {
   low: '#27ae60',
 };
 
+const SUGGESTION_COLUMNS = [
+  { type: 'diagnosis_suggestion', label: 'Diagnosis Suggestions', icon: '🩺' },
+  { type: 'question_to_ask', label: 'Questions to Ask', icon: '❓' },
+  { type: 'next_step', label: 'Next Steps', icon: '➡️' },
+] as const;
+
 const FACT_SECTIONS = [
   { key: 'symptoms', label: 'Symptoms' },
   { key: 'conditions', label: 'Conditions' },
   { key: 'medications', label: 'Medications' },
   { key: 'allergies', label: 'Allergies' },
 ] as const;
+
+function groupAndSort(suggestions: RealtimeSuggestion[]) {
+  const grouped: Record<string, RealtimeSuggestion[]> = {};
+  for (const col of SUGGESTION_COLUMNS) {
+    grouped[col.type] = [];
+  }
+  for (const suggestion of suggestions) {
+    if (grouped[suggestion.type]) {
+      grouped[suggestion.type].push(suggestion);
+    }
+  }
+  // Sort each group by confidence descending
+  for (const key of Object.keys(grouped)) {
+    grouped[key].sort((a, b) => b.confidence - a.confidence);
+  }
+  return grouped;
+}
+
+function groupHintsAndSort(hints: Hint[]) {
+  const grouped: Record<string, Hint[]> = {};
+  for (const col of SUGGESTION_COLUMNS) {
+    grouped[col.type] = [];
+  }
+  const other: Hint[] = [];
+  for (const hint of hints) {
+    if (grouped[hint.type]) {
+      grouped[hint.type].push(hint);
+    } else {
+      other.push(hint);
+    }
+  }
+  // Sort each group by confidence descending
+  for (const key of Object.keys(grouped)) {
+    grouped[key].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+  }
+  other.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+  return { grouped, other };
+}
 
 export function HintsPanel({ hints, analysis, recommendedDocument }: Props) {
   const hasVitals =
@@ -40,6 +85,24 @@ export function HintsPanel({ hints, analysis, recommendedDocument }: Props) {
       analysis.patient_context !== null ||
       FACT_SECTIONS.some(({ key }) => analysis.extracted_facts[key].length > 0)
     );
+
+  const groupedSuggestions = useMemo(
+    () => (analysis ? groupAndSort(analysis.suggestions) : null),
+    [analysis],
+  );
+
+  const { grouped: groupedHints, other: otherHints } = useMemo(
+    () => groupHintsAndSort(hints),
+    [hints],
+  );
+
+  const hasGroupedSuggestions = groupedSuggestions
+    ? SUGGESTION_COLUMNS.some(({ type }) => groupedSuggestions[type].length > 0)
+    : false;
+
+  const hasGroupedHints = SUGGESTION_COLUMNS.some(
+    ({ type }) => groupedHints[type].length > 0,
+  ) || otherHints.length > 0;
 
   return (
     <section className="panel" id="hints-panel">
@@ -89,22 +152,37 @@ export function HintsPanel({ hints, analysis, recommendedDocument }: Props) {
                 </span>
               </div>
 
-              {analysis.suggestions.length > 0 && (
+              {hasGroupedSuggestions && (
                 <div className="analysis-section">
                   <h3 className="analysis-title">Suggestions</h3>
-                  <ul className="hints-list">
-                    {analysis.suggestions.map((suggestion, index) => (
-                      <li key={`${suggestion.type}-${index}`} className="hint-card">
-                        <div className="hint-header">
-                          <span className="hint-type">{suggestion.type}</span>
-                          <span className="hint-confidence">
-                            {(suggestion.confidence * 100).toFixed(0)}%
-                          </span>
+                  <div className="suggestion-columns">
+                    {SUGGESTION_COLUMNS.map(({ type, label, icon }) => {
+                      const items = groupedSuggestions![type] ?? [];
+                      return (
+                        <div key={type} className="suggestion-column">
+                          <h4 className="suggestion-column-title">
+                            <span>{icon}</span> {label}
+                          </h4>
+                          {items.length === 0 ? (
+                            <p className="placeholder-text suggestion-empty">—</p>
+                          ) : (
+                            <ul className="hints-list">
+                              {items.map((suggestion, index) => (
+                                <li key={`${suggestion.type}-${index}`} className="hint-card">
+                                  <div className="hint-header">
+                                    <span className="hint-confidence">
+                                      {(suggestion.confidence * 100).toFixed(0)}%
+                                    </span>
+                                  </div>
+                                  <p className="hint-message">{suggestion.text}</p>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
                         </div>
-                        <p className="hint-message">{suggestion.text}</p>
-                      </li>
-                    ))}
-                  </ul>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
@@ -236,32 +314,77 @@ export function HintsPanel({ hints, analysis, recommendedDocument }: Props) {
 
           <div className="analysis-section">
             <h3 className="analysis-title">Stored Hints</h3>
-            {hints.length === 0 ? (
+            {!hasGroupedHints ? (
               <p className="placeholder-text">No hints stored yet.</p>
             ) : (
-              <ul className="hints-list">
-                {hints.map((h) => (
-                  <li key={h.hint_id} className="hint-card">
-                    <div className="hint-header">
-                      <span className="hint-type">{h.type}</span>
-                      {h.severity && (
-                        <span
-                          className="hint-severity"
-                          style={{ color: SEVERITY_COLORS[h.severity] ?? '#888' }}
-                        >
-                          {h.severity}
-                        </span>
-                      )}
-                      {typeof h.confidence === 'number' && (
-                        <span className="hint-confidence">
-                          {(h.confidence * 100).toFixed(0)}%
-                        </span>
+              <div className="suggestion-columns">
+                {SUGGESTION_COLUMNS.map(({ type, label, icon }) => {
+                  const items = groupedHints[type] ?? [];
+                  return (
+                    <div key={type} className="suggestion-column">
+                      <h4 className="suggestion-column-title">
+                        <span>{icon}</span> {label}
+                      </h4>
+                      {items.length === 0 ? (
+                        <p className="placeholder-text suggestion-empty">—</p>
+                      ) : (
+                        <ul className="hints-list">
+                          {items.map((h) => (
+                            <li key={h.hint_id} className="hint-card">
+                              <div className="hint-header">
+                                {h.severity && (
+                                  <span
+                                    className="hint-severity"
+                                    style={{ color: SEVERITY_COLORS[h.severity] ?? '#888' }}
+                                  >
+                                    {h.severity}
+                                  </span>
+                                )}
+                                {typeof h.confidence === 'number' && (
+                                  <span className="hint-confidence">
+                                    {(h.confidence * 100).toFixed(0)}%
+                                  </span>
+                                )}
+                              </div>
+                              <p className="hint-message">{h.message}</p>
+                            </li>
+                          ))}
+                        </ul>
                       )}
                     </div>
-                    <p className="hint-message">{h.message}</p>
-                  </li>
-                ))}
-              </ul>
+                  );
+                })}
+                {otherHints.length > 0 && (
+                  <div className="suggestion-column">
+                    <h4 className="suggestion-column-title">
+                      <span>📋</span> Other
+                    </h4>
+                    <ul className="hints-list">
+                      {otherHints.map((h) => (
+                        <li key={h.hint_id} className="hint-card">
+                          <div className="hint-header">
+                            <span className="hint-type">{h.type}</span>
+                            {h.severity && (
+                              <span
+                                className="hint-severity"
+                                style={{ color: SEVERITY_COLORS[h.severity] ?? '#888' }}
+                              >
+                                {h.severity}
+                              </span>
+                            )}
+                            {typeof h.confidence === 'number' && (
+                              <span className="hint-confidence">
+                                {(h.confidence * 100).toFixed(0)}%
+                              </span>
+                            )}
+                          </div>
+                          <p className="hint-message">{h.message}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

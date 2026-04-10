@@ -330,6 +330,46 @@ button:disabled {
   font-size: 0.85rem;
 }
 
+/* ── Suggestion columns ─────────────────── */
+
+.suggestion-columns {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+
+@media (max-width: 900px) {
+  .suggestion-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.suggestion-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: #f8f9fb;
+  border: 1px solid #eaecef;
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.suggestion-column-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.suggestion-empty {
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 0.5rem 0;
+}
+
 /* ── Errors ──────────────────────────────── */
 
 .error-list {

@@ -401,12 +401,33 @@ class SessionService:
 
         items = response.get("items", [])
         if not isinstance(items, list) or not items:
+            logger.info(
+                "Clinical recommendations search for '%s' returned no items (session %s)",
+                query,
+                session.session_id,
+            )
             return None
 
         top_match = items[0]
         if not isinstance(top_match, dict):
             return None
+
+        logger.info(
+            "Clinical recommendations search for '%s': top_match id=%s title=%s pdf_available=%s score=%s (session %s)",
+            query,
+            top_match.get("id"),
+            top_match.get("title"),
+            top_match.get("pdf_available"),
+            top_match.get("score"),
+            session.session_id,
+        )
+
         if not top_match.get("pdf_available"):
+            logger.info(
+                "Clinical recommendations: PDF not available for recommendation '%s' (session %s)",
+                top_match.get("id"),
+                session.session_id,
+            )
             return None
 
         recommendation_id = top_match.get("id")

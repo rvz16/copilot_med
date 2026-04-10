@@ -267,7 +267,7 @@ def build_knowledge_refs(transcript_chunk: str, facts: dict[str, Any]) -> list[d
         if any(keyword in lowered for keyword in rule["keywords"]):
             refs.append(
                 {
-                    "source": "mock_kb",
+                    "source": "heuristic_rules",
                     "title": rule["title"],
                     "snippet": rule["snippet"],
                     "url": None,
@@ -278,7 +278,7 @@ def build_knowledge_refs(transcript_chunk: str, facts: dict[str, Any]) -> list[d
     if not refs and facts.get("symptoms"):
         refs.append(
             {
-                "source": "mock_kb",
+                "source": "heuristic_rules",
                 "title": "General Symptom Triage Checklist",
                 "snippet": "Structured triage prompts for symptom progression and red flags.",
                 "url": None,
