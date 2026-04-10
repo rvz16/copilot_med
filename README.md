@@ -251,6 +251,7 @@ curl http://localhost:8080/api/v1/sessions/<session_id>/extractions
   - optional patient context
   - error list
 - Uses Ollama on the host by default through `host.docker.internal`
+- Can also target OpenAI-compatible hosted APIs such as OpenRouter or Google AI Developer
 
 ## Compose Environment Overrides
 
@@ -261,8 +262,13 @@ Important root-level environment overrides:
 | `KAGGLE_API_TOKEN` | empty | Optional Kaggle auth for model bootstrap |
 | `KAGGLE_USERNAME` | empty | Optional Kaggle auth for model bootstrap |
 | `KAGGLE_KEY` | empty | Optional Kaggle auth for model bootstrap |
+| `REALTIME_ANALYSIS_LLM_PROVIDER` | `ollama` | `ollama` or `openai_compatible` |
 | `REALTIME_ANALYSIS_MODEL_NAME` | `qwen3:4b` | Model name passed to realtime-analysis |
-| `REALTIME_ANALYSIS_LLM_BASE_URL` | `http://host.docker.internal:11434` | Ollama base URL used by realtime-analysis |
+| `REALTIME_ANALYSIS_LLM_BASE_URL` | `http://host.docker.internal:11434` | Ollama base URL or OpenAI-compatible base URL |
+| `REALTIME_ANALYSIS_LLM_API_KEY` | empty | API key for hosted OpenAI-compatible providers |
+| `REALTIME_ANALYSIS_LLM_HTTP_REFERER` | empty | Optional `HTTP-Referer` header, useful for OpenRouter |
+| `REALTIME_ANALYSIS_LLM_X_TITLE` | `MedCoPilot` | Optional `X-Title` header, useful for OpenRouter |
+| `REALTIME_ANALYSIS_LLM_EXTRA_HEADERS_JSON` | empty | Optional JSON object with extra outbound LLM headers |
 | `REALTIME_ANALYSIS_FHIR_BASE_URL` | `http://158.160.84.63:8092/hapi-fhir-jpaserver/fhir` | Default FHIR endpoint |
 | `REALTIME_ANALYSIS_MAX_TOKENS` | `256` | Max generation tokens |
 | `REALTIME_ANALYSIS_TEMPERATURE` | `0.0` | Generation temperature |
@@ -274,7 +280,11 @@ Important root-level environment overrides:
 Example override:
 
 ```bash
-REALTIME_ANALYSIS_LLM_BASE_URL=http://host.docker.internal:11434 \
+REALTIME_ANALYSIS_LLM_PROVIDER=openai_compatible \
+REALTIME_ANALYSIS_MODEL_NAME=google/gemini-2.0-flash-exp:free \
+REALTIME_ANALYSIS_LLM_BASE_URL=https://openrouter.ai/api/v1 \
+REALTIME_ANALYSIS_LLM_API_KEY=your_openrouter_key \
+REALTIME_ANALYSIS_LLM_HTTP_REFERER=http://localhost:3000 \
 REALTIME_ANALYSIS_LANGUAGE=en \
 docker compose up --build
 ```

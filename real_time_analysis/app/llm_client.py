@@ -1,4 +1,4 @@
-"""Lightweight LLM client that talks to Ollama (native API) or OpenAI-compatible endpoints."""
+"""Lightweight LLM client that talks to Ollama or OpenAI-compatible endpoints."""
 from __future__ import annotations
 
 import json
@@ -14,6 +14,16 @@ from app.heuristics import clamp_confidence, normalize_text_list
 
 logger = logging.getLogger("medcopilot.llm")
 
+_OPENAI_COMPATIBLE_PROVIDERS = {
+    "openai_compatible",
+    "openai-compatible",
+    "openrouter",
+    "google_ai",
+    "google-ai",
+    "google_ai_openai",
+    "google-openai",
+}
+
 SYSTEM_PROMPT = """\
 Clinical assistant. Return ONLY a short JSON object:
 {"suggestions":[{"type":"diagnosis_suggestion|question_to_ask|next_step|warning","text":"...","confidence":0.0-1.0}],\
@@ -26,21 +36,28 @@ If type is diagnosis_suggestion, text must contain only the most likely diagnosi
 
 
 class LLMClient:
-    """Calls Ollama native API for structured clinical output."""
+    """Calls Ollama or OpenAI-compatible APIs for structured clinical output."""
 
     def __init__(
         self,
         base_url: str | None = None,
         model_name: str | None = None,
+        provider: str | None = None,
+        api_key: str | None = None,
         max_tokens: int = 512,
         temperature: float = 0.0,
         timeout: float = 30.0,
     ) -> None:
+        self.provider = (provider or os.getenv("LLM_PROVIDER", "ollama")).strip().lower()
         self.base_url = (base_url or os.getenv("LLM_BASE_URL", "http://localhost:11434")).rstrip("/")
         self.model_name = model_name or os.getenv("MODEL_NAME", "qwen3:4b")
+        self.api_key = api_key if api_key is not None else os.getenv("LLM_API_KEY")
         self.max_tokens = int(os.getenv("MAX_TOKENS", "256"))
         self.temperature = float(os.getenv("TEMPERATURE", str(temperature)))
         self.timeout = float(os.getenv("LLM_TIMEOUT", str(timeout)))
+        self.http_referer = os.getenv("LLM_HTTP_REFERER", "").strip()
+        self.x_title = os.getenv("LLM_X_TITLE", "").strip()
+        self.extra_headers = self._load_extra_headers(os.getenv("LLM_EXTRA_HEADERS_JSON", ""))
         self._client = httpx.AsyncClient(timeout=self.timeout)
 
     async def generate_structured(
@@ -69,29 +86,18 @@ class LLMClient:
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_content},
             ],
-            "stream": False,
-            "format": "json",
-            "think": False,
-            "options": {
-                "temperature": self.temperature,
-                "num_predict": self.max_tokens,
-                "num_ctx": 2048,
-            },
         }
 
         try:
             start = time.perf_counter()
-            resp = await self._client.post(f"{self.base_url}/api/chat", json=body)
+            raw_text, status_code = await self._generate_raw_text(body)
             elapsed = time.perf_counter() - start
-            logger.info("Ollama responded in %.1fms (status=%d)", elapsed * 1000, resp.status_code)
-
-            resp.raise_for_status()
-            data = resp.json()
-            msg = data.get("message", {})
-            raw_text = msg.get("content", "")
-            # Fallback: if content is empty but thinking has the output
-            if not raw_text.strip() and msg.get("thinking"):
-                raw_text = msg["thinking"]
+            logger.info(
+                "LLM provider %s responded in %.1fms (status=%d)",
+                self.provider,
+                elapsed * 1000,
+                status_code,
+            )
             logger.info("Raw LLM output (first 300 chars): %s", raw_text[:300])
 
             parsed = self._extract_json(raw_text)
@@ -112,6 +118,112 @@ class LLMClient:
 
     async def close(self) -> None:
         await self._client.aclose()
+
+    async def _generate_raw_text(self, body: dict[str, Any]) -> tuple[str, int]:
+        if self.provider == "ollama":
+            return await self._generate_ollama_raw_text(body)
+        if self.provider in _OPENAI_COMPATIBLE_PROVIDERS:
+            return await self._generate_openai_compatible_raw_text(body)
+        raise RuntimeError(f"unsupported_llm_provider: {self.provider}")
+
+    async def _generate_ollama_raw_text(self, body: dict[str, Any]) -> tuple[str, int]:
+        ollama_body = {
+            **body,
+            "stream": False,
+            "format": "json",
+            "think": False,
+            "options": {
+                "temperature": self.temperature,
+                "num_predict": self.max_tokens,
+                "num_ctx": 2048,
+            },
+        }
+        response = await self._client.post(f"{self.base_url}/api/chat", json=ollama_body)
+        response.raise_for_status()
+        data = response.json()
+        msg = data.get("message", {})
+        raw_text = msg.get("content", "")
+        if not raw_text.strip() and msg.get("thinking"):
+            raw_text = msg["thinking"]
+        return str(raw_text), response.status_code
+
+    async def _generate_openai_compatible_raw_text(self, body: dict[str, Any]) -> tuple[str, int]:
+        openai_body = {
+            **body,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "stream": False,
+        }
+        response = await self._client.post(
+            self._openai_chat_endpoint(),
+            json=openai_body,
+            headers=self._openai_headers(),
+        )
+        response.raise_for_status()
+        data = response.json()
+        return self._extract_openai_message_content(data), response.status_code
+
+    def _openai_chat_endpoint(self) -> str:
+        if self.base_url.endswith("/chat/completions"):
+            return self.base_url
+        return f"{self.base_url}/chat/completions"
+
+    def _openai_headers(self) -> dict[str, str]:
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        if self.http_referer:
+            headers["HTTP-Referer"] = self.http_referer
+        if self.x_title:
+            headers["X-Title"] = self.x_title
+        headers.update(self.extra_headers)
+        return headers
+
+    @staticmethod
+    def _extract_openai_message_content(payload: dict[str, Any]) -> str:
+        choices = payload.get("choices")
+        if not isinstance(choices, list) or not choices:
+            return ""
+        first = choices[0]
+        if not isinstance(first, dict):
+            return ""
+        message = first.get("message", {})
+        if not isinstance(message, dict):
+            return ""
+        content = message.get("content", "")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts: list[str] = []
+            for item in content:
+                if isinstance(item, str):
+                    parts.append(item)
+                    continue
+                if not isinstance(item, dict):
+                    continue
+                text = item.get("text")
+                if isinstance(text, str):
+                    parts.append(text)
+            return "".join(parts)
+        return ""
+
+    @staticmethod
+    def _load_extra_headers(raw_headers_json: str) -> dict[str, str]:
+        if not raw_headers_json.strip():
+            return {}
+        try:
+            parsed = json.loads(raw_headers_json)
+        except json.JSONDecodeError as exc:
+            logger.warning("Invalid LLM_EXTRA_HEADERS_JSON: %s", exc)
+            return {}
+        if not isinstance(parsed, dict):
+            logger.warning("LLM_EXTRA_HEADERS_JSON must be a JSON object.")
+            return {}
+        headers: dict[str, str] = {}
+        for key, value in parsed.items():
+            if isinstance(key, str) and isinstance(value, str):
+                headers[key] = value
+        return headers
 
     # --- JSON extraction ---
 
