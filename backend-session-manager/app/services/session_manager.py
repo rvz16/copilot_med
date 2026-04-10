@@ -18,6 +18,7 @@ from app.schemas.session import (
     HintResponse,
     HintsResponse,
     ListSessionsResponse,
+    RecommendedDocumentResponse,
     RealtimeAnalysisResponse,
     SessionDetailResponse,
     StopRecordingResponse,
@@ -27,6 +28,7 @@ from app.schemas.session import (
     UploadConfig,
 )
 from app.services.asr import AsrProvider
+from app.services.clinical_recommendations import ClinicalRecommendationsProvider
 from app.services.hints import HintService
 from app.services.knowledge_extractor import KnowledgeExtractorProvider
 from app.services.realtime_analysis import RealtimeAnalysisProvider
@@ -55,6 +57,7 @@ class SessionService:
         asr_provider: AsrProvider,
         hint_service: HintService,
         realtime_analysis: RealtimeAnalysisProvider,
+        clinical_recommendations: ClinicalRecommendationsProvider,
         knowledge_extractor: KnowledgeExtractorProvider,
     ) -> None:
         self.db = db
@@ -63,6 +66,7 @@ class SessionService:
         self.asr_provider = asr_provider
         self.hint_service = hint_service
         self.realtime_analysis = realtime_analysis
+        self.clinical_recommendations = clinical_recommendations
         self.knowledge_extractor = knowledge_extractor
 
     def create_session(self, doctor_id: str, patient_id: str) -> CreateSessionResponse:
@@ -193,6 +197,14 @@ class SessionService:
                     try:
                         analysis_raw = self.realtime_analysis.analyze(analysis_payload)
                         realtime_analysis_response = RealtimeAnalysisResponse.model_validate(analysis_raw)
+                        recommended_document = self._find_recommended_document(
+                            session=session,
+                            analysis=realtime_analysis_response,
+                        )
+                        if recommended_document is not None:
+                            realtime_analysis_response = realtime_analysis_response.model_copy(
+                                update={"recommended_document": recommended_document}
+                            )
                         self._log_external_call(
                             session=session,
                             service_name=self.realtime_analysis.service_name,
@@ -338,6 +350,84 @@ class SessionService:
         self.db.commit()
         self.db.refresh(session)
         return self._build_close_response(session)
+
+    def _find_recommended_document(
+        self,
+        *,
+        session: SessionRecord,
+        analysis: RealtimeAnalysisResponse,
+    ) -> RecommendedDocumentResponse | None:
+        diagnosis_candidates = [
+            suggestion
+            for suggestion in analysis.suggestions
+            if suggestion.type == "diagnosis_suggestion" and suggestion.text.strip()
+        ]
+        if not diagnosis_candidates:
+            return None
+
+        top_diagnosis = max(diagnosis_candidates, key=lambda suggestion: suggestion.confidence)
+        if top_diagnosis.confidence < self.settings.clinical_recommendations_min_confidence:
+            return None
+
+        query = top_diagnosis.text.strip()
+        request_payload = {"query": query, "limit": 1}
+        try:
+            response = self.clinical_recommendations.search(query=query, limit=1)
+            self._log_external_call(
+                session=session,
+                service_name=self.clinical_recommendations.service_name,
+                endpoint=self.clinical_recommendations.endpoint,
+                request_payload=request_payload,
+                response_payload=response,
+                status="success",
+                error_message=None,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Clinical recommendations lookup failed for session %s: %s",
+                session.session_id,
+                exc,
+            )
+            self._log_external_call(
+                session=session,
+                service_name=self.clinical_recommendations.service_name,
+                endpoint=self.clinical_recommendations.endpoint,
+                request_payload=request_payload,
+                response_payload=None,
+                status="failed",
+                error_message=str(exc),
+            )
+            return None
+
+        items = response.get("items", [])
+        if not isinstance(items, list) or not items:
+            return None
+
+        top_match = items[0]
+        if not isinstance(top_match, dict):
+            return None
+        if not top_match.get("pdf_available"):
+            return None
+
+        recommendation_id = top_match.get("id")
+        title = top_match.get("title")
+        pdf_url = self.clinical_recommendations.build_pdf_url(str(recommendation_id))
+        if not isinstance(recommendation_id, str) or not recommendation_id.strip():
+            return None
+        if not isinstance(title, str) or not title.strip():
+            return None
+        if not pdf_url:
+            return None
+
+        return RecommendedDocumentResponse(
+            recommendation_id=recommendation_id,
+            title=title.strip(),
+            matched_query=query,
+            diagnosis_confidence=top_diagnosis.confidence,
+            search_score=float(top_match.get("score", 0.0)),
+            pdf_available=True,
+            pdf_url=pdf_url,
+        )
 
     def get_session(self, session_id: str) -> SessionDetailResponse:
         session = self._get_session(session_id)

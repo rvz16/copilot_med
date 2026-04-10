@@ -3,11 +3,12 @@
    hints from Session Manager.
    ────────────────────────────────────────────── */
 
-import type { Hint, RealtimeAnalysis } from '../types/types';
+import type { Hint, RealtimeAnalysis, RecommendedDocument } from '../types/types';
 
 interface Props {
   hints: Hint[];
   analysis: RealtimeAnalysis | null;
+  recommendedDocument: RecommendedDocument | null;
 }
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -23,7 +24,7 @@ const FACT_SECTIONS = [
   { key: 'allergies', label: 'Allergies' },
 ] as const;
 
-export function HintsPanel({ hints, analysis }: Props) {
+export function HintsPanel({ hints, analysis, recommendedDocument }: Props) {
   const hasVitals =
     !!analysis &&
     Object.values(analysis.extracted_facts.vitals).some(
@@ -44,10 +45,39 @@ export function HintsPanel({ hints, analysis }: Props) {
     <section className="panel" id="hints-panel">
       <h2>Realtime Analysis</h2>
 
-      {!hasAnalysis && hints.length === 0 ? (
+      {!hasAnalysis && hints.length === 0 && !recommendedDocument ? (
         <p className="placeholder-text">Clinical analysis and hints will appear here.</p>
       ) : (
         <div className="analysis-stack">
+          {recommendedDocument && (
+            <div className="analysis-section">
+              <h3 className="analysis-title">Suggested Clinical Recommendation</h3>
+              <div className="hint-card">
+                <div className="hint-header">
+                  <span className="hint-type">clinical_recommendation</span>
+                  <span className="hint-confidence">
+                    {(recommendedDocument.diagnosis_confidence * 100).toFixed(0)}%
+                  </span>
+                </div>
+                <p className="hint-message">{recommendedDocument.title}</p>
+                <p className="hint-message">
+                  Diagnosis query: {recommendedDocument.matched_query}
+                </p>
+                <p className="hint-message">
+                  Recommendation ID: {recommendedDocument.recommendation_id}
+                </p>
+                <a
+                  className="hint-message"
+                  href={recommendedDocument.pdf_url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open PDF
+                </a>
+              </div>
+            </div>
+          )}
+
           {analysis && hasAnalysis && (
             <>
               <div className="analysis-meta">

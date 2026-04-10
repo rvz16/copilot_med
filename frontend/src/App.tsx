@@ -161,7 +161,11 @@ export default function App() {
         {hasSession && (
           <div className="column column-right">
             <TranscriptPanel transcript={uploader.transcript} />
-            <HintsPanel hints={uploader.hints} analysis={uploader.latestAnalysis} />
+            <HintsPanel
+              hints={uploader.hints}
+              analysis={uploader.latestAnalysis}
+              recommendedDocument={uploader.recommendedDocument}
+            />
           </div>
         )}
       </main>

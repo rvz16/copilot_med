@@ -81,6 +81,8 @@ services:
     build:
       context: ./backend-session-manager
     depends_on:
+      clinical-recommendations:
+        condition: service_healthy
       transcribation:
         condition: service_healthy
       realtime-analysis:
@@ -96,6 +98,11 @@ services:
       REALTIME_ANALYSIS_URL: http://realtime-analysis:8000/v1/assist
       REALTIME_ANALYSIS_LANGUAGE: ${REALTIME_ANALYSIS_LANGUAGE:-ru}
       REALTIME_ANALYSIS_TIMEOUT_SECONDS: ${REALTIME_ANALYSIS_TIMEOUT_SECONDS:-8}
+      CLINICAL_RECOMMENDATIONS_ENABLED: "true"
+      CLINICAL_RECOMMENDATIONS_URL: http://clinical-recommendations:8002
+      CLINICAL_RECOMMENDATIONS_PUBLIC_URL: http://localhost:8002
+      CLINICAL_RECOMMENDATIONS_TIMEOUT_SECONDS: 5
+      CLINICAL_RECOMMENDATIONS_MIN_CONFIDENCE: 0.6
       KNOWLEDGE_EXTRACTOR_MODE: mock
       KNOWLEDGE_EXTRACTOR_ENABLED: "true"
       HTTP_TIMEOUT_SECONDS: 120

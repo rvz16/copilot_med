@@ -1,6 +1,8 @@
 from fastapi.testclient import TestClient
 
+from app.clients.clinical_recommendations import HttpClinicalRecommendationsClient
 from app.services.asr import ChunkTranscriptionResult, MockAsrProvider
+from app.services.realtime_analysis import MockRealtimeAnalysisProvider
 
 
 def create_session(client: TestClient) -> str:
@@ -288,6 +290,108 @@ def test_realtime_analysis_failure_falls_back_to_local_hints(app_factory):
         assert body["realtime_analysis"] is None
         assert len(body["new_hints"]) == 1
         assert body["new_hints"][0]["type"] == "followup_hint"
+
+
+def test_upload_chunk_attaches_recommended_document_for_diagnosis_suggestion(app_factory, monkeypatch):
+    def fake_analyze(self, payload: dict) -> dict:
+        del self, payload
+        return {
+            "request_id": "sess_123-seq-1",
+            "latency_ms": 15,
+            "model": {"name": "mock-realtime-analysis", "quantization": "none"},
+            "suggestions": [
+                {
+                    "type": "diagnosis_suggestion",
+                    "text": "рак легких",
+                    "confidence": 0.82,
+                    "evidence": ["кашель, боль в груди"],
+                }
+            ],
+            "drug_interactions": [],
+            "extracted_facts": {
+                "symptoms": ["кашель"],
+                "conditions": [],
+                "medications": [],
+                "allergies": [],
+                "vitals": {
+                    "age": None,
+                    "weight_kg": None,
+                    "height_cm": None,
+                    "bp": None,
+                    "hr": None,
+                    "temp_c": None,
+                },
+            },
+            "knowledge_refs": [],
+            "patient_context": None,
+            "errors": [],
+        }
+
+    def fake_search(self, query: str, limit: int = 1) -> dict:
+        del self
+        assert query == "рак легких"
+        assert limit == 1
+        return {
+            "query": query,
+            "items": [
+                {
+                    "id": "30_5",
+                    "title": "Злокачественное новообразование бронхов и легкого",
+                    "pdf_number": 30,
+                    "pdf_filename": "КР30.pdf",
+                    "pdf_available": True,
+                    "score": 3.3448,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(MockRealtimeAnalysisProvider, "analyze", fake_analyze)
+    monkeypatch.setattr(HttpClinicalRecommendationsClient, "search", fake_search)
+
+    app = app_factory(
+        REALTIME_ANALYSIS_ENABLED=True,
+        REALTIME_ANALYSIS_MODE="mock",
+        CLINICAL_RECOMMENDATIONS_ENABLED=True,
+        CLINICAL_RECOMMENDATIONS_URL="http://recommendations.local",
+        CLINICAL_RECOMMENDATIONS_PUBLIC_URL="http://localhost:8002",
+    )
+    with TestClient(app) as client:
+        session_id = create_session(client)
+
+        response = upload_chunk(client, session_id, seq=1)
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["realtime_analysis"]["recommended_document"] == {
+            "recommendation_id": "30_5",
+            "title": "Злокачественное новообразование бронхов и легкого",
+            "matched_query": "рак легких",
+            "diagnosis_confidence": 0.82,
+            "search_score": 3.3448,
+            "pdf_available": True,
+            "pdf_url": "http://localhost:8002/api/v1/clinical-recommendations/30_5/pdf",
+        }
+
+
+def test_upload_chunk_skips_recommendation_lookup_without_diagnosis_suggestion(app_factory, monkeypatch):
+    def fail_search(self, query: str, limit: int = 1) -> dict:
+        del self, query, limit
+        raise AssertionError("clinical recommendations search should not be called")
+
+    monkeypatch.setattr(HttpClinicalRecommendationsClient, "search", fail_search)
+
+    app = app_factory(
+        REALTIME_ANALYSIS_ENABLED=True,
+        REALTIME_ANALYSIS_MODE="mock",
+        CLINICAL_RECOMMENDATIONS_ENABLED=True,
+    )
+    with TestClient(app) as client:
+        session_id = create_session(client)
+
+        response = upload_chunk(client, session_id, seq=1)
+
+        assert response.status_code == 200
+        assert response.json()["realtime_analysis"]["recommended_document"] is None
 
 
 def test_repeated_stop_is_idempotent(client: TestClient):

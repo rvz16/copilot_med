@@ -21,6 +21,7 @@ Clinical assistant. Return ONLY a short JSON object:
 "extracted_facts":{"symptoms":[],"conditions":[],"medications":[],"allergies":[],"vitals":{"age":null,"weight_kg":null,"height_cm":null,"bp":null,"hr":null,"temp_c":null}},\
 "knowledge_refs":[]}
 Rules: Max 3 suggestions. Keep text short (under 15 words). No markdown. Confidence 0-1. Empty lists when unsure.\
+If type is diagnosis_suggestion, text must contain only the most likely diagnosis or condition name in the same language as the transcript. No prefixes like "consider", "rule out", "check for", or treatment advice.\
 """
 
 

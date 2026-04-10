@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings
 from app.db.session import Database
 from app.services.asr import build_asr_provider
+from app.services.clinical_recommendations import build_clinical_recommendations_provider
 from app.services.hints import HintService
 from app.services.knowledge_extractor import build_knowledge_extractor_provider
 from app.services.realtime_analysis import build_realtime_analysis_provider
@@ -41,5 +42,6 @@ def get_session_service(
         asr_provider=build_asr_provider(settings),
         hint_service=HintService(),
         realtime_analysis=build_realtime_analysis_provider(settings),
+        clinical_recommendations=build_clinical_recommendations_provider(settings),
         knowledge_extractor=build_knowledge_extractor_provider(settings),
     )
