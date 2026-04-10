@@ -16,7 +16,7 @@ export function useUploader(sessionId: string | null) {
   const [transcript, setTranscript] = useState('');
   const [hints, setHints] = useState<Hint[]>([]);
   const [latestAnalysis, setLatestAnalysis] = useState<RealtimeAnalysis | null>(null);
-  const [recommendedDocument, setRecommendedDocument] = useState<RecommendedDocument | null>(null);
+  const [recommendedDocuments, setRecommendedDocuments] = useState<RecommendedDocument[]>([]);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [chunksUploaded, setChunksUploaded] = useState(0);
@@ -80,8 +80,8 @@ export function useUploader(sessionId: string | null) {
         }
         if (res.realtime_analysis) {
           setLatestAnalysis(res.realtime_analysis);
-          if (res.realtime_analysis.recommended_document) {
-            setRecommendedDocument(res.realtime_analysis.recommended_document);
+          if (res.realtime_analysis.recommended_documents) {
+            setRecommendedDocuments(res.realtime_analysis.recommended_documents);
           }
         }
         if (res.new_hints && res.new_hints.length > 0) {
@@ -154,7 +154,7 @@ export function useUploader(sessionId: string | null) {
     setTranscript('');
     setHints([]);
     setLatestAnalysis(null);
-    setRecommendedDocument(null);
+    setRecommendedDocuments([]);
     setChunksUploaded(0);
   }, [discardPending]);
 
@@ -162,7 +162,7 @@ export function useUploader(sessionId: string | null) {
     transcript,
     hints,
     latestAnalysis,
-    recommendedDocument,
+    recommendedDocuments,
     uploadStatus,
     uploadError,
     chunksUploaded,

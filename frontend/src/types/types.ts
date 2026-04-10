@@ -114,7 +114,7 @@ export interface RealtimeAnalysis {
   drug_interactions: RealtimeDrugInteraction[];
   extracted_facts: RealtimeExtractedFacts;
   knowledge_refs: RealtimeKnowledgeRef[];
-  recommended_document?: RecommendedDocument | null;
+  recommended_documents?: RecommendedDocument[];
   patient_context: RealtimePatientContext | null;
   errors: string[];
 }

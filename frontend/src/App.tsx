@@ -164,7 +164,7 @@ export default function App() {
             <HintsPanel
               hints={uploader.hints}
               analysis={uploader.latestAnalysis}
-              recommendedDocument={uploader.recommendedDocument}
+              recommendedDocuments={uploader.recommendedDocuments}
             />
           </div>
         )}

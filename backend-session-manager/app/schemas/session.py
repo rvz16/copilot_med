@@ -124,7 +124,7 @@ class RealtimeAnalysisResponse(ApiBaseModel):
     drug_interactions: list[RealtimeDrugInteraction] = Field(default_factory=list)
     extracted_facts: RealtimeExtractedFacts = Field(default_factory=RealtimeExtractedFacts)
     knowledge_refs: list[RealtimeKnowledgeRef] = Field(default_factory=list)
-    recommended_document: RecommendedDocumentResponse | None = None
+    recommended_documents: list[RecommendedDocumentResponse] = Field(default_factory=list)
     patient_context: RealtimePatientContext | None = None
     errors: list[str] = Field(default_factory=list)
 

@@ -23,7 +23,7 @@ body {
 /* ── App layout ──────────────────────────── */
 
 .app {
-  max-width: 1100px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 1rem;
 }
@@ -328,6 +328,54 @@ button:disabled {
 
 .hint-message {
   font-size: 0.85rem;
+  word-break: break-word;
+}
+
+.hint-pdf-link {
+  display: inline-block;
+  margin-top: 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #2e86c1;
+  text-decoration: none;
+}
+
+.hint-pdf-link:hover {
+  text-decoration: underline;
+}
+
+/* ── Main analysis grid ─────────────────── */
+
+.analysis-main-grid {
+  display: grid;
+  grid-template-columns: 3fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 900px) {
+  .analysis-main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.analysis-suggestions-area {
+  min-width: 0;
+}
+
+.analysis-facts-area {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: #f8f9fb;
+  border: 1px solid #eaecef;
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.facts-column-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
 }
 
 /* ── Suggestion columns ─────────────────── */
@@ -352,6 +400,7 @@ button:disabled {
   border: 1px solid #eaecef;
   border-radius: 8px;
   padding: 0.75rem;
+  min-width: 0;
 }
 
 .suggestion-column-title {
@@ -381,3 +430,4 @@ button:disabled {
   padding: 0.3rem 0;
   color: #c0392b;
 }
+

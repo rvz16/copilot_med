@@ -197,13 +197,13 @@ class SessionService:
                     try:
                         analysis_raw = self.realtime_analysis.analyze(analysis_payload)
                         realtime_analysis_response = RealtimeAnalysisResponse.model_validate(analysis_raw)
-                        recommended_document = self._find_recommended_document(
+                        recommended_documents = self._find_recommended_documents(
                             session=session,
                             analysis=realtime_analysis_response,
                         )
-                        if recommended_document is not None:
+                        if recommended_documents:
                             realtime_analysis_response = realtime_analysis_response.model_copy(
-                                update={"recommended_document": recommended_document}
+                                update={"recommended_documents": recommended_documents}
                             )
                         self._log_external_call(
                             session=session,
@@ -351,28 +351,29 @@ class SessionService:
         self.db.refresh(session)
         return self._build_close_response(session)
 
-    def _find_recommended_document(
+    def _find_recommended_documents(
         self,
         *,
         session: SessionRecord,
         analysis: RealtimeAnalysisResponse,
-    ) -> RecommendedDocumentResponse | None:
+        limit: int = 3,
+    ) -> list[RecommendedDocumentResponse]:
         diagnosis_candidates = [
             suggestion
             for suggestion in analysis.suggestions
             if suggestion.type == "diagnosis_suggestion" and suggestion.text.strip()
         ]
         if not diagnosis_candidates:
-            return None
+            return []
 
         top_diagnosis = max(diagnosis_candidates, key=lambda suggestion: suggestion.confidence)
         if top_diagnosis.confidence < self.settings.clinical_recommendations_min_confidence:
-            return None
+            return []
 
         query = top_diagnosis.text.strip()
-        request_payload = {"query": query, "limit": 1}
+        request_payload = {"query": query, "limit": limit}
         try:
-            response = self.clinical_recommendations.search(query=query, limit=1)
+            response = self.clinical_recommendations.search(query=query, limit=limit)
             self._log_external_call(
                 session=session,
                 service_name=self.clinical_recommendations.service_name,
@@ -397,7 +398,7 @@ class SessionService:
                 status="failed",
                 error_message=str(exc),
             )
-            return None
+            return []
 
         items = response.get("items", [])
         if not isinstance(items, list) or not items:
@@ -406,49 +407,56 @@ class SessionService:
                 query,
                 session.session_id,
             )
-            return None
+            return []
 
-        top_match = items[0]
-        if not isinstance(top_match, dict):
-            return None
-
-        logger.info(
-            "Clinical recommendations search for '%s': top_match id=%s title=%s pdf_available=%s score=%s (session %s)",
-            query,
-            top_match.get("id"),
-            top_match.get("title"),
-            top_match.get("pdf_available"),
-            top_match.get("score"),
-            session.session_id,
-        )
-
-        if not top_match.get("pdf_available"):
+        results = []
+        for match in items:
+            if not isinstance(match, dict):
+                continue
+            
             logger.info(
-                "Clinical recommendations: PDF not available for recommendation '%s' (session %s)",
-                top_match.get("id"),
+                "Clinical recommendations search for '%s': match id=%s title=%s pdf_available=%s score=%s (session %s)",
+                query,
+                match.get("id"),
+                match.get("title"),
+                match.get("pdf_available"),
+                match.get("score"),
                 session.session_id,
             )
-            return None
 
-        recommendation_id = top_match.get("id")
-        title = top_match.get("title")
-        pdf_url = self.clinical_recommendations.build_pdf_url(str(recommendation_id))
-        if not isinstance(recommendation_id, str) or not recommendation_id.strip():
-            return None
-        if not isinstance(title, str) or not title.strip():
-            return None
-        if not pdf_url:
-            return None
+            if not match.get("pdf_available"):
+                logger.info(
+                    "Clinical recommendations: PDF not available for recommendation '%s' (session %s)",
+                    match.get("id"),
+                    session.session_id,
+                )
+                continue
 
-        return RecommendedDocumentResponse(
-            recommendation_id=recommendation_id,
-            title=title.strip(),
-            matched_query=query,
-            diagnosis_confidence=top_diagnosis.confidence,
-            search_score=float(top_match.get("score", 0.0)),
-            pdf_available=True,
-            pdf_url=pdf_url,
-        )
+            recommendation_id = match.get("id")
+            title = match.get("title")
+            pdf_url = self.clinical_recommendations.build_pdf_url(str(recommendation_id))
+            if not isinstance(recommendation_id, str) or not recommendation_id.strip():
+                continue
+            if not isinstance(title, str) or not title.strip():
+                continue
+            if not pdf_url:
+                continue
+
+            results.append(
+                RecommendedDocumentResponse(
+                    recommendation_id=recommendation_id,
+                    title=title.strip(),
+                    matched_query=query,
+                    diagnosis_confidence=top_diagnosis.confidence,
+                    search_score=float(match.get("score", 0.0)),
+                    pdf_available=True,
+                    pdf_url=pdf_url,
+                )
+            )
+            if len(results) >= limit:
+                break
+        
+        return results
 
     def get_session(self, session_id: str) -> SessionDetailResponse:
         session = self._get_session(session_id)
