@@ -47,13 +47,11 @@ class AssistController:
         }
 
     async def assist(self, payload: AssistRequest) -> AssistResponse:
-        import asyncio
         started = time.perf_counter()
         transcript = payload.transcript_chunk
         language = payload.context.language
         evidence_defaults = extract_evidence_quotes(transcript, max_quotes=2)
 
-        # --- Run FHIR fetch and LLM call in parallel ---
         async def fetch_fhir() -> dict[str, Any] | None:
             if not payload.patient_id:
                 return None
@@ -75,17 +73,10 @@ class AssistController:
                 patient_context=patient_context_text,
             )
 
-        # Run FHIR and LLM concurrently — LLM starts without waiting for FHIR
-        patient_ctx, model_result = await asyncio.gather(
-            fetch_fhir(),
-            call_llm(None),
-        )
-
-        # If FHIR returned context, format it for the response
-        if patient_ctx:
-            patient_context_text = FHIRClient.format_context_for_prompt(patient_ctx)
-        else:
-            patient_context_text = None
+        # Fetch patient context first so the LLM can use it in the prompt when available.
+        patient_ctx = await fetch_fhir()
+        patient_context_text = FHIRClient.format_context_for_prompt(patient_ctx) if patient_ctx else None
+        model_result = await call_llm(patient_context_text)
 
         errors = normalize_text_list(model_result.get("errors", []))
 
