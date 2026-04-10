@@ -52,13 +52,20 @@ class LLMClient:
         self.base_url = (base_url or os.getenv("LLM_BASE_URL", "http://localhost:11434")).rstrip("/")
         self.model_name = model_name or os.getenv("MODEL_NAME", "qwen3:4b")
         self.api_key = api_key if api_key is not None else os.getenv("LLM_API_KEY")
-        self.max_tokens = int(os.getenv("MAX_TOKENS", "256"))
+        self.max_tokens = int(os.getenv("MAX_TOKENS", "1024"))
         self.temperature = float(os.getenv("TEMPERATURE", str(temperature)))
         self.timeout = float(os.getenv("LLM_TIMEOUT", str(timeout)))
         self.http_referer = os.getenv("LLM_HTTP_REFERER", "").strip()
         self.x_title = os.getenv("LLM_X_TITLE", "").strip()
         self.extra_headers = self._load_extra_headers(os.getenv("LLM_EXTRA_HEADERS_JSON", ""))
         self._client = httpx.AsyncClient(timeout=self.timeout)
+        logger.info(
+            "LLMClient initialized: provider=%s, base_url=%s, model=%s, "
+            "max_tokens=%d, temperature=%.2f, timeout=%.1fs, has_api_key=%s",
+            self.provider, self.base_url, self.model_name,
+            self.max_tokens, self.temperature, self.timeout,
+            bool(self.api_key),
+        )
 
     async def generate_structured(
         self,
@@ -90,29 +97,59 @@ class LLMClient:
 
         try:
             start = time.perf_counter()
+            logger.info(
+                "Sending LLM request: provider=%s, model=%s, endpoint=%s, "
+                "user_content_length=%d",
+                self.provider, self.model_name,
+                self._openai_chat_endpoint() if self.provider in _OPENAI_COMPATIBLE_PROVIDERS else f"{self.base_url}/api/chat",
+                len(user_content),
+            )
             raw_text, status_code = await self._generate_raw_text(body)
             elapsed = time.perf_counter() - start
             logger.info(
-                "LLM provider %s responded in %.1fms (status=%d)",
+                "LLM provider %s responded in %.1fms (status=%d), "
+                "raw_text_length=%d",
                 self.provider,
                 elapsed * 1000,
                 status_code,
+                len(raw_text),
             )
-            logger.info("Raw LLM output (first 300 chars): %s", raw_text[:300])
+            logger.info("Raw LLM output (first 500 chars): %.500s", raw_text)
+            if len(raw_text) > 500:
+                logger.info("Raw LLM output (last 200 chars): %.200s", raw_text[-200:])
 
             parsed = self._extract_json(raw_text)
             if parsed is None:
+                logger.warning(
+                    "JSON extraction FAILED for raw_text (length=%d). "
+                    "Full raw_text: %s",
+                    len(raw_text), raw_text,
+                )
                 result["errors"].append("model_output_parse_failed")
                 return result
 
+            logger.info("Parsed JSON keys: %s", list(parsed.keys()))
             sanitized = self._sanitize_payload(parsed)
             result.update(sanitized)
             return result
 
-        except httpx.TimeoutException:
+        except httpx.TimeoutException as exc:
+            logger.error("LLM request timed out after %.1fs: %s", self.timeout, exc)
             result["errors"].append("llm_timeout")
             return result
+        except httpx.HTTPStatusError as exc:
+            logger.error(
+                "LLM HTTP error: status=%d, response_body=%.500s",
+                exc.response.status_code,
+                exc.response.text,
+            )
+            result["errors"].append(f"llm_request_failed: {type(exc).__name__}: {exc}")
+            return result
         except Exception as exc:
+            logger.error(
+                "LLM request failed: %s: %s", type(exc).__name__, exc,
+                exc_info=True,
+            )
             result["errors"].append(f"llm_request_failed: {type(exc).__name__}: {exc}")
             return result
 
@@ -154,14 +191,51 @@ class LLMClient:
             "max_tokens": self.max_tokens,
             "stream": False,
         }
+        # For reasoning models, set low effort to reduce reasoning
+        # token usage (keeping more budget for the actual JSON output).
+        reasoning_effort = os.getenv("LLM_REASONING_EFFORT", "low").strip().lower()
+        if reasoning_effort in {"low", "medium", "high"}:
+            openai_body["reasoning_effort"] = reasoning_effort
+        endpoint = self._openai_chat_endpoint()
+        headers = self._openai_headers()
+        logger.debug(
+            "OpenAI-compatible request: endpoint=%s, model=%s, max_tokens=%d",
+            endpoint, openai_body.get("model"), self.max_tokens,
+        )
         response = await self._client.post(
-            self._openai_chat_endpoint(),
+            endpoint,
             json=openai_body,
-            headers=self._openai_headers(),
+            headers=headers,
+        )
+        logger.info(
+            "OpenAI-compatible response: status=%d, content_length=%s",
+            response.status_code,
+            response.headers.get("content-length", "unknown"),
         )
         response.raise_for_status()
         data = response.json()
-        return self._extract_openai_message_content(data), response.status_code
+        logger.info(
+            "OpenAI response structure: keys=%s, choices_count=%d",
+            list(data.keys()),
+            len(data.get("choices", [])),
+        )
+        if data.get("choices"):
+            first_choice = data["choices"][0]
+            msg = first_choice.get("message", {})
+            logger.info(
+                "First choice message keys: %s, content_type=%s, "
+                "content_length=%d, finish_reason=%s",
+                list(msg.keys()) if isinstance(msg, dict) else type(msg).__name__,
+                type(msg.get("content")).__name__ if isinstance(msg, dict) else "N/A",
+                len(str(msg.get("content", ""))) if isinstance(msg, dict) else 0,
+                first_choice.get("finish_reason"),
+            )
+        content = self._extract_openai_message_content(data)
+        logger.info(
+            "Extracted content (length=%d, first 300 chars): %.300s",
+            len(content), content,
+        )
+        return content, response.status_code
 
     def _openai_chat_endpoint(self) -> str:
         if self.base_url.endswith("/chat/completions"):
@@ -230,6 +304,7 @@ class LLMClient:
     @staticmethod
     def _extract_json(raw_text: str) -> dict[str, Any] | None:
         text = re.sub(r"<think>.*?</think>", "", raw_text, flags=re.DOTALL).strip()
+        logger.debug("_extract_json: after think-strip length=%d", len(text))
         if text.startswith("```"):
             text = text.strip("`")
             if text.startswith("json"):
@@ -238,12 +313,15 @@ class LLMClient:
         try:
             parsed = json.loads(text)
             if isinstance(parsed, dict):
+                logger.debug("_extract_json: direct parse succeeded")
                 return parsed
-        except json.JSONDecodeError:
-            pass
+            logger.debug("_extract_json: direct parse returned non-dict type=%s", type(parsed).__name__)
+        except json.JSONDecodeError as exc:
+            logger.debug("_extract_json: direct parse failed: %s", exc)
 
         start = text.find("{")
         if start < 0:
+            logger.debug("_extract_json: no '{' found in text")
             return None
         depth = 0
         for idx in range(start, len(text)):
@@ -256,9 +334,21 @@ class LLMClient:
                     candidate = text[start : idx + 1]
                     try:
                         parsed = json.loads(candidate)
-                    except json.JSONDecodeError:
+                    except json.JSONDecodeError as exc:
+                        logger.debug(
+                            "_extract_json: brace-match parse failed: %s, "
+                            "candidate_length=%d", exc, len(candidate),
+                        )
                         return None
-                    return parsed if isinstance(parsed, dict) else None
+                    if isinstance(parsed, dict):
+                        logger.debug("_extract_json: brace-match parse succeeded")
+                        return parsed
+                    logger.debug(
+                        "_extract_json: brace-match returned non-dict type=%s",
+                        type(parsed).__name__,
+                    )
+                    return None
+        logger.debug("_extract_json: unbalanced braces, no match found")
         return None
 
     # --- Sanitization ---
