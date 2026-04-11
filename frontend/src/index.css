@@ -55,7 +55,7 @@ body {
 
 .app-main {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 320px minmax(0, 1fr);
   gap: 1rem;
 }
 
@@ -69,6 +69,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  min-width: 0;
 }
 
 /* ── Panel card ──────────────────────────── */
@@ -127,6 +128,11 @@ body {
   display: flex;
   gap: 0.4rem;
   margin-bottom: 0.5rem;
+}
+
+.button-row > button {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 button {
@@ -266,6 +272,10 @@ button:disabled {
   gap: 0.75rem;
 }
 
+.analysis-grid {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
 .analysis-stat {
   display: flex;
   flex-direction: column;
@@ -376,6 +386,26 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+}
+
+.patient-context-panel {
+  min-height: 220px;
+}
+
+.patient-context-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.patient-context-grid {
+  gap: 0.6rem;
+}
+
+.patient-context-empty {
+  min-height: 8rem;
+  display: flex;
+  align-items: center;
 }
 
 /* ── Suggestion columns ─────────────────── */
@@ -526,4 +556,3 @@ button:disabled {
 .recommendation-pdf-link:hover {
   text-decoration: underline;
 }
-

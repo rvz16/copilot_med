@@ -6,6 +6,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { SessionControls } from './components/SessionControls';
 import { RecordingControls } from './components/RecordingControls';
+import { PatientContextPanel } from './components/PatientContextPanel';
 import { TranscriptPanel } from './components/TranscriptPanel';
 import { HintsPanel } from './components/HintsPanel';
 import { StatusPanel } from './components/StatusPanel';
@@ -155,6 +156,9 @@ export default function App() {
               onStartRecording={handleStartRecording}
               onStopRecording={handleStopRecording}
             />
+          )}
+          {hasSession && (
+            <PatientContextPanel patientContext={uploader.latestAnalysis?.patient_context ?? null} />
           )}
         </div>
 

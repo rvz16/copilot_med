@@ -86,17 +86,7 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
     !!analysis &&
     (FACT_SECTIONS.some(({ key }) => analysis.extracted_facts[key].length > 0) || hasVitals);
 
-  const hasPatientContext =
-    !!analysis && analysis.patient_context !== null && (
-      !!analysis.patient_context.patient_name ||
-      !!analysis.patient_context.gender ||
-      !!analysis.patient_context.birth_date ||
-      analysis.patient_context.conditions.length > 0 ||
-      analysis.patient_context.medications.length > 0 ||
-      analysis.patient_context.allergies.length > 0
-    );
-
-  const isEmpty = !hasGroupedHints && !hasExtractedFacts && !hasPatientContext && recommendedDocuments.length === 0
+  const isEmpty = !hasGroupedHints && !hasExtractedFacts && recommendedDocuments.length === 0
     && (!analysis || (
       analysis.drug_interactions.length === 0 &&
       analysis.knowledge_refs.length === 0 &&
@@ -275,33 +265,6 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
               )}
             </div>
           </div>
-
-          {/* ── Patient Context (from FHIR) ──────── */}
-          {hasPatientContext && analysis?.patient_context && (
-            <div className="analysis-section">
-              <h3 className="analysis-title">Контекст пациента (FHIR)</h3>
-              <div className="analysis-grid">
-                {analysis.patient_context.patient_name && (
-                  <div className="analysis-stat">
-                    <span className="analysis-stat-label">Имя</span>
-                    <span>{analysis.patient_context.patient_name}</span>
-                  </div>
-                )}
-                {analysis.patient_context.gender && (
-                  <div className="analysis-stat">
-                    <span className="analysis-stat-label">Пол</span>
-                    <span>{analysis.patient_context.gender}</span>
-                  </div>
-                )}
-                {analysis.patient_context.birth_date && (
-                  <div className="analysis-stat">
-                    <span className="analysis-stat-label">Дата рождения</span>
-                    <span>{analysis.patient_context.birth_date}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
 
           {/* ── Drug Interactions ─────────────────── */}
           {analysis && analysis.drug_interactions.length > 0 && (
