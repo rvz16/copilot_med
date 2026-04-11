@@ -83,7 +83,7 @@ class ExtractedFacts(BaseModel):
 
 
 class KnowledgeRef(BaseModel):
-    source: str = "heuristic_rules"
+    source: str = "model_generated"
     title: str = Field(min_length=1)
     snippet: str = Field(min_length=1)
     url: str | None = None

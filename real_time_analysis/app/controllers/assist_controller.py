@@ -9,7 +9,6 @@ from fastapi import APIRouter
 
 from app.fhir_client import FHIRClient
 from app.heuristics import (
-    build_knowledge_refs,
     clamp_confidence,
     detect_drug_interactions,
     extract_evidence_quotes,
@@ -94,10 +93,7 @@ class AssistController:
             model=model_result.get("drug_interactions", []),
         )
 
-        knowledge_refs = self._merge_knowledge_refs(
-            heuristic=build_knowledge_refs(transcript, merged_facts),
-            model=model_result.get("knowledge_refs", []),
-        )
+        knowledge_refs = self._merge_knowledge_refs(model=model_result.get("knowledge_refs", []))
 
         latency_ms = int((time.perf_counter() - started) * 1000)
 
@@ -223,30 +219,33 @@ class AssistController:
 
         return list(merged.values())
 
-    def _merge_knowledge_refs(self, heuristic: Any, model: Any) -> list[dict[str, Any]]:
+    def _merge_knowledge_refs(self, model: Any) -> list[dict[str, Any]]:
         refs: list[dict[str, Any]] = []
         seen: set[str] = set()
-        for source in (model, heuristic):
-            if not isinstance(source, list):
+        if not isinstance(model, list):
+            return refs
+
+        for item in model:
+            if not isinstance(item, dict):
                 continue
-            for item in source:
-                if not isinstance(item, dict):
-                    continue
-                title = item.get("title")
-                snippet = item.get("snippet")
-                if not isinstance(title, str) or not title.strip():
-                    continue
-                if not isinstance(snippet, str) or not snippet.strip():
-                    continue
-                key = title.casefold()
-                if key in seen:
-                    continue
-                seen.add(key)
-                refs.append({
-                    "source": item.get("source") if isinstance(item.get("source"), str) else "heuristic_rules",
-                    "title": " ".join(title.split()),
-                    "snippet": " ".join(snippet.split()),
-                    "url": item.get("url") if isinstance(item.get("url"), str) else None,
-                    "confidence": clamp_confidence(item.get("confidence"), 0.5),
-                })
+            title = item.get("title")
+            snippet = item.get("snippet")
+            if not isinstance(title, str) or not title.strip():
+                continue
+            if not isinstance(snippet, str) or not snippet.strip():
+                continue
+            source = item.get("source")
+            if isinstance(source, str) and source.strip() == "heuristic_rules":
+                continue
+            key = title.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            refs.append({
+                "source": source if isinstance(source, str) and source.strip() else "model_generated",
+                "title": " ".join(title.split()),
+                "snippet": " ".join(snippet.split()),
+                "url": item.get("url") if isinstance(item.get("url"), str) else None,
+                "confidence": clamp_confidence(item.get("confidence"), 0.5),
+            })
         return refs

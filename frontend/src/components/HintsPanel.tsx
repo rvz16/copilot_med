@@ -67,6 +67,11 @@ function groupHintsAndSort(hints: Hint[]) {
 }
 
 export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
+  const visibleKnowledgeRefs = useMemo(
+    () => analysis?.knowledge_refs.filter((reference) => reference.source !== 'heuristic_rules') ?? [],
+    [analysis],
+  );
+
   const hasVitals =
     !!analysis &&
     Object.values(analysis.extracted_facts.vitals).some(
@@ -89,7 +94,7 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
   const isEmpty = !hasGroupedHints && !hasExtractedFacts && recommendedDocuments.length === 0
     && (!analysis || (
       analysis.drug_interactions.length === 0 &&
-      analysis.knowledge_refs.length === 0 &&
+      visibleKnowledgeRefs.length === 0 &&
       analysis.errors.length === 0
     ));
 
@@ -295,14 +300,13 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
           )}
 
           {/* ── Knowledge References ──────────────── */}
-          {analysis && analysis.knowledge_refs.length > 0 && (
+          {analysis && visibleKnowledgeRefs.length > 0 && (
             <div className="analysis-section">
               <h3 className="analysis-title">Справочные материалы</h3>
               <ul className="hints-list">
-                {analysis.knowledge_refs.map((reference, index) => (
+                {visibleKnowledgeRefs.map((reference, index) => (
                   <li key={`${reference.title}-${index}`} className="hint-card">
                     <div className="hint-header">
-                      <span className="hint-type">{reference.source}</span>
                       <span className="hint-confidence">
                         {(reference.confidence * 100).toFixed(0)}%
                       </span>

@@ -195,6 +195,25 @@ def test_assist_without_patient_id() -> None:
     assert data["patient_context"] is None
 
 
+def test_assist_does_not_emit_heuristic_knowledge_refs() -> None:
+    app = create_app(llm=_make_stub_llm(), fhir=_make_stub_fhir())
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/assist",
+        json={
+            "request_id": "req-no-heuristic-refs",
+            "patient_id": "pt-004",
+            "transcript_chunk": "Patient denies diabetes and reports cough.",
+            "context": {"language": "en"},
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["knowledge_refs"] == []
+
+
 def test_health_endpoint() -> None:
     app = create_app(llm=_make_stub_llm(), fhir=_make_stub_fhir())
     client = TestClient(app)
