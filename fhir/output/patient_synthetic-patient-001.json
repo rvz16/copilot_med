@@ -1,0 +1,16 @@
+{
+  "resourceType": "Patient",
+  "id": "synthetic-patient-001",
+  "active": true,
+  "name": [
+    {
+      "use": "official",
+      "family": "Morozova",
+      "given": [
+        "Elena"
+      ]
+    }
+  ],
+  "gender": "female",
+  "birthDate": "1988-02-14"
+}

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "synthetic-patient-001",
+    "name": "Elena Morozova",
+    "gender": "female",
+    "birthDate": "1988-02-14"
+  },
+  {
+    "id": "synthetic-patient-002",
+    "name": "Ivan Petrov",
+    "gender": "male",
+    "birthDate": "1975-09-03"
+  },
+  {
+    "id": "synthetic-patient-003",
+    "name": "Anna Sokolova",
+    "gender": "female",
+    "birthDate": "1994-06-22"
+  },
+  {
+    "id": "synthetic-patient-004",
+    "name": "Maksim Volkov",
+    "gender": "male",
+    "birthDate": "1981-11-30"
+  },
+  {
+    "id": "synthetic-patient-005",
+    "name": "Olga Smirnova",
+    "gender": "female",
+    "birthDate": "1969-04-09"
+  }
+]

@@ -1,0 +1,98 @@
+{
+  "resourceType": "Bundle",
+  "id": "synthetic-patients",
+  "type": "collection",
+  "total": 5,
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "synthetic-patient-001",
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Morozova",
+            "given": [
+              "Elena"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1988-02-14"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "synthetic-patient-002",
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Petrov",
+            "given": [
+              "Ivan"
+            ]
+          }
+        ],
+        "gender": "male",
+        "birthDate": "1975-09-03"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "synthetic-patient-003",
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Sokolova",
+            "given": [
+              "Anna"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1994-06-22"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "synthetic-patient-004",
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Volkov",
+            "given": [
+              "Maksim"
+            ]
+          }
+        ],
+        "gender": "male",
+        "birthDate": "1981-11-30"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "synthetic-patient-005",
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Smirnova",
+            "given": [
+              "Olga"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1969-04-09"
+      }
+    }
+  ]
+}
