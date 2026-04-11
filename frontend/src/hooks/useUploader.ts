@@ -41,7 +41,7 @@ export function useUploader(sessionId: string | null) {
       return;
     }
 
-    const error = new Error('Pending audio chunks could not be uploaded.');
+    const error = new Error('Не удалось загрузить ожидающие аудиофрагменты.');
     waiters.forEach(({ reject }) => reject(error));
   }, []);
 
@@ -96,7 +96,7 @@ export function useUploader(sessionId: string | null) {
           break;
         }
         setUploadError(
-          err instanceof Error ? err.message : 'Chunk upload failed',
+          err instanceof Error ? err.message : 'Не удалось загрузить аудиофрагмент',
         );
         // On error, stop processing. User can retry by adding more chunks.
         break;
@@ -128,7 +128,7 @@ export function useUploader(sessionId: string | null) {
       if (queueRef.current.length === 0) {
         return Promise.resolve();
       }
-      return Promise.reject(new Error('Pending audio chunks could not be uploaded.'));
+      return Promise.reject(new Error('Не удалось загрузить ожидающие аудиофрагменты.'));
     }
 
     return new Promise<void>((resolve, reject) => {

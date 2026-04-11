@@ -99,7 +99,7 @@ export function DoctorDashboard({
     <main className="dashboard-page">
       <section className="dashboard-header">
         <div>
-          <p className="eyebrow">Doctor Workspace</p>
+          <p className="eyebrow">Рабочее пространство врача</p>
           <h1>{doctor.name}</h1>
           <p className="hero-text">
             {doctor.specialty}. Управляйте новыми консультациями и поднимайте завершённые встречи
@@ -139,7 +139,7 @@ export function DoctorDashboard({
       <section className="dashboard-grid">
         <article className="panel form-panel">
           <div className="section-heading compact">
-            <p className="eyebrow">New Session</p>
+            <p className="eyebrow">Новая сессия</p>
             <h2>Создать новую консультацию</h2>
           </div>
 
@@ -173,7 +173,7 @@ export function DoctorDashboard({
                 type="text"
                 value={chiefComplaint}
                 onChange={(event) => setChiefComplaint(event.target.value)}
-                placeholder="Recurring frontal headache"
+                placeholder="Повторяющаяся лобная головная боль"
               />
             </div>
 
@@ -190,7 +190,7 @@ export function DoctorDashboard({
         <article className="panel history-panel">
           <div className="history-toolbar">
             <div className="section-heading compact">
-              <p className="eyebrow">Session History</p>
+              <p className="eyebrow">История сессий</p>
               <h2>Предыдущие встречи</h2>
             </div>
 

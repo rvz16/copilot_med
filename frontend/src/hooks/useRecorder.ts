@@ -95,10 +95,10 @@ export function useRecorder({ chunkMs = 4000, onChunk }: UseRecorderOptions) {
     } catch (err) {
       const msg =
         err instanceof DOMException && err.name === 'NotAllowedError'
-          ? 'Microphone permission denied. Please allow microphone access.'
+          ? 'Доступ к микрофону запрещён. Разрешите использование микрофона.'
           : err instanceof Error
             ? err.message
-            : 'Failed to start recording';
+            : 'Не удалось начать запись';
       setMicError(msg);
       return false;
     }

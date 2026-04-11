@@ -27,7 +27,7 @@ export function useSession() {
       setUploadConfig(res.upload_config);
       return res;
     } catch (err) {
-      const error = err instanceof Error ? err : new Error('Failed to create session');
+      const error = err instanceof Error ? err : new Error('Не удалось создать сессию');
       setError(error.message);
       throw error;
     }
@@ -42,7 +42,7 @@ export function useSession() {
       setRecordingState(res.recording_state as RecordingState);
       return res;
     } catch (err) {
-      const error = err instanceof Error ? err : new Error('Failed to stop recording');
+      const error = err instanceof Error ? err : new Error('Не удалось остановить запись');
       setError(error.message);
       throw error;
     }
@@ -57,7 +57,7 @@ export function useSession() {
       setRecordingState(res.recording_state as RecordingState);
       return res;
     } catch (err) {
-      const error = err instanceof Error ? err : new Error('Failed to close session');
+      const error = err instanceof Error ? err : new Error('Не удалось закрыть сессию');
       setError(error.message);
       throw error;
     }

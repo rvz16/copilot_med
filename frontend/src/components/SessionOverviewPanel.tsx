@@ -42,7 +42,7 @@ export function SessionOverviewPanel({
   return (
     <section className="panel session-overview-panel">
       <div className="section-heading compact">
-        <p className="eyebrow">{mode === 'live' ? 'Live Session' : 'Archived Snapshot'}</p>
+        <p className="eyebrow">{mode === 'live' ? 'Текущая сессия' : 'Архивный снимок'}</p>
         <h2>{patientName}</h2>
       </div>
 

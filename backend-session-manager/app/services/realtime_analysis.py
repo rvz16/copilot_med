@@ -32,36 +32,36 @@ class MockRealtimeAnalysisProvider:
             suggestions.append(
                 {
                     "type": "question_to_ask",
-                    "text": "Clarify headache severity and duration.",
+                    "text": "Уточните выраженность головной боли и её длительность.",
                     "confidence": 0.82,
                     "evidence": [transcript[:120].strip()] if transcript.strip() else [],
                 }
             )
-            symptoms.append("headache")
+            symptoms.append("головная боль")
 
         if "nausea" in lowered or "тошнота" in lowered:
             suggestions.append(
                 {
                     "type": "next_step",
-                    "text": "Check dehydration and associated gastrointestinal symptoms.",
+                    "text": "Проверьте признаки обезвоживания и сопутствующие желудочно-кишечные симптомы.",
                     "confidence": 0.71,
                     "evidence": [transcript[:120].strip()] if transcript.strip() else [],
                 }
             )
-            symptoms.append("nausea")
+            symptoms.append("тошнота")
 
         if "warfarin" in lowered:
-            medications.append("warfarin")
+            medications.append("варфарин")
         if "ibuprofen" in lowered or "ибупрофен" in lowered:
-            medications.append("ibuprofen")
+            medications.append("ибупрофен")
 
         if "warfarin" in lowered and ("ibuprofen" in lowered or "ибупрофен" in lowered):
             interactions.append(
                 {
-                    "drug_a": "warfarin",
-                    "drug_b": "ibuprofen",
+                    "drug_a": "варфарин",
+                    "drug_b": "ибупрофен",
                     "severity": "high",
-                    "rationale": "Higher bleeding risk when anticoagulants are combined with NSAIDs.",
+                    "rationale": "Повышается риск кровотечения при сочетании антикоагулянтов с НПВП.",
                     "confidence": 0.91,
                 }
             )
@@ -69,7 +69,7 @@ class MockRealtimeAnalysisProvider:
         return {
             "request_id": payload.get("request_id", "mock-request"),
             "latency_ms": 12,
-            "model": {"name": "mock-realtime-analysis", "quantization": "none"},
+            "model": {"name": "тестовый модуль анализа", "quantization": "none"},
             "suggestions": suggestions,
             "drug_interactions": interactions,
             "extracted_facts": {

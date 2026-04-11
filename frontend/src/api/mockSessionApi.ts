@@ -26,33 +26,33 @@ const MOCK_DELAY_MS = 300;
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const TRANSCRIPT_FRAGMENTS = [
-  'Patient reports headache for two days.',
-  ' Pain is located in the frontal region.',
-  ' No history of migraines.',
-  ' Over-the-counter analgesics provide partial relief.',
-  ' No visual disturbances reported.',
-  ' Patient denies nausea or vomiting.',
+  'Пациент жалуется на головную боль в течение двух дней.',
+  ' Боль локализуется в лобной области.',
+  ' Ранее приступов мигрени не отмечалось.',
+  ' Обезболивающие из аптеки помогают только частично.',
+  ' Нарушений зрения не отмечает.',
+  ' Тошноту и рвоту пациент отрицает.',
 ];
 
 const SAMPLE_HINTS: Hint[] = [
   {
     hint_id: 'hint_001',
     type: 'followup_hint',
-    message: 'Ask about pain severity and duration.',
+    message: 'Уточните интенсивность боли и её длительность.',
     confidence: 0.84,
     severity: 'medium',
   },
   {
     hint_id: 'hint_002',
     type: 'differential_hint',
-    message: 'Consider tension-type headache vs. migraine.',
+    message: 'Рассмотрите головную боль напряжения и мигрень.',
     confidence: 0.72,
     severity: 'low',
   },
   {
     hint_id: 'hint_003',
     type: 'followup_hint',
-    message: 'Ask about recent stressors or sleep changes.',
+    message: 'Спросите о недавнем стрессе и изменениях сна.',
     confidence: 0.68,
     severity: 'low',
   },
@@ -76,20 +76,20 @@ function buildRealtimeAnalysis(stableText: string, seq: number): RealtimeAnalysi
     request_id: `mock-analysis-${seq}`,
     latency_ms: 25,
     model: {
-      name: 'mock-realtime-analysis',
+      name: 'тестовый модуль анализа',
       quantization: 'none',
     },
     suggestions: [
       {
         type: 'question_to_ask',
-        text: 'Clarify symptom severity and progression.',
+        text: 'Уточните выраженность симптомов и их развитие.',
         confidence: 0.8,
         evidence: [stableText],
       },
     ],
     drug_interactions: [],
     extracted_facts: {
-      symptoms: stableText.toLowerCase().includes('headache') ? ['headache'] : [],
+      symptoms: stableText.toLowerCase().includes('головн') ? ['головная боль'] : [],
       conditions: [],
       medications: [],
       allergies: [],
@@ -106,8 +106,8 @@ function buildRealtimeAnalysis(stableText: string, seq: number): RealtimeAnalysi
     recommended_documents: [
       {
         recommendation_id: `rec-${seq}`,
-        title: 'Russian Headache Management Guideline',
-        matched_query: 'Headache assessment',
+        title: 'Клиническая рекомендация по ведению головной боли',
+        matched_query: 'Оценка головной боли',
         diagnosis_confidence: 0.8,
         search_score: 0.77,
         pdf_available: true,
@@ -116,11 +116,11 @@ function buildRealtimeAnalysis(stableText: string, seq: number): RealtimeAnalysi
     ],
     patient_context: {
       patient_name: 'Olivia Bennett',
-      gender: 'female',
+      gender: 'женский',
       birth_date: '1991-04-18',
-      conditions: ['Seasonal allergic rhinitis'],
-      medications: ['Ibuprofen'],
-      allergies: ['Penicillin'],
+      conditions: ['Сезонный аллергический ринит'],
+      medications: ['Ибупрофен'],
+      allergies: ['Пенициллин'],
     },
     errors: [],
   };
@@ -151,7 +151,7 @@ function detailFromRecord(record: MockSessionRecord): SessionDetail {
 function getRecord(sessionId: string): MockSessionRecord {
   const record = sessions.get(sessionId);
   if (!record) {
-    throw new Error(`Mock session ${sessionId} not found`);
+    throw new Error(`Тестовая сессия ${sessionId} не найдена`);
   }
   return record;
 }
@@ -299,7 +299,7 @@ export const mockSessionApi: SessionApi = {
       session_id: sessionId,
       status: record.summary.status,
       recording_state: 'stopped',
-      message: 'Recording stopped.',
+      message: 'Запись остановлена.',
     };
     return response;
   },
@@ -368,7 +368,7 @@ export const mockSessionApi: SessionApi = {
 
   async healthCheck() {
     await delay(MOCK_DELAY_MS);
-    const response: HealthResponse = { status: 'ok', service: 'session-manager (mock)' };
+    const response: HealthResponse = { status: 'ok', service: 'менеджер сессий (тестовый режим)' };
     return response;
   },
 };

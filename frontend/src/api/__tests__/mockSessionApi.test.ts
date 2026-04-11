@@ -76,7 +76,7 @@ describe('mockSessionApi', () => {
     const res = await mockSessionApi.stopRecording(created.session_id);
 
     expect(res.recording_state).toBe('stopped');
-    expect(res.message).toBe('Recording stopped.');
+    expect(res.message).toBe('Запись остановлена.');
   });
 
   it('closeSession returns closed state', async () => {

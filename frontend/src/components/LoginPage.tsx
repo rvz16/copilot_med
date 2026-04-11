@@ -27,7 +27,7 @@ export function LoginPage({ doctors, error, onBack, onLogin }: Props) {
     <main className="login-page">
       <section className="login-card">
         <div className="section-heading">
-          <p className="eyebrow">Doctor Sign-In</p>
+          <p className="eyebrow">Вход врача</p>
           <h1>Вход в персональную рабочую область врача</h1>
         </div>
 
@@ -71,7 +71,7 @@ export function LoginPage({ doctors, error, onBack, onLogin }: Props) {
 
       <aside className="credential-sidebar">
         <div className="section-heading">
-          <p className="eyebrow">Sample Credentials</p>
+          <p className="eyebrow">Тестовые данные</p>
           <h2>Демо-аккаунты</h2>
         </div>
 

@@ -137,17 +137,17 @@ class SessionService:
     ) -> AudioChunkResponse:
         session = self._get_session(session_id)
         if session.status == "closed":
-            raise ApiError("SESSION_CLOSED", "Session is already closed.", 409)
+            raise ApiError("SESSION_CLOSED", "Сессия уже закрыта.", 409)
         if seq != session.latest_seq + 1:
             raise ApiError(
                 "INVALID_SEQUENCE",
-                f"Expected seq {session.latest_seq + 1}, received {seq}.",
+                f"Ожидался seq {session.latest_seq + 1}, получен {seq}.",
                 409,
             )
 
         normalized_mime_type = mime_type.strip().lower()
         if normalized_mime_type not in self.settings.accepted_upload_mime_types:
-            raise ApiError("UNSUPPORTED_MIME_TYPE", f"Unsupported MIME type: {mime_type}.", 400)
+            raise ApiError("UNSUPPORTED_MIME_TYPE", f"Неподдерживаемый MIME-тип: {mime_type}.", 400)
 
         try:
             file_path = self.storage_service.save_chunk(session.session_id, seq, normalized_mime_type, file_bytes)
@@ -158,7 +158,7 @@ class SessionService:
                 file_bytes,
             )
         except OSError as exc:
-            raise ApiError("CHUNK_PROCESSING_FAILED", "Unable to store uploaded audio chunk.", 500) from exc
+            raise ApiError("CHUNK_PROCESSING_FAILED", "Не удалось сохранить загруженный аудиофрагмент.", 500) from exc
 
         if session.latest_seq == 0 and session.started_at is None:
             session.started_at = utcnow()
@@ -335,7 +335,7 @@ class SessionService:
         del reason
         session = self._get_session(session_id)
         if session.status == "closed":
-            raise ApiError("SESSION_CLOSED", "Session is already closed.", 409)
+            raise ApiError("SESSION_CLOSED", "Сессия уже закрыта.", 409)
 
         session.recording_state = "stopped"
         if session.stopped_at is None:
@@ -348,7 +348,7 @@ class SessionService:
             session_id=session.session_id,
             status=session.status,
             recording_state=session.recording_state,
-            message="Recording stopped.",
+            message="Запись остановлена.",
         )
 
     def close_session(self, session_id: str, trigger_post_session_analytics: bool) -> CloseSessionResponse:
@@ -671,7 +671,7 @@ class SessionService:
     def _get_session(self, session_id: str) -> SessionRecord:
         session = self.db.scalar(self._base_session_query().where(SessionRecord.session_id == session_id))
         if session is None:
-            raise ApiError("INVALID_SESSION", "Session not found.", 404)
+            raise ApiError("INVALID_SESSION", "Сессия не найдена.", 404)
         return session
 
     def _build_hint_list_items(self, session_db_id: int) -> list[HintListItem]:

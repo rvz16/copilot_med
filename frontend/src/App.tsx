@@ -72,7 +72,7 @@ export default function App() {
       const response = await api.listSessions({ doctorId: doctor.id, limit: 50, offset: 0 });
       setSessions(response.items);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load doctor sessions';
+      const message = error instanceof Error ? error.message : 'Не удалось загрузить сессии врача';
       setSessionsError(message);
     } finally {
       setSessionsLoading(false);
@@ -169,7 +169,7 @@ export default function App() {
       setWorkspaceMode('archive');
       setScreen('workspace');
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to open archived session';
+      const message = error instanceof Error ? error.message : 'Не удалось открыть архивную сессию';
       setSessionsError(message);
     }
   }, []);
@@ -255,7 +255,7 @@ export default function App() {
             <span className="brand-mark">MC</span>
             <div>
               <h1>MedCoPilot</h1>
-              <p>Doctor-focused consultation cockpit</p>
+              <p>Платформа для ведения врачебных консультаций</p>
             </div>
           </div>
           {IS_MOCK && <span className="mock-badge">ТЕСТОВЫЙ РЕЖИМ</span>}
@@ -274,7 +274,7 @@ export default function App() {
             <span className="brand-mark">MC</span>
             <div>
               <h1>MedCoPilot</h1>
-              <p>Secure demo access for clinicians</p>
+              <p>Демонстрационный вход для врачей</p>
             </div>
           </div>
           {IS_MOCK && <span className="mock-badge">ТЕСТОВЫЙ РЕЖИМ</span>}
@@ -392,11 +392,11 @@ export default function App() {
 
       <ConsultationWorkspace
         mode="live"
-        sessionId={session.sessionId ?? 'pending'}
+        sessionId={session.sessionId ?? 'черновик'}
         doctorName={liveSessionProfile?.doctorName ?? activeDoctor.name}
         doctorSpecialty={liveSessionProfile?.doctorSpecialty ?? activeDoctor.specialty}
-        patientName={liveSessionProfile?.patientName ?? 'Patient'}
-        patientId={liveSessionProfile?.patientId ?? 'patient_pending'}
+        patientName={liveSessionProfile?.patientName ?? 'Пациент'}
+        patientId={liveSessionProfile?.patientId ?? 'pat_ожидание'}
         chiefComplaint={liveSessionProfile?.chiefComplaint ?? null}
         status={session.sessionStatus}
         recordingState={session.recordingState}

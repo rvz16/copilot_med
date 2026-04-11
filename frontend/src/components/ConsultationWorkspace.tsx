@@ -73,10 +73,10 @@ export function ConsultationWorkspace({
     <main className="workspace-page">
       <div className="workspace-header">
         <div>
-          <p className="eyebrow">{mode === 'live' ? 'Consultation In Progress' : 'Consultation Archive'}</p>
+          <p className="eyebrow">{mode === 'live' ? 'Консультация в работе' : 'Архив консультации'}</p>
           <h1>
             {patientName}
-            <span>{mode === 'live' ? ' live workspace' : ' final saved state'}</span>
+            <span>{mode === 'live' ? ' активное рабочее пространство' : ' сохранённое итоговое состояние'}</span>
           </h1>
         </div>
       </div>

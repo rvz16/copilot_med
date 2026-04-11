@@ -10,11 +10,11 @@ export function LandingPage({ doctors, onShowLogin }: Props) {
     <main className="landing-page">
       <section className="hero-card">
         <div className="hero-copy">
-          <p className="eyebrow">Clinical Copilot Workspace</p>
-          <h1>MedCoPilot for doctors, live sessions, and archived consultation review.</h1>
+          <p className="eyebrow">Клиническое рабочее пространство</p>
+          <h1>MedCoPilot для врачей, живых консультаций и просмотра завершённых встреч.</h1>
           <p className="hero-text">
-            Start a consultation, record the meeting, keep the final state of every session,
-            and reopen the doctor’s history in a read-only clinical workspace.
+            Запускайте консультацию, записывайте встречу, сохраняйте итоговое состояние каждой
+            сессии и открывайте историю врача в режиме просмотра.
           </p>
 
           <div className="hero-actions">
@@ -45,7 +45,7 @@ export function LandingPage({ doctors, onShowLogin }: Props) {
 
       <section className="doctor-gallery">
         <div className="section-heading">
-          <p className="eyebrow">Demo Access</p>
+          <p className="eyebrow">Демо-доступ</p>
           <h2>Подготовленные профили врачей</h2>
         </div>
 

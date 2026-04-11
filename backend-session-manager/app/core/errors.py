@@ -29,8 +29,8 @@ def format_validation_error(exc: RequestValidationError) -> str:
     for err in exc.errors():
         location = ".".join(str(item) for item in err.get("loc", []) if item != "body")
         prefix = f"{location}: " if location else ""
-        details.append(f"{prefix}{err.get('msg', 'Invalid value')}")
-    return "; ".join(details) if details else "Invalid request."
+        details.append(f"{prefix}{err.get('msg', 'Некорректное значение')}")
+    return "; ".join(details) if details else "Некорректный запрос."
 
 
 async def api_error_handler(_: Request, exc: ApiError) -> JSONResponse:
@@ -43,4 +43,4 @@ async def validation_error_handler(_: Request, exc: RequestValidationError) -> J
 
 async def unhandled_exception_handler(_: Request, exc: Exception) -> JSONResponse:
     logger.exception("Unhandled application error", exc_info=exc)
-    return error_response(500, "INTERNAL_ERROR", "Unexpected server error.")
+    return error_response(500, "INTERNAL_ERROR", "Непредвиденная ошибка сервера.")

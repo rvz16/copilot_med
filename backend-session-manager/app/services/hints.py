@@ -21,23 +21,23 @@ class HintService:
 
     RULES = (
         HintRule(
-            keywords=("headache",),
+            keywords=("headache", "головная боль", "головн"),
             hint_type="followup_hint",
-            message="Ask about pain severity and duration.",
+            message="Уточните интенсивность боли и её длительность.",
             confidence=0.84,
             severity="medium",
         ),
         HintRule(
-            keywords=("blood pressure", "hypertension"),
+            keywords=("blood pressure", "hypertension", "давление", "гипертони"),
             hint_type="followup_hint",
-            message="Consider hypertension history and recent blood pressure readings.",
+            message="Уточните анамнез по гипертонии и недавние показатели давления.",
             confidence=0.76,
             severity="medium",
         ),
         HintRule(
-            keywords=("allergic", "allergy"),
+            keywords=("allergic", "allergy", "аллерг", "реакци"),
             hint_type="followup_hint",
-            message="Confirm allergy history and prior reactions.",
+            message="Подтвердите аллергологический анамнез и прошлые реакции.",
             confidence=0.8,
             severity="high",
         ),

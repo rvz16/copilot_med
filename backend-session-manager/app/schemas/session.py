@@ -36,7 +36,7 @@ class CreateSessionRequest(ApiBaseModel):
     def non_empty(cls, value: str) -> str:
         stripped = value.strip()
         if not stripped:
-            raise ValueError("must be a non-empty string")
+            raise ValueError("должно быть непустой строкой")
         return stripped
 
     @field_validator("doctor_name", "doctor_specialty", "patient_name", "chief_complaint")
@@ -175,7 +175,7 @@ class StopRecordingRequest(ApiBaseModel):
     def valid_reason(cls, value: str) -> str:
         stripped = value.strip()
         if not stripped:
-            raise ValueError("must be a non-empty string")
+            raise ValueError("должно быть непустой строкой")
         return stripped
 
 

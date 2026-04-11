@@ -7,12 +7,12 @@ from app.core.config import Settings
 
 
 TRANSCRIPT_FRAGMENTS = [
-    "Patient reports headache for two days.",
-    " Pain is located in the frontal region.",
-    " No history of migraines.",
-    " Over-the-counter analgesics provide partial relief.",
-    " No visual disturbances reported.",
-    " Patient denies nausea or vomiting.",
+    "Пациент жалуется на головную боль в течение двух дней.",
+    " Боль локализуется в лобной области.",
+    " Ранее приступов мигрени не отмечалось.",
+    " Обезболивающие из аптеки помогают только частично.",
+    " Нарушений зрения не отмечает.",
+    " Тошноту и рвоту пациент отрицает.",
 ]
 
 

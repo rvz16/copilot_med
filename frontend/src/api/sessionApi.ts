@@ -26,7 +26,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     const msg =
-      body?.error?.message ?? `Request failed with status ${res.status}`;
+      body?.error?.message ?? `Запрос завершился с ошибкой ${res.status}`;
     throw new Error(msg);
   }
   return res.json() as Promise<T>;
