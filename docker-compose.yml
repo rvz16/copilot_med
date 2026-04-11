@@ -12,6 +12,8 @@ services:
       CORS_ORIGINS: http://localhost:3000,http://localhost:5173
       CLINICAL_RECOMMENDATIONS_CSV_PATH: /app/clinical_recommendations/clinical_recommendations.csv
       CLINICAL_RECOMMENDATIONS_PDF_DIR: /app/clinical_recommendations/pdf_files
+    volumes:
+      - ./clinical_recommendations/pdf_files:/app/clinical_recommendations/pdf_files:ro
     ports:
       - "8002:8002"
     healthcheck:

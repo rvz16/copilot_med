@@ -132,7 +132,7 @@ export default function App() {
     <div className="app">
       <header className="app-header">
         <h1>MedCoPilot</h1>
-        {IS_MOCK && <span className="mock-badge">MOCK MODE</span>}
+        {IS_MOCK && <span className="mock-badge">ТЕСТОВЫЙ РЕЖИМ</span>}
       </header>
 
       <main className="app-main">

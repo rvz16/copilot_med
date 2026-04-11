@@ -6,6 +6,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SessionStatus } from '../hooks/useSession';
 
+const STATUS_LABELS: Record<SessionStatus, string> = {
+  idle: 'ожидание',
+  created: 'создана',
+  active: 'активна',
+  closed: 'закрыта',
+};
+
 interface Props {
   sessionId: string | null;
   sessionStatus: SessionStatus;
@@ -43,29 +50,29 @@ export function SessionControls({
 
   return (
     <section className="panel" id="session-controls">
-      <h2>Session Controls</h2>
+      <h2>Управление сессией</h2>
 
       <div className="form-row">
-        <label htmlFor="doctor-id">Doctor ID</label>
+        <label htmlFor="doctor-id">ID врача</label>
         <input
           id="doctor-id"
           type="text"
           value={doctorId}
           onChange={(e) => setDoctorId(e.target.value)}
           disabled={!canStart || disabled}
-          placeholder="e.g. doc_001"
+          placeholder="напр. doc_001"
         />
       </div>
 
       <div className="form-row">
-        <label htmlFor="patient-id">Patient ID</label>
+        <label htmlFor="patient-id">ID пациента</label>
         <input
           id="patient-id"
           type="text"
           value={patientId}
           onChange={(e) => setPatientId(e.target.value)}
           disabled={!canStart || disabled}
-          placeholder="e.g. pat_001"
+          placeholder="напр. pat_001"
         />
       </div>
 
@@ -75,7 +82,7 @@ export function SessionControls({
           onClick={() => onStartSession(doctorId, patientId)}
           disabled={!canStart || !doctorId || !patientId || disabled}
         >
-          Start Session
+          Начать сессию
         </button>
 
         <button
@@ -84,20 +91,20 @@ export function SessionControls({
           disabled={!canClose || disabled}
           className="btn-secondary"
         >
-          Close Session
+          Закрыть сессию
         </button>
       </div>
 
       {sessionId && (
         <div className="info-row">
-          <span className="label">Session ID:</span>
+          <span className="label">ID сессии:</span>
           <code>{sessionId}</code>
         </div>
       )}
 
       <div className="info-row">
-        <span className="label">Status:</span>
-        <span className={`badge badge-${sessionStatus}`}>{sessionStatus}</span>
+        <span className="label">Статус:</span>
+        <span className={`badge badge-${sessionStatus}`}>{STATUS_LABELS[sessionStatus]}</span>
       </div>
     </section>
   );

@@ -18,17 +18,31 @@ const SEVERITY_COLORS: Record<string, string> = {
   low: '#27ae60',
 };
 
+const SEVERITY_LABELS: Record<string, string> = {
+  high: 'высокий',
+  medium: 'средний',
+  low: 'низкий',
+};
+
+const HINT_TYPE_LABELS: Record<string, string> = {
+  clinical_recommendation: 'клин. рекомендация',
+  drug_interaction: 'лек. взаимодействие',
+  diagnosis_suggestion: 'диагноз',
+  question_to_ask: 'вопрос',
+  next_step: 'след. шаг',
+};
+
 const SUGGESTION_COLUMNS = [
-  { type: 'diagnosis_suggestion', label: 'Diagnosis Suggestions', icon: '🩺' },
-  { type: 'question_to_ask', label: 'Questions to Ask', icon: '❓' },
-  { type: 'next_step', label: 'Next Steps', icon: '➡️' },
+  { type: 'diagnosis_suggestion', label: 'Предполагаемые диагнозы', icon: '🩺' },
+  { type: 'question_to_ask', label: 'Вопросы пациенту', icon: '❓' },
+  { type: 'next_step', label: 'Следующие шаги', icon: '➡️' },
 ] as const;
 
 const FACT_SECTIONS = [
-  { key: 'symptoms', label: 'Symptoms' },
-  { key: 'conditions', label: 'Conditions' },
-  { key: 'medications', label: 'Medications' },
-  { key: 'allergies', label: 'Allergies' },
+  { key: 'symptoms', label: 'Симптомы' },
+  { key: 'conditions', label: 'Заболевания' },
+  { key: 'medications', label: 'Лекарства' },
+  { key: 'allergies', label: 'Аллергии' },
 ] as const;
 
 function groupHintsAndSort(hints: Hint[]) {
@@ -91,49 +105,51 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
 
   return (
     <section className="panel" id="hints-panel">
-      <h2>Realtime Analysis</h2>
+      <h2>Анализ в реальном времени</h2>
 
       {isEmpty ? (
-        <p className="placeholder-text">Clinical analysis and hints will appear here.</p>
+        <p className="placeholder-text">Клинический анализ и подсказки появятся здесь.</p>
       ) : (
         <div className="analysis-stack">
           {/* ── Model info ────────────────────────── */}
           {analysis && (
             <div className="analysis-meta">
               <span className="analysis-chip">
-                Model: {analysis.model.name}
+                Модель: {analysis.model.name}
               </span>
               <span className="analysis-chip">
-                Latency: {analysis.latency_ms} ms
+                Задержка: {analysis.latency_ms} мс
               </span>
             </div>
           )}
 
-          {/* ── Clinical Recommendations ──────────── */}
+          {/* ── Clinical Recommendations (compact card) ── */}
           {recommendedDocuments.length > 0 && (
-            <div className="analysis-section">
-              <h3 className="analysis-title">Suggested Clinical Recommendations</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+            <div className="recommendations-card">
+              <h3 className="recommendations-card-title">
+                📚 Клинические рекомендации
+                <span className="recommendations-count">{recommendedDocuments.length}</span>
+              </h3>
+              <div className="recommendations-list">
                 {recommendedDocuments.map((doc, idx) => (
-                  <div key={`${doc.recommendation_id}-${idx}`} className="hint-card">
-                    <div className="hint-header">
-                      <span className="hint-type">clinical_recommendation</span>
-                      <span className="hint-confidence">
+                  <div key={`${doc.recommendation_id}-${idx}`} className="recommendation-row">
+                    <div className="recommendation-row-main">
+                      <span className="recommendation-title">{doc.title}</span>
+                      <span className="recommendation-confidence">
                         {(doc.diagnosis_confidence * 100).toFixed(0)}%
                       </span>
                     </div>
-                    <p className="hint-message">{doc.title}</p>
-                    <p className="hint-message" style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                      Diagnosis query: {doc.matched_query}
-                    </p>
-                    <a
-                      className="hint-pdf-link"
-                      href={doc.pdf_url}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      📄 Open PDF
-                    </a>
+                    <div className="recommendation-row-meta">
+                      <span className="recommendation-query">{doc.matched_query}</span>
+                      <a
+                        className="recommendation-pdf-link"
+                        href={doc.pdf_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        📄 PDF
+                      </a>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -142,7 +158,7 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
 
           {/* ── Main columns: suggestions + extracted facts ───── */}
           <div className="analysis-section">
-            <h3 className="analysis-title">Analysis Results</h3>
+            <h3 className="analysis-title">Результаты анализа</h3>
             <div className="analysis-main-grid">
               {/* Left: suggestion columns */}
               <div className="analysis-suggestions-area">
@@ -167,7 +183,7 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
                                         className="hint-severity"
                                         style={{ color: SEVERITY_COLORS[h.severity] ?? '#888' }}
                                       >
-                                        {h.severity}
+                                        {SEVERITY_LABELS[h.severity] ?? h.severity}
                                       </span>
                                     )}
                                     {typeof h.confidence === 'number' && (
@@ -186,24 +202,24 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
                     })}
                   </div>
                 ) : (
-                  <p className="placeholder-text">No analysis hints yet.</p>
+                  <p className="placeholder-text">Подсказки анализа пока отсутствуют.</p>
                 )}
 
                 {/* Other hint types */}
                 {otherHints.length > 0 && (
                   <div className="analysis-section" style={{ marginTop: '0.75rem' }}>
-                    <h4 className="suggestion-column-title">📋 Other Hints</h4>
+                    <h4 className="suggestion-column-title">📋 Другие подсказки</h4>
                     <ul className="hints-list">
                       {otherHints.map((h) => (
                         <li key={h.hint_id} className="hint-card">
                           <div className="hint-header">
-                            <span className="hint-type">{h.type}</span>
+                            <span className="hint-type">{HINT_TYPE_LABELS[h.type] ?? h.type}</span>
                             {h.severity && (
                               <span
                                 className="hint-severity"
                                 style={{ color: SEVERITY_COLORS[h.severity] ?? '#888' }}
                               >
-                                {h.severity}
+                                {SEVERITY_LABELS[h.severity] ?? h.severity}
                               </span>
                             )}
                             {typeof h.confidence === 'number' && (
@@ -223,7 +239,7 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
               {/* Right: extracted facts column */}
               {hasExtractedFacts && analysis && (
                 <div className="analysis-facts-area">
-                  <h4 className="suggestion-column-title">📋 Extracted Facts</h4>
+                  <h4 className="suggestion-column-title">📋 Извлечённые факты</h4>
                   <div className="facts-column-content">
                     {FACT_SECTIONS.map(({ key, label }) => (
                       analysis.extracted_facts[key].length > 0 ? (
@@ -242,7 +258,7 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
 
                     {hasVitals && (
                       <div className="facts-group">
-                        <span className="analysis-stat-label">Vitals</span>
+                        <span className="analysis-stat-label">Витальные показатели</span>
                         <div className="fact-pills">
                           {Object.entries(analysis.extracted_facts.vitals).map(([key, value]) => (
                             value !== null && value !== '' ? (
@@ -263,23 +279,23 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
           {/* ── Patient Context (from FHIR) ──────── */}
           {hasPatientContext && analysis?.patient_context && (
             <div className="analysis-section">
-              <h3 className="analysis-title">Patient Context (FHIR)</h3>
+              <h3 className="analysis-title">Контекст пациента (FHIR)</h3>
               <div className="analysis-grid">
                 {analysis.patient_context.patient_name && (
                   <div className="analysis-stat">
-                    <span className="analysis-stat-label">Name</span>
+                    <span className="analysis-stat-label">Имя</span>
                     <span>{analysis.patient_context.patient_name}</span>
                   </div>
                 )}
                 {analysis.patient_context.gender && (
                   <div className="analysis-stat">
-                    <span className="analysis-stat-label">Gender</span>
+                    <span className="analysis-stat-label">Пол</span>
                     <span>{analysis.patient_context.gender}</span>
                   </div>
                 )}
                 {analysis.patient_context.birth_date && (
                   <div className="analysis-stat">
-                    <span className="analysis-stat-label">Birth Date</span>
+                    <span className="analysis-stat-label">Дата рождения</span>
                     <span>{analysis.patient_context.birth_date}</span>
                   </div>
                 )}
@@ -290,17 +306,17 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
           {/* ── Drug Interactions ─────────────────── */}
           {analysis && analysis.drug_interactions.length > 0 && (
             <div className="analysis-section">
-              <h3 className="analysis-title">Drug Interactions</h3>
+              <h3 className="analysis-title">Лекарственные взаимодействия</h3>
               <ul className="hints-list">
                 {analysis.drug_interactions.map((interaction, index) => (
                   <li key={`${interaction.drug_a}-${interaction.drug_b}-${index}`} className="hint-card">
                     <div className="hint-header">
-                      <span className="hint-type">drug_interaction</span>
+                      <span className="hint-type">лек. взаимодействие</span>
                       <span
                         className="hint-severity"
                         style={{ color: SEVERITY_COLORS[interaction.severity] ?? '#888' }}
                       >
-                        {interaction.severity}
+                        {SEVERITY_LABELS[interaction.severity] ?? interaction.severity}
                       </span>
                       <span className="hint-confidence">
                         {(interaction.confidence * 100).toFixed(0)}%
@@ -318,7 +334,7 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
           {/* ── Knowledge References ──────────────── */}
           {analysis && analysis.knowledge_refs.length > 0 && (
             <div className="analysis-section">
-              <h3 className="analysis-title">Knowledge References</h3>
+              <h3 className="analysis-title">Справочные материалы</h3>
               <ul className="hints-list">
                 {analysis.knowledge_refs.map((reference, index) => (
                   <li key={`${reference.title}-${index}`} className="hint-card">
@@ -339,7 +355,7 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
           {/* ── Errors ───────────────────────────── */}
           {analysis && analysis.errors.length > 0 && (
             <div className="analysis-section">
-              <h3 className="analysis-title">Analysis Errors</h3>
+              <h3 className="analysis-title">Ошибки анализа</h3>
               <ul className="error-list">
                 {analysis.errors.map((error) => (
                   <li key={error} className="error-item">

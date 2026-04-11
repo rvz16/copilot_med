@@ -16,7 +16,8 @@ COPY clinical-recommendations-service/requirements.txt ./
 RUN pip install -r requirements.txt
 
 COPY clinical-recommendations-service/app ./app
-COPY clinical_recommendations ./clinical_recommendations
+COPY clinical_recommendations/clinical_recommendations.csv ./clinical_recommendations/clinical_recommendations.csv
+RUN mkdir -p ./clinical_recommendations/pdf_files
 
 RUN adduser --disabled-password --gecos "" appuser \
     && chown -R appuser:appuser /app
