@@ -53,13 +53,26 @@ services:
       retries: 20
       start_period: 180s
 
+  fhir:
+    build:
+      context: ./fhir
+    user: "0:0"
+    ports:
+      - "8092:8092"
+    volumes:
+      - fhir-data:/data/hapi
+
   realtime-analysis:
     build:
       context: ./real_time_analysis
+    depends_on:
+      fhir:
+        condition: service_started
     environment:
       LLM_PROVIDER: ${REALTIME_ANALYSIS_LLM_PROVIDER:-ollama}
       MODEL_NAME: ${REALTIME_ANALYSIS_MODEL_NAME:-qwen3:4b}
       LLM_BASE_URL: ${REALTIME_ANALYSIS_LLM_BASE_URL:-http://host.docker.internal:11434}
+      FHIR_BASE_URL: ${REALTIME_ANALYSIS_FHIR_BASE_URL:-http://fhir:8092/fhir}
       LLM_API_KEY: ${REALTIME_ANALYSIS_LLM_API_KEY:-}
       LLM_HTTP_REFERER: ${REALTIME_ANALYSIS_LLM_HTTP_REFERER:-}
       LLM_X_TITLE: ${REALTIME_ANALYSIS_LLM_X_TITLE:-MedCoPilot}
@@ -145,5 +158,6 @@ services:
       - "3000:80"
 
 volumes:
+  fhir-data:
   session-manager-data:
   transcribation-model:
