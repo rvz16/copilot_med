@@ -15,7 +15,7 @@ RUN uv venv --python 3.11 .venv && \
 
 COPY app/ app/
 COPY scripts/ scripts/
-RUN chmod +x scripts/start.sh
+RUN sed -i 's/\r$//' scripts/start.sh && chmod +x scripts/start.sh
 
 ENV PATH="/app/.venv/bin:$PATH"
 

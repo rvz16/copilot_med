@@ -23,7 +23,7 @@ class Settings(BaseSettings):
         default_factory=lambda: ["http://localhost:3000", "http://localhost:5173"],
         alias="CORS_ORIGINS",
     )
-    default_chunk_ms: int = Field(default=4000, alias="DEFAULT_CHUNK_MS")
+    default_chunk_ms: int = Field(default=7000, alias="DEFAULT_CHUNK_MS")
     max_in_flight_requests: int = Field(default=1, alias="MAX_IN_FLIGHT_REQUESTS")
     accepted_mime_types: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["audio/webm", "audio/wav"],

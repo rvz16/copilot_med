@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.config import COMPUTE_TYPE, DEVICE, MODEL_KAGGLE_DATASET, MODEL_PATH
+from app.config import COMPUTE_TYPE, DEVICE, MODEL_KAGGLE_DATASET, MODEL_PATH, USE_GROQ_API
 from app.model import load_model
 from app.routes import router
 from app.session_audio_context import session_store
@@ -28,11 +28,15 @@ async def _periodic_cleanup():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(
-        "Device: %s | Compute: %s | Model: %s | Dataset: %s",
-        DEVICE, COMPUTE_TYPE, MODEL_PATH, MODEL_KAGGLE_DATASET,
+        "Device: %s | Compute: %s | Model: %s | Dataset: %s | Groq API: %s",
+        DEVICE, COMPUTE_TYPE, MODEL_PATH, MODEL_KAGGLE_DATASET, USE_GROQ_API
     )
-    load_model()
-    logger.info("Model loaded and ready.")
+    
+    if not USE_GROQ_API:
+        load_model()
+        logger.info("Local model loaded and ready.")
+    else:
+        logger.info("Using Groq API. Local model is not loaded into memory.")
 
     task = asyncio.create_task(_periodic_cleanup())
     yield
@@ -56,6 +60,7 @@ def health():
     return {
         "status": "ok",
         "service": "transcribation",
-        "device": DEVICE,
-        "model_path": str(MODEL_PATH),
+        "device": "api" if USE_GROQ_API else DEVICE,
+        "model_path": "groq" if USE_GROQ_API else str(MODEL_PATH),
+        "use_groq_api": USE_GROQ_API,
     }
