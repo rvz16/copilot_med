@@ -26,6 +26,10 @@ class UploadConfig(ApiBaseModel):
 class CreateSessionRequest(ApiBaseModel):
     doctor_id: str
     patient_id: str
+    doctor_name: str | None = None
+    doctor_specialty: str | None = None
+    patient_name: str | None = None
+    chief_complaint: str | None = None
 
     @field_validator("doctor_id", "patient_id")
     @classmethod
@@ -35,12 +39,24 @@ class CreateSessionRequest(ApiBaseModel):
             raise ValueError("must be a non-empty string")
         return stripped
 
+    @field_validator("doctor_name", "doctor_specialty", "patient_name", "chief_complaint")
+    @classmethod
+    def normalize_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
 
 class CreateSessionResponse(ApiBaseModel):
     session_id: str
     status: str
     recording_state: str
     upload_config: UploadConfig
+    doctor_name: str | None = None
+    doctor_specialty: str | None = None
+    patient_name: str | None = None
+    chief_complaint: str | None = None
 
 
 class Ack(ApiBaseModel):
@@ -187,16 +203,20 @@ class HealthResponse(ApiBaseModel):
     service: str
 
 
-class SessionDetailResponse(ApiBaseModel):
+class SessionSummaryResponse(ApiBaseModel):
     session_id: str
     doctor_id: str
+    doctor_name: str | None = None
+    doctor_specialty: str | None = None
     patient_id: str
+    patient_name: str | None = None
+    chief_complaint: str | None = None
     encounter_id: str | None = None
     status: str
     recording_state: str
     processing_state: str
     latest_seq: int
-    current_transcript: str | None = None
+    transcript_preview: str | None = None
     stable_transcript: str | None = None
     last_error: str | None = None
     created_at: datetime
@@ -204,6 +224,7 @@ class SessionDetailResponse(ApiBaseModel):
     started_at: datetime | None = None
     stopped_at: datetime | None = None
     closed_at: datetime | None = None
+    snapshot_available: bool = False
 
 
 class TranscriptEventResponse(ApiBaseModel):
@@ -235,6 +256,23 @@ class HintsResponse(ApiBaseModel):
     items: list[HintListItem]
 
 
+class ConsultationSnapshotResponse(ApiBaseModel):
+    status: str
+    recording_state: str
+    processing_state: str
+    latest_seq: int
+    transcript: str
+    hints: list[HintListItem] = Field(default_factory=list)
+    realtime_analysis: RealtimeAnalysisResponse | None = None
+    last_error: str | None = None
+    updated_at: datetime
+    finalized_at: datetime | None = None
+
+
+class SessionDetailResponse(SessionSummaryResponse):
+    snapshot: ConsultationSnapshotResponse | None = None
+
+
 class ExtractionsResponse(ApiBaseModel):
     session_id: str
     processing_state: str
@@ -246,7 +284,7 @@ class ExtractionsResponse(ApiBaseModel):
 
 
 class ListSessionsResponse(ApiBaseModel):
-    items: list[SessionDetailResponse]
+    items: list[SessionSummaryResponse]
     limit: int
     offset: int
     total: int

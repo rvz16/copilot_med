@@ -14,6 +14,10 @@ export interface UploadConfig {
 export interface CreateSessionRequest {
   doctor_id: string;
   patient_id: string;
+  doctor_name?: string;
+  doctor_specialty?: string;
+  patient_name?: string;
+  chief_complaint?: string;
 }
 
 export interface CreateSessionResponse {
@@ -21,6 +25,10 @@ export interface CreateSessionResponse {
   status: string;
   recording_state: string;
   upload_config: UploadConfig;
+  doctor_name?: string | null;
+  doctor_specialty?: string | null;
+  patient_name?: string | null;
+  chief_complaint?: string | null;
 }
 
 // ── Audio chunk upload ──────────────────────
@@ -40,6 +48,10 @@ export interface Hint {
   message: string;
   confidence: number | null;
   severity?: string;
+}
+
+export interface StoredHint extends Hint {
+  created_at: string;
 }
 
 export interface RealtimeModelInfo {
@@ -158,6 +170,54 @@ export interface CloseSessionResponse {
   full_transcript_ready: boolean;
 }
 
+export interface SessionSnapshot {
+  status: string;
+  recording_state: string;
+  processing_state: string;
+  latest_seq: number;
+  transcript: string;
+  hints: StoredHint[];
+  realtime_analysis: RealtimeAnalysis | null;
+  last_error: string | null;
+  updated_at: string;
+  finalized_at: string | null;
+}
+
+export interface SessionSummary {
+  session_id: string;
+  doctor_id: string;
+  doctor_name: string | null;
+  doctor_specialty: string | null;
+  patient_id: string;
+  patient_name: string | null;
+  chief_complaint: string | null;
+  encounter_id: string | null;
+  status: string;
+  recording_state: string;
+  processing_state: string;
+  latest_seq: number;
+  transcript_preview: string | null;
+  stable_transcript: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  stopped_at: string | null;
+  closed_at: string | null;
+  snapshot_available: boolean;
+}
+
+export interface SessionDetail extends SessionSummary {
+  snapshot: SessionSnapshot | null;
+}
+
+export interface ListSessionsResponse {
+  items: SessionSummary[];
+  limit: number;
+  offset: number;
+  total: number;
+}
+
 // ── Health ──────────────────────────────────
 
 export interface HealthResponse {
@@ -177,7 +237,7 @@ export interface ApiErrorBody {
 // ── API interface ───────────────────────────
 
 export interface SessionApi {
-  createSession(doctorId: string, patientId: string): Promise<CreateSessionResponse>;
+  createSession(payload: CreateSessionRequest): Promise<CreateSessionResponse>;
   uploadAudioChunk(
     sessionId: string,
     file: Blob,
@@ -189,5 +249,13 @@ export interface SessionApi {
   ): Promise<AudioChunkResponse>;
   stopRecording(sessionId: string): Promise<StopRecordingResponse>;
   closeSession(sessionId: string): Promise<CloseSessionResponse>;
+  getSession(sessionId: string): Promise<SessionDetail>;
+  listSessions(params?: {
+    doctorId?: string;
+    patientId?: string;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ListSessionsResponse>;
   healthCheck(): Promise<HealthResponse>;
 }

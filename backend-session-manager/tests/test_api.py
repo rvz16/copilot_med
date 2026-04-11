@@ -8,7 +8,14 @@ from app.services.realtime_analysis import MockRealtimeAnalysisProvider
 def create_session(client: TestClient) -> str:
     response = client.post(
         "/api/v1/sessions",
-        json={"doctor_id": "doc_001", "patient_id": "pat_001"},
+        json={
+            "doctor_id": "doc_001",
+            "doctor_name": "Dr. Amelia Carter",
+            "doctor_specialty": "Family Medicine",
+            "patient_id": "pat_001",
+            "patient_name": "Olivia Bennett",
+            "chief_complaint": "Recurring headache",
+        },
     )
     assert response.status_code == 200
     return response.json()["session_id"]
@@ -44,7 +51,14 @@ def test_health_check_returns_200(client: TestClient):
 def test_create_session_success(client: TestClient):
     response = client.post(
         "/api/v1/sessions",
-        json={"doctor_id": "doc_001", "patient_id": "pat_001"},
+        json={
+            "doctor_id": "doc_001",
+            "doctor_name": "Dr. Amelia Carter",
+            "doctor_specialty": "Family Medicine",
+            "patient_id": "pat_001",
+            "patient_name": "Olivia Bennett",
+            "chief_complaint": "Recurring headache",
+        },
     )
 
     assert response.status_code == 200
@@ -52,6 +66,8 @@ def test_create_session_success(client: TestClient):
     assert body["session_id"].startswith("sess_")
     assert body["status"] == "created"
     assert body["recording_state"] == "idle"
+    assert body["doctor_name"] == "Dr. Amelia Carter"
+    assert body["patient_name"] == "Olivia Bennett"
     assert body["upload_config"]["recommended_chunk_ms"] == 4000
     assert "audio/webm" in body["upload_config"]["accepted_mime_types"]
 
@@ -178,6 +194,55 @@ def test_close_session_success(client: TestClient):
     assert body["recording_state"] == "stopped"
     assert body["processing_state"] == "completed"
     assert body["full_transcript_ready"] is True
+
+
+def test_get_session_returns_profile_and_snapshot(client: TestClient):
+    session_id = create_session(client)
+    upload_chunk(client, session_id, seq=1, is_final=True)
+    client.post(
+        f"/api/v1/sessions/{session_id}/close",
+        json={"trigger_post_session_analytics": True},
+    )
+
+    response = client.get(f"/api/v1/sessions/{session_id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["doctor_name"] == "Dr. Amelia Carter"
+    assert body["doctor_specialty"] == "Family Medicine"
+    assert body["patient_name"] == "Olivia Bennett"
+    assert body["chief_complaint"] == "Recurring headache"
+    assert body["snapshot"]["status"] == "closed"
+    assert body["snapshot"]["latest_seq"] == 1
+    assert body["snapshot"]["transcript"].startswith("Patient reports headache")
+    assert body["snapshot"]["finalized_at"] is not None
+
+
+def test_list_sessions_filters_by_doctor_and_returns_snapshot_flag(client: TestClient):
+    first_session_id = create_session(client)
+    second = client.post(
+        "/api/v1/sessions",
+        json={
+            "doctor_id": "doc_002",
+            "doctor_name": "Dr. Michael Reyes",
+            "doctor_specialty": "Internal Medicine",
+            "patient_id": "pat_002",
+            "patient_name": "Noah Brooks",
+            "chief_complaint": "Shortness of breath",
+        },
+    )
+
+    assert second.status_code == 200
+
+    first_list = client.get("/api/v1/sessions", params={"doctor_id": "doc_001"})
+    second_list = client.get("/api/v1/sessions", params={"doctor_id": "doc_002"})
+
+    assert first_list.status_code == 200
+    assert second_list.status_code == 200
+    assert [item["session_id"] for item in first_list.json()["items"]] == [first_session_id]
+    assert first_list.json()["items"][0]["snapshot_available"] is True
+    assert first_list.json()["items"][0]["patient_name"] == "Olivia Bennett"
+    assert [item["session_id"] for item in second_list.json()["items"]] == [second.json()["session_id"]]
 
 
 def test_upload_after_close_returns_409(client: TestClient):

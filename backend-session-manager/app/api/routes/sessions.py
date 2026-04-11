@@ -25,7 +25,14 @@ def create_session(
     payload: CreateSessionRequest,
     service: SessionService = Depends(get_session_service),
 ) -> CreateSessionResponse:
-    return service.create_session(payload.doctor_id, payload.patient_id)
+    return service.create_session(
+        payload.doctor_id,
+        payload.patient_id,
+        doctor_name=payload.doctor_name,
+        doctor_specialty=payload.doctor_specialty,
+        patient_name=payload.patient_name,
+        chief_complaint=payload.chief_complaint,
+    )
 
 
 @router.post(

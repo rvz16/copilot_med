@@ -45,6 +45,44 @@ class SessionRecord(Base):
         back_populates="session",
         cascade="all, delete-orphan",
     )
+    profile: Mapped["SessionProfile | None"] = relationship(
+        back_populates="session",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    workspace_snapshot: Mapped["SessionWorkspaceSnapshot | None"] = relationship(
+        back_populates="session",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
+
+class SessionProfile(Base):
+    __tablename__ = "session_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    session_db_id: Mapped[int] = mapped_column(ForeignKey("sessions.id"), unique=True, index=True)
+    doctor_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    doctor_specialty: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    patient_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    chief_complaint: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    session: Mapped[SessionRecord] = relationship(back_populates="profile")
+
+
+class SessionWorkspaceSnapshot(Base):
+    __tablename__ = "session_workspace_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    session_db_id: Mapped[int] = mapped_column(ForeignKey("sessions.id"), unique=True, index=True)
+    payload_json: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+    finalized_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    session: Mapped[SessionRecord] = relationship(back_populates="workspace_snapshot")
 
 
 class AudioChunk(Base):

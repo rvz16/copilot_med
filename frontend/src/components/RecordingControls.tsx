@@ -48,7 +48,7 @@ export function RecordingControls({
           onClick={onStartRecording}
           disabled={disabled || !canRecord || isRecording}
         >
-          🎙️ Начать запись
+          Начать запись
         </button>
 
         <button
@@ -57,7 +57,7 @@ export function RecordingControls({
           disabled={disabled || !isRecording}
           className="btn-secondary"
         >
-          ⏹️ Остановить запись
+          Остановить запись
         </button>
       </div>
 

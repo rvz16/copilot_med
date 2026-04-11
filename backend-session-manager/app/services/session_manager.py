@@ -3,15 +3,25 @@ import logging
 from uuid import uuid4
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
 from app.core.errors import ApiError
-from app.models import AudioChunk, ExtractedArtifact, ExternalCallLog, Hint, SessionRecord, TranscriptEvent
+from app.models import (
+    AudioChunk,
+    ExtractedArtifact,
+    ExternalCallLog,
+    Hint,
+    SessionProfile,
+    SessionRecord,
+    SessionWorkspaceSnapshot,
+    TranscriptEvent,
+)
 from app.schemas.session import (
     Ack,
     AudioChunkResponse,
     CloseSessionResponse,
+    ConsultationSnapshotResponse,
     CreateSessionResponse,
     ExtractionsResponse,
     HintListItem,
@@ -21,6 +31,7 @@ from app.schemas.session import (
     RecommendedDocumentResponse,
     RealtimeAnalysisResponse,
     SessionDetailResponse,
+    SessionSummaryResponse,
     StopRecordingResponse,
     TranscriptEventResponse,
     TranscriptResponse,
@@ -69,7 +80,16 @@ class SessionService:
         self.clinical_recommendations = clinical_recommendations
         self.knowledge_extractor = knowledge_extractor
 
-    def create_session(self, doctor_id: str, patient_id: str) -> CreateSessionResponse:
+    def create_session(
+        self,
+        doctor_id: str,
+        patient_id: str,
+        *,
+        doctor_name: str | None = None,
+        doctor_specialty: str | None = None,
+        patient_name: str | None = None,
+        chief_complaint: str | None = None,
+    ) -> CreateSessionResponse:
         session = SessionRecord(
             session_id=self._new_public_id("sess"),
             doctor_id=doctor_id.strip(),
@@ -79,6 +99,19 @@ class SessionService:
             processing_state="pending",
         )
         self.db.add(session)
+        self.db.flush()
+
+        profile = SessionProfile(
+            session_db_id=session.id,
+            doctor_name=doctor_name,
+            doctor_specialty=doctor_specialty,
+            patient_name=patient_name,
+            chief_complaint=chief_complaint,
+        )
+        self.db.add(profile)
+        session.profile = profile
+        self._upsert_session_snapshot(session=session, realtime_analysis=None)
+
         self.db.commit()
         self.db.refresh(session)
         return CreateSessionResponse(
@@ -86,6 +119,10 @@ class SessionService:
             status=session.status,
             recording_state=session.recording_state,
             upload_config=self._upload_config(),
+            doctor_name=profile.doctor_name,
+            doctor_specialty=profile.doctor_specialty,
+            patient_name=profile.patient_name,
+            chief_complaint=profile.chief_complaint,
         )
 
     def upload_audio_chunk(
@@ -114,7 +151,7 @@ class SessionService:
 
         try:
             file_path = self.storage_service.save_chunk(session.session_id, seq, normalized_mime_type, file_bytes)
-            recording_path = self.storage_service.append_to_recording(
+            self.storage_service.append_to_recording(
                 session.session_id,
                 seq,
                 normalized_mime_type,
@@ -273,6 +310,10 @@ class SessionService:
 
         session.latest_seq = seq
         session.updated_at = utcnow()
+        self._upsert_session_snapshot(
+            session=session,
+            realtime_analysis=realtime_analysis_response,
+        )
         self.db.commit()
         self.db.refresh(session)
 
@@ -300,6 +341,7 @@ class SessionService:
         if session.stopped_at is None:
             session.stopped_at = utcnow()
         session.updated_at = utcnow()
+        self._upsert_session_snapshot(session=session, realtime_analysis=None)
         self.db.commit()
         self.db.refresh(session)
         return StopRecordingResponse(
@@ -347,6 +389,11 @@ class SessionService:
             self._run_post_session_analytics(session)
 
         session.updated_at = utcnow()
+        self._upsert_session_snapshot(
+            session=session,
+            realtime_analysis=None,
+            finalized=True,
+        )
         self.db.commit()
         self.db.refresh(session)
         return self._build_close_response(session)
@@ -479,7 +526,7 @@ class SessionService:
         if status:
             filters.append(SessionRecord.status == status)
 
-        query = select(SessionRecord).order_by(SessionRecord.created_at.desc())
+        query = self._base_session_query().order_by(SessionRecord.created_at.desc())
         count_query = select(func.count()).select_from(SessionRecord)
         for condition in filters:
             query = query.where(condition)
@@ -488,7 +535,7 @@ class SessionService:
         total = self.db.scalar(count_query) or 0
         items = self.db.scalars(query.offset(offset).limit(limit)).all()
         return ListSessionsResponse(
-            items=[self._build_session_detail(item) for item in items],
+            items=[self._build_session_summary(item) for item in items],
             limit=limit,
             offset=offset,
             total=total,
@@ -519,22 +566,9 @@ class SessionService:
 
     def get_hints(self, session_id: str) -> HintsResponse:
         session = self._get_session(session_id)
-        items = self.db.scalars(
-            select(Hint).where(Hint.session_db_id == session.id).order_by(Hint.created_at.asc(), Hint.id.asc())
-        ).all()
         return HintsResponse(
             session_id=session.session_id,
-            items=[
-                HintListItem(
-                    hint_id=item.hint_id,
-                    type=item.type,
-                    message=item.message,
-                    confidence=item.confidence,
-                    severity=item.severity,
-                    created_at=item.created_at,
-                )
-                for item in items
-            ],
+            items=self._build_hint_list_items(session.id),
         )
 
     def get_extractions(self, session_id: str) -> ExtractionsResponse:
@@ -627,31 +661,131 @@ class SessionService:
             )
         )
 
+    @staticmethod
+    def _base_session_query():
+        return select(SessionRecord).options(
+            selectinload(SessionRecord.profile),
+            selectinload(SessionRecord.workspace_snapshot),
+        )
+
     def _get_session(self, session_id: str) -> SessionRecord:
-        session = self.db.scalar(select(SessionRecord).where(SessionRecord.session_id == session_id))
+        session = self.db.scalar(self._base_session_query().where(SessionRecord.session_id == session_id))
         if session is None:
             raise ApiError("INVALID_SESSION", "Session not found.", 404)
         return session
 
-    def _build_session_detail(self, session: SessionRecord) -> SessionDetailResponse:
-        return SessionDetailResponse(
+    def _build_hint_list_items(self, session_db_id: int) -> list[HintListItem]:
+        items = self.db.scalars(
+            select(Hint).where(Hint.session_db_id == session_db_id).order_by(Hint.created_at.asc(), Hint.id.asc())
+        ).all()
+        return [
+            HintListItem(
+                hint_id=item.hint_id,
+                type=item.type,
+                message=item.message,
+                confidence=item.confidence,
+                severity=item.severity,
+                created_at=item.created_at,
+            )
+            for item in items
+        ]
+
+    def _build_session_summary(self, session: SessionRecord) -> SessionSummaryResponse:
+        profile = session.profile
+        stable_transcript = session.stable_transcript or None
+        transcript_preview = stable_transcript[:180] if stable_transcript else None
+        return SessionSummaryResponse(
             session_id=session.session_id,
             doctor_id=session.doctor_id,
+            doctor_name=profile.doctor_name if profile else None,
+            doctor_specialty=profile.doctor_specialty if profile else None,
             patient_id=session.patient_id,
+            patient_name=profile.patient_name if profile else None,
+            chief_complaint=profile.chief_complaint if profile else None,
             encounter_id=session.encounter_id,
             status=session.status,
             recording_state=session.recording_state,
             processing_state=session.processing_state,
             latest_seq=session.latest_seq,
-            current_transcript=session.current_transcript,
-            stable_transcript=session.stable_transcript,
+            transcript_preview=transcript_preview,
+            stable_transcript=stable_transcript,
             last_error=session.last_error,
             created_at=session.created_at,
             updated_at=session.updated_at,
             started_at=session.started_at,
             stopped_at=session.stopped_at,
             closed_at=session.closed_at,
+            snapshot_available=session.workspace_snapshot is not None,
         )
+
+    def _build_snapshot_response(
+        self,
+        snapshot: SessionWorkspaceSnapshot | None,
+    ) -> ConsultationSnapshotResponse | None:
+        if snapshot is None:
+            return None
+        return ConsultationSnapshotResponse.model_validate(snapshot.payload_json)
+
+    def _build_session_detail(self, session: SessionRecord) -> SessionDetailResponse:
+        summary = self._build_session_summary(session)
+        return SessionDetailResponse(
+            **summary.model_dump(),
+            snapshot=self._build_snapshot_response(session.workspace_snapshot),
+        )
+
+    def _upsert_session_snapshot(
+        self,
+        *,
+        session: SessionRecord,
+        realtime_analysis: RealtimeAnalysisResponse | None,
+        finalized: bool = False,
+    ) -> None:
+        snapshot = session.workspace_snapshot
+        if snapshot is None:
+            snapshot = self.db.scalar(
+                select(SessionWorkspaceSnapshot).where(SessionWorkspaceSnapshot.session_db_id == session.id)
+            )
+            if snapshot is not None:
+                session.workspace_snapshot = snapshot
+
+        previous_payload = snapshot.payload_json if snapshot is not None and isinstance(snapshot.payload_json, dict) else {}
+        hints = self._build_hint_list_items(session.id)
+        updated_at = session.updated_at or utcnow()
+        payload = {
+            "status": session.status,
+            "recording_state": session.recording_state,
+            "processing_state": session.processing_state,
+            "latest_seq": session.latest_seq,
+            "transcript": session.stable_transcript or session.current_transcript or "",
+            "hints": [item.model_dump(mode="json") for item in hints],
+            "realtime_analysis": (
+                realtime_analysis.model_dump(mode="json")
+                if realtime_analysis is not None
+                else previous_payload.get("realtime_analysis")
+            ),
+            "last_error": session.last_error,
+            "updated_at": updated_at.isoformat(),
+            "finalized_at": (
+                updated_at.isoformat()
+                if finalized
+                else previous_payload.get("finalized_at")
+            ),
+        }
+
+        if snapshot is None:
+            snapshot = SessionWorkspaceSnapshot(
+                session_db_id=session.id,
+                payload_json=payload,
+                finalized_at=updated_at if finalized else None,
+            )
+            self.db.add(snapshot)
+            session.workspace_snapshot = snapshot
+            return
+
+        snapshot.payload_json = payload
+        snapshot.updated_at = updated_at
+        if finalized:
+            snapshot.finalized_at = updated_at
 
     def _build_close_response(self, session: SessionRecord) -> CloseSessionResponse:
         return CloseSessionResponse(

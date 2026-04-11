@@ -4,6 +4,8 @@ from app.models.entities import (
     ExternalCallLog,
     Hint,
     SessionRecord,
+    SessionProfile,
+    SessionWorkspaceSnapshot,
     TranscriptEvent,
 )
 
@@ -13,5 +15,7 @@ __all__ = [
     "ExternalCallLog",
     "Hint",
     "SessionRecord",
+    "SessionProfile",
+    "SessionWorkspaceSnapshot",
     "TranscriptEvent",
 ]

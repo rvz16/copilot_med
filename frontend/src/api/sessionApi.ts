@@ -6,8 +6,11 @@
 import type {
   AudioChunkResponse,
   CloseSessionResponse,
+  CreateSessionRequest,
   CreateSessionResponse,
   HealthResponse,
+  ListSessionsResponse,
+  SessionDetail,
   SessionApi,
   StopRecordingResponse,
 } from '../types/types';
@@ -30,11 +33,11 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 export const sessionApi: SessionApi = {
-  async createSession(doctorId, patientId) {
+  async createSession(payload: CreateSessionRequest) {
     const res = await fetch(withBaseUrl('/api/v1/sessions'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ doctor_id: doctorId, patient_id: patientId }),
+      body: JSON.stringify(payload),
     });
     return handleResponse<CreateSessionResponse>(res);
   },
@@ -71,6 +74,24 @@ export const sessionApi: SessionApi = {
       body: JSON.stringify({ trigger_post_session_analytics: true }),
     });
     return handleResponse<CloseSessionResponse>(res);
+  },
+
+  async getSession(sessionId) {
+    const res = await fetch(withBaseUrl(`/api/v1/sessions/${sessionId}`));
+    return handleResponse<SessionDetail>(res);
+  },
+
+  async listSessions(params = {}) {
+    const query = new URLSearchParams();
+    if (params.doctorId) query.set('doctor_id', params.doctorId);
+    if (params.patientId) query.set('patient_id', params.patientId);
+    if (params.status) query.set('status', params.status);
+    if (typeof params.limit === 'number') query.set('limit', String(params.limit));
+    if (typeof params.offset === 'number') query.set('offset', String(params.offset));
+
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    const res = await fetch(withBaseUrl(`/api/v1/sessions${suffix}`));
+    return handleResponse<ListSessionsResponse>(res);
   },
 
   async healthCheck() {
