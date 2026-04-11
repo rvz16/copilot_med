@@ -7,17 +7,73 @@ from pathlib import Path
 
 import numpy as np
 
-from app.config import SAMPLE_RATE
+from app.config import (
+    SAMPLE_RATE,
+    VAD_THRESHOLD,
+    VAD_MIN_SPEECH_MS,
+    VAD_MIN_SILENCE_MS,
+    VAD_PAD_MS
+)
 
 logger = logging.getLogger(__name__)
 
+_vad_model = None
+
+def get_vad_model():
+    global _vad_model
+    if _vad_model is None:
+        from faster_whisper.vad import get_vad_model as fw_get_vad_model
+        _vad_model = fw_get_vad_model()
+    return _vad_model
+
+def apply_vad_and_mask(
+    pcm: np.ndarray, 
+    vad_threshold: float = VAD_THRESHOLD, 
+    min_speech_ms: int = VAD_MIN_SPEECH_MS,
+    min_silence_ms: int = VAD_MIN_SILENCE_MS,
+    pad_ms: int = VAD_PAD_MS
+) -> tuple[bool, np.ndarray]:
+    
+    if len(pcm) == 0:
+        return False, pcm
+
+    try:
+        from faster_whisper.vad import get_vad_model, VadOptions
+        vad_model = get_vad_model()
+        
+        vad_options = VadOptions(
+            threshold=vad_threshold,
+            min_speech_duration_ms=min_speech_ms,
+            min_silence_duration_ms=min_silence_ms,
+            speech_pad_ms=pad_ms,
+        )
+        
+        if hasattr(vad_model, "get_speech_timestamps"):
+            timestamps = vad_model.get_speech_timestamps(pcm, vad_options)
+        else:
+            from faster_whisper.vad import get_speech_timestamps
+            timestamps = get_speech_timestamps(pcm, vad_options)
+            
+    except Exception as exc:
+        logger.error("VAD processing error: %s. Fallback to raw audio.", exc)
+        return True, pcm
+
+    if not timestamps:
+        return False, np.zeros_like(pcm)
+
+    masked_pcm = np.zeros_like(pcm)
+    for ts in timestamps:
+        start = ts['start']
+        end = ts['end']
+        masked_pcm[start:end] = pcm[start:end]
+
+    return True, masked_pcm
+
 
 def decode_audio_to_pcm(file_content: bytes, extension: str) -> np.ndarray:
-    """Decode audio to 16kHz mono float32 PCM via ffmpeg pipe."""
     if not file_content:
         return np.array([], dtype=np.float32)
 
-    # Try pipe-based decoding first (faster, no disk I/O)
     cmd = [
         "ffmpeg",
         "-f", _ext_to_ffmpeg_format(extension),
@@ -39,7 +95,6 @@ def decode_audio_to_pcm(file_content: bytes, extension: str) -> np.ndarray:
     except Exception as exc:
         logger.debug("ffmpeg pipe decode failed (%s), falling back to tempfile", exc)
 
-    # Fallback: temp file (needed when format auto-detection via pipe fails)
     return _decode_via_tempfile(file_content, extension)
 
 
@@ -67,27 +122,5 @@ def _decode_via_tempfile(file_content: bytes, extension: str) -> np.ndarray:
 
 
 def _ext_to_ffmpeg_format(ext: str) -> str:
-    mapping = {
-        ".webm": "webm",
-        ".wav": "wav",
-        ".mp3": "mp3",
-        ".ogg": "ogg",
-    }
+    mapping = {".webm": "webm", ".wav": "wav", ".mp3": "mp3", ".ogg": "ogg"}
     return mapping.get(ext.lower(), "webm")
-
-
-def compute_rms(pcm: np.ndarray) -> float:
-    if len(pcm) == 0:
-        return 0.0
-    return float(np.sqrt(np.mean(pcm ** 2)))
-
-
-def estimate_speech_ratio(pcm: np.ndarray, threshold: float = 0.008) -> float:
-    """Fraction of 20ms frames with energy above threshold."""
-    frame_size = int(SAMPLE_RATE * 0.02)
-    n_frames = len(pcm) // frame_size
-    if n_frames == 0:
-        return 0.0 if compute_rms(pcm) < threshold else 1.0
-    frames = pcm[: n_frames * frame_size].reshape(n_frames, frame_size)
-    energies = np.sqrt(np.mean(frames ** 2, axis=1))
-    return float(np.mean(energies > threshold))

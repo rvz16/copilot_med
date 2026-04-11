@@ -20,8 +20,10 @@ def is_model_dir(path: Path) -> bool:
 
 
 def ensure_kaggle_credentials() -> None:
-    kaggle_dir = Path.home() / ".kaggle"
+    kaggle_dir = Path("/tmp/.kaggle")
     kaggle_dir.mkdir(parents=True, exist_ok=True)
+    
+    os.environ["KAGGLE_CONFIG_DIR"] = str(kaggle_dir)
 
     access_token_path = kaggle_dir / "access_token"
     api_token = os.getenv("KAGGLE_API_TOKEN", "").strip()

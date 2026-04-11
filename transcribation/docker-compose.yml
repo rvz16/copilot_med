@@ -4,6 +4,13 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
+      VAD_THRESHOLD: "0.2"
+      VAD_MIN_SPEECH_MS: "200"
+      VAD_MIN_SILENCE_MS: "500"
+      VAD_PAD_MS: "400"
+      USE_GROQ_API: "true"
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: "whisper-large-v3-turbo"
       MODEL_PATH: /models/whisper-ct2-ru
       MODEL_KAGGLE_DATASET: danchik575/whisper-ct2-ru
       KAGGLE_API_TOKEN: ${KAGGLE_API_TOKEN:-}

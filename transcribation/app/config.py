@@ -51,13 +51,16 @@ def env_bool(name: str, default: bool) -> bool:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
+USE_GROQ_API = env_bool("USE_GROQ_API", True)
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "whisper-large-v3-turbo")
 
 # --- VAD parameters ---
 VAD_FILTER = env_bool("VAD_FILTER", True)
-VAD_THRESHOLD = float(os.getenv("VAD_THRESHOLD", "0.1"))
-VAD_MIN_SILENCE_DURATION_MS = int(os.getenv("VAD_MIN_SILENCE_DURATION_MS", "1000"))
-VAD_MIN_SPEECH_DURATION_MS = int(os.getenv("VAD_MIN_SPEECH_DURATION_MS", "80"))
-VAD_SPEECH_PAD_MS = int(os.getenv("VAD_SPEECH_PAD_MS", "700"))
+VAD_THRESHOLD = float(os.getenv("VAD_THRESHOLD", "0.3"))
+VAD_MIN_SPEECH_MS = int(os.getenv("VAD_MIN_SPEECH_MS", "250"))
+VAD_MIN_SILENCE_MS = int(os.getenv("VAD_MIN_SILENCE_MS", "500"))
+VAD_PAD_MS = int(os.getenv("VAD_PAD_MS", "400"))
 
 DEFAULT_USE_AUDIO_CONTEXT = env_bool("DEFAULT_USE_AUDIO_CONTEXT", True)
 DEFAULT_USE_PROMPT = env_bool("DEFAULT_USE_PROMPT", True)
