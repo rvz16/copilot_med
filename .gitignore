@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+*.pdf
 
 # Editor directories and files
 .vscode/*
@@ -243,3 +244,5 @@ __marimo__/
 TASK.md
 
 whisper-ct2-ru/
+
+.history/

@@ -1,6 +1,32 @@
 name: medcopilot
 
 services:
+  clinical-recommendations:
+    build:
+      context: .
+      dockerfile: clinical-recommendations-service/Dockerfile
+    environment:
+      APP_ENV: container
+      HOST: 0.0.0.0
+      PORT: 8002
+      CORS_ORIGINS: http://localhost:3000,http://localhost:5173
+      CLINICAL_RECOMMENDATIONS_CSV_PATH: /app/clinical_recommendations/clinical_recommendations.csv
+      CLINICAL_RECOMMENDATIONS_PDF_DIR: /app/clinical_recommendations/pdf_files
+    volumes:
+      - ./clinical_recommendations/pdf_files:/app/clinical_recommendations/pdf_files:ro
+    ports:
+      - "8002:8002"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8002/health').status == 200 else 1)
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   transcribation:
     build:
       context: ./transcribation
@@ -43,12 +69,19 @@ services:
       fhir:
         condition: service_started
     environment:
+      LLM_PROVIDER: ${REALTIME_ANALYSIS_LLM_PROVIDER:-ollama}
       MODEL_NAME: ${REALTIME_ANALYSIS_MODEL_NAME:-qwen3:4b}
       LLM_BASE_URL: ${REALTIME_ANALYSIS_LLM_BASE_URL:-http://host.docker.internal:11434}
       FHIR_BASE_URL: ${REALTIME_ANALYSIS_FHIR_BASE_URL:-http://fhir:8092/fhir}
-      MAX_TOKENS: ${REALTIME_ANALYSIS_MAX_TOKENS:-256}
+      LLM_API_KEY: ${REALTIME_ANALYSIS_LLM_API_KEY:-}
+      LLM_HTTP_REFERER: ${REALTIME_ANALYSIS_LLM_HTTP_REFERER:-}
+      LLM_X_TITLE: ${REALTIME_ANALYSIS_LLM_X_TITLE:-MedCoPilot}
+      LLM_EXTRA_HEADERS_JSON: ${REALTIME_ANALYSIS_LLM_EXTRA_HEADERS_JSON:-}
+      FHIR_BASE_URL: ${REALTIME_ANALYSIS_FHIR_BASE_URL:-http://158.160.84.63:8092/hapi-fhir-jpaserver/fhir}
+      MAX_TOKENS: ${REALTIME_ANALYSIS_MAX_TOKENS:-1024}
       TEMPERATURE: ${REALTIME_ANALYSIS_TEMPERATURE:-0.0}
-      LLM_TIMEOUT: ${REALTIME_ANALYSIS_LLM_TIMEOUT:-8.0}
+      LLM_TIMEOUT: ${REALTIME_ANALYSIS_LLM_TIMEOUT:-15.0}
+      LLM_REASONING_EFFORT: ${REALTIME_ANALYSIS_LLM_REASONING_EFFORT:-low}
       LOG_LEVEL: ${REALTIME_ANALYSIS_LOG_LEVEL:-INFO}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -69,6 +102,8 @@ services:
     build:
       context: ./backend-session-manager
     depends_on:
+      clinical-recommendations:
+        condition: service_healthy
       transcribation:
         condition: service_healthy
       realtime-analysis:
@@ -84,6 +119,11 @@ services:
       REALTIME_ANALYSIS_URL: http://realtime-analysis:8000/v1/assist
       REALTIME_ANALYSIS_LANGUAGE: ${REALTIME_ANALYSIS_LANGUAGE:-ru}
       REALTIME_ANALYSIS_TIMEOUT_SECONDS: ${REALTIME_ANALYSIS_TIMEOUT_SECONDS:-8}
+      CLINICAL_RECOMMENDATIONS_ENABLED: "true"
+      CLINICAL_RECOMMENDATIONS_URL: http://clinical-recommendations:8002
+      CLINICAL_RECOMMENDATIONS_PUBLIC_URL: http://localhost:8002
+      CLINICAL_RECOMMENDATIONS_TIMEOUT_SECONDS: 5
+      CLINICAL_RECOMMENDATIONS_MIN_CONFIDENCE: 0.6
       KNOWLEDGE_EXTRACTOR_MODE: mock
       KNOWLEDGE_EXTRACTOR_ENABLED: "true"
       HTTP_TIMEOUT_SECONDS: 120

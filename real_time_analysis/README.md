@@ -23,16 +23,16 @@
 ### Как это работает
 
 1. Клиент отправляет `POST /v1/assist` с текстом консультации и (опционально) `patient_id`
-2. **Параллельно** запускаются:
-   - **LLM-запрос** → Ollama (`qwen3:4b`) генерирует структурированный JSON: диагнозы, вопросы, предупреждения, лекарственные взаимодействия
+2. Запускаются:
    - **FHIR-запрос** → HAPI FHIR R4 сервер: Patient, Condition, MedicationRequest, AllergyIntolerance
+   - **LLM-запрос** → Ollama или OpenAI-совместимый hosted API генерирует структурированный JSON: диагнозы, вопросы, предупреждения, лекарственные взаимодействия
 3. **Эвристики** (regex) извлекают симптомы, лекарства, витальные показатели из текста
 4. Результаты LLM + эвристик **мержатся**, FHIR-контекст пациента добавляется в ответ
 5. Ответ возвращается как JSON
 
 ### Потоки данных
 
-- **LLM** — нативный Ollama API (`/api/chat`) с `format: json` и `think: false` для чистого JSON без reasoning
+- **LLM** — либо нативный Ollama API (`/api/chat`), либо OpenAI-совместимый endpoint (`/chat/completions`) для OpenRouter, Google AI Developer compatibility layer, vLLM и similar gateways
 - **FHIR** — стандартный REST: `GET Patient/{id}`, `GET Condition?patient={id}`, `GET MedicationRequest?patient={id}`, `GET AllergyIntolerance?patient={id}` (параллельно через asyncio)
 - **Эвристики** — детерминированные regex-правила для drug interactions (warfarin+NSAIDs и др.) и извлечения фактов
 
@@ -42,7 +42,7 @@
 app/
 ├── main.py                      # FastAPI app, lifespan, create_app()
 ├── schemas.py                   # Pydantic модели (request/response)
-├── llm_client.py                # Async клиент к Ollama (native API)
+├── llm_client.py                # Async клиент к Ollama и OpenAI-compatible APIs
 ├── fhir_client.py               # Async FHIR R4 клиент (httpx)
 ├── heuristics.py                # Regex-эвристики, drug interaction rules
 └── controllers/
@@ -155,8 +155,13 @@ requirements.txt
 
 | Переменная | Default | Описание |
 |------------|---------|----------|
-| `MODEL_NAME` | `qwen3:4b` | Имя модели в Ollama |
-| `LLM_BASE_URL` | `http://localhost:11434` | URL Ollama сервера |
+| `LLM_PROVIDER` | `ollama` | `ollama` или `openai_compatible` |
+| `MODEL_NAME` | `qwen3:4b` | Имя модели |
+| `LLM_BASE_URL` | `http://localhost:11434` | URL Ollama или OpenAI-compatible сервера |
+| `LLM_API_KEY` | empty | API key для hosted OpenAI-compatible провайдеров |
+| `LLM_HTTP_REFERER` | empty | Опциональный `HTTP-Referer`, useful for OpenRouter |
+| `LLM_X_TITLE` | `MedCoPilot` | Опциональный `X-Title`, useful for OpenRouter |
+| `LLM_EXTRA_HEADERS_JSON` | empty | JSON object с дополнительными заголовками |
 | `FHIR_BASE_URL` | `http://158.160.84.63:8092/hapi-fhir-jpaserver/fhir` | URL FHIR R4 сервера |
 | `MAX_TOKENS` | `256` | Макс. токенов генерации LLM |
 | `TEMPERATURE` | `0.0` | Температура генерации (0 = детерминированный) |
@@ -191,6 +196,30 @@ docker compose up --build
 
 Контейнер обращается к Ollama на хосте через `host.docker.internal:11434`.
 
+### Hosted providers
+
+#### OpenRouter
+
+```bash
+LLM_PROVIDER=openai_compatible \
+MODEL_NAME=google/gemini-2.0-flash-exp:free \
+LLM_BASE_URL=https://openrouter.ai/api/v1 \
+LLM_API_KEY=your_openrouter_key \
+LLM_HTTP_REFERER=http://localhost:3000 \
+LLM_X_TITLE=MedCoPilot \
+uvicorn app.main:app --reload --port 8000
+```
+
+#### Google AI Developer compatibility layer
+
+```bash
+LLM_PROVIDER=openai_compatible \
+MODEL_NAME=gemini-2.5-flash \
+LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai \
+LLM_API_KEY=your_google_ai_studio_key \
+uvicorn app.main:app --reload --port 8000
+```
+
 ### Docker (GPU, продакшен с vLLM)
 
 Для GPU-окружения замени Ollama на vLLM. В `docker-compose.yml`:
@@ -217,14 +246,13 @@ services:
   realtime-insight:
     build: .
     environment:
+      - LLM_PROVIDER=openai_compatible
       - MODEL_NAME=Qwen/Qwen3-4B
-      - LLM_BASE_URL=http://vllm:8000
+      - LLM_BASE_URL=http://vllm:8000/v1
     depends_on:
       vllm:
         condition: service_healthy
 ```
-
-При переключении на vLLM нужно изменить `llm_client.py` — использовать OpenAI-совместимый API (`/v1/chat/completions`) вместо нативного Ollama API (`/api/chat`).
 
 ## Интеграция с другими контейнерами
 

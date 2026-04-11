@@ -87,6 +87,16 @@ export interface RealtimeKnowledgeRef {
   confidence: number;
 }
 
+export interface RecommendedDocument {
+  recommendation_id: string;
+  title: string;
+  matched_query: string;
+  diagnosis_confidence: number;
+  search_score: number;
+  pdf_available: boolean;
+  pdf_url: string;
+}
+
 export interface RealtimePatientContext {
   patient_name: string | null;
   gender: string | null;
@@ -104,6 +114,7 @@ export interface RealtimeAnalysis {
   drug_interactions: RealtimeDrugInteraction[];
   extracted_facts: RealtimeExtractedFacts;
   knowledge_refs: RealtimeKnowledgeRef[];
+  recommended_documents?: RecommendedDocument[];
   patient_context: RealtimePatientContext | null;
   errors: string[];
 }

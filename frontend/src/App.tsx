@@ -132,7 +132,7 @@ export default function App() {
     <div className="app">
       <header className="app-header">
         <h1>MedCoPilot</h1>
-        {IS_MOCK && <span className="mock-badge">MOCK MODE</span>}
+        {IS_MOCK && <span className="mock-badge">ТЕСТОВЫЙ РЕЖИМ</span>}
       </header>
 
       <main className="app-main">
@@ -161,7 +161,11 @@ export default function App() {
         {hasSession && (
           <div className="column column-right">
             <TranscriptPanel transcript={uploader.transcript} />
-            <HintsPanel hints={uploader.hints} analysis={uploader.latestAnalysis} />
+            <HintsPanel
+              hints={uploader.hints}
+              analysis={uploader.latestAnalysis}
+              recommendedDocuments={uploader.recommendedDocuments}
+            />
           </div>
         )}
       </main>

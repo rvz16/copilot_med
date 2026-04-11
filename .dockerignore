@@ -1,0 +1,23 @@
+# ── Root .dockerignore ──────────────────────────
+# Applies to images built with context: . (clinical-recommendations)
+
+# PDFs are bind-mounted at runtime, not needed in the image
+clinical_recommendations/pdf_files/
+
+# Other services (they have their own build contexts)
+frontend/
+transcribation/
+backend-session-manager/
+real_time_analysis/
+knowledge-extractor/
+
+# Dev / VCS artifacts
+.git/
+.github/
+.env
+.env.*
+!.env.example
+**/__pycache__/
+**/*.pyc
+**/node_modules/
+**/.venv/

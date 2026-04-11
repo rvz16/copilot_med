@@ -128,6 +128,58 @@ def test_assist_with_fhir_context() -> None:
     assert "Penicillin" in data["patient_context"]["allergies"]
 
 
+def test_assist_passes_formatted_fhir_context_to_llm() -> None:
+    llm = LLMClient.__new__(LLMClient)
+    llm.base_url = "http://stub"
+    llm.model_name = "qwen3:4b"
+    llm.max_tokens = 512
+    llm.temperature = 0.0
+    llm.timeout = 5.0
+    llm.generate_structured = AsyncMock(return_value={  # type: ignore[assignment]
+        "suggestions": [],
+        "drug_interactions": [],
+        "extracted_facts": {
+            "symptoms": [],
+            "conditions": [],
+            "medications": [],
+            "allergies": [],
+            "vitals": {
+                "age": None,
+                "weight_kg": None,
+                "height_cm": None,
+                "bp": None,
+                "hr": None,
+                "temp_c": None,
+            },
+        },
+        "knowledge_refs": [],
+        "errors": [],
+    })
+    llm.close = AsyncMock()
+
+    fhir = _make_stub_fhir_with_context()
+    app = create_app(llm=llm, fhir=fhir)
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/assist",
+        json={
+            "request_id": "req-fhir-llm",
+            "patient_id": "pt-003",
+            "transcript_chunk": "Patient complains of headache and dizziness.",
+            "context": {"language": "en"},
+        },
+    )
+
+    assert response.status_code == 200
+    llm.generate_structured.assert_awaited_once()
+    call_kwargs = llm.generate_structured.await_args.kwargs
+    assert call_kwargs["patient_context"] is not None
+    assert "Patient: John Doe" in call_kwargs["patient_context"]
+    assert "Known conditions: Hypertension, Type 2 Diabetes" in call_kwargs["patient_context"]
+    assert "Current medications: Metformin 500mg, Lisinopril 10mg" in call_kwargs["patient_context"]
+
+
 def test_assist_without_patient_id() -> None:
     app = create_app(llm=_make_stub_llm(), fhir=_make_stub_fhir())
     client = TestClient(app)

@@ -83,7 +83,7 @@ class ExtractedFacts(BaseModel):
 
 
 class KnowledgeRef(BaseModel):
-    source: str = "mock_kb"
+    source: str = "heuristic_rules"
     title: str = Field(min_length=1)
     snippet: str = Field(min_length=1)
     url: str | None = None

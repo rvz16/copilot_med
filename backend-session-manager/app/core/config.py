@@ -42,6 +42,23 @@ class Settings(BaseSettings):
         default=8,
         alias="REALTIME_ANALYSIS_TIMEOUT_SECONDS",
     )
+    clinical_recommendations_enabled: bool = Field(default=True, alias="CLINICAL_RECOMMENDATIONS_ENABLED")
+    clinical_recommendations_url: str = Field(
+        default="http://localhost:8002",
+        alias="CLINICAL_RECOMMENDATIONS_URL",
+    )
+    clinical_recommendations_public_url: str = Field(
+        default="http://localhost:8002",
+        alias="CLINICAL_RECOMMENDATIONS_PUBLIC_URL",
+    )
+    clinical_recommendations_timeout_seconds: int = Field(
+        default=5,
+        alias="CLINICAL_RECOMMENDATIONS_TIMEOUT_SECONDS",
+    )
+    clinical_recommendations_min_confidence: float = Field(
+        default=0.6,
+        alias="CLINICAL_RECOMMENDATIONS_MIN_CONFIDENCE",
+    )
     knowledge_extractor_enabled: bool = Field(default=True, alias="KNOWLEDGE_EXTRACTOR_ENABLED")
     knowledge_extractor_mode: str = Field(default="mock", alias="KNOWLEDGE_EXTRACTOR_MODE")
     knowledge_extractor_url: str = Field(

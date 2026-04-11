@@ -6,6 +6,17 @@
 import type { RecordingState } from '../hooks/useSession';
 import type { UploadStatus } from '../hooks/useUploader';
 
+const RECORDING_LABELS: Record<RecordingState, string> = {
+  idle: 'ожидание',
+  recording: 'запись',
+  stopped: 'остановлена',
+};
+
+const UPLOAD_LABELS: Record<UploadStatus, string> = {
+  idle: 'ожидание',
+  uploading: 'загрузка',
+};
+
 interface Props {
   recordingState: RecordingState;
   isRecording: boolean;
@@ -29,7 +40,7 @@ export function RecordingControls({
 }: Props) {
   return (
     <section className="panel" id="recording-controls">
-      <h2>Recording Controls</h2>
+      <h2>Управление записью</h2>
 
       <div className="button-row">
         <button
@@ -37,7 +48,7 @@ export function RecordingControls({
           onClick={onStartRecording}
           disabled={disabled || !canRecord || isRecording}
         >
-          🎙️ Start Recording
+          🎙️ Начать запись
         </button>
 
         <button
@@ -46,26 +57,26 @@ export function RecordingControls({
           disabled={disabled || !isRecording}
           className="btn-secondary"
         >
-          ⏹️ Stop Recording
+          ⏹️ Остановить запись
         </button>
       </div>
 
       <div className="info-row">
-        <span className="label">Recording:</span>
+        <span className="label">Запись:</span>
         <span className={`badge badge-${recordingState}`}>
-          {isRecording ? '● recording' : recordingState}
+          {isRecording ? '● запись идёт' : RECORDING_LABELS[recordingState]}
         </span>
       </div>
 
       <div className="info-row">
-        <span className="label">Upload:</span>
+        <span className="label">Загрузка:</span>
         <span className={`badge ${uploadStatus === 'uploading' ? 'badge-active' : 'badge-idle'}`}>
-          {uploadStatus}
+          {UPLOAD_LABELS[uploadStatus]}
         </span>
       </div>
 
       <div className="info-row">
-        <span className="label">Chunks sent:</span>
+        <span className="label">Отправлено фрагментов:</span>
         <span>{chunksUploaded}</span>
       </div>
     </section>

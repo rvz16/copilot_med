@@ -23,7 +23,7 @@ body {
 /* ── App layout ──────────────────────────── */
 
 .app {
-  max-width: 1100px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 1rem;
 }
@@ -55,7 +55,7 @@ body {
 
 .app-main {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 280px 1fr;
   gap: 1rem;
 }
 
@@ -77,13 +77,13 @@ body {
   background: #ffffff;
   border: 1px solid #e0e4ea;
   border-radius: 8px;
-  padding: 1rem 1.25rem;
+  padding: 0.75rem 1rem;
 }
 
 .panel h2 {
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 600;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
   color: #16213e;
 }
 
@@ -98,8 +98,8 @@ body {
 .form-row {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  margin-bottom: 0.75rem;
+  gap: 0.15rem;
+  margin-bottom: 0.5rem;
 }
 
 .form-row label {
@@ -109,10 +109,10 @@ body {
 }
 
 .form-row input {
-  padding: 0.45rem 0.6rem;
+  padding: 0.35rem 0.5rem;
   border: 1px solid #ccc;
   border-radius: 4px;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
 }
 
 .form-row input:focus {
@@ -125,15 +125,15 @@ body {
 
 .button-row {
   display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
 }
 
 button {
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.75rem;
   border: none;
   border-radius: 6px;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
   background: #2980b9;
@@ -171,7 +171,7 @@ button:disabled {
 .info-row .label {
   font-weight: 500;
   color: #555;
-  min-width: 90px;
+  min-width: 70px;
 }
 
 .info-row code {
@@ -328,6 +328,95 @@ button:disabled {
 
 .hint-message {
   font-size: 0.85rem;
+  word-break: break-word;
+}
+
+.hint-pdf-link {
+  display: inline-block;
+  margin-top: 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #2e86c1;
+  text-decoration: none;
+}
+
+.hint-pdf-link:hover {
+  text-decoration: underline;
+}
+
+/* ── Main analysis grid ─────────────────── */
+
+.analysis-main-grid {
+  display: grid;
+  grid-template-columns: 3fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 900px) {
+  .analysis-main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.analysis-suggestions-area {
+  min-width: 0;
+}
+
+.analysis-facts-area {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: #f8f9fb;
+  border: 1px solid #eaecef;
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.facts-column-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* ── Suggestion columns ─────────────────── */
+
+.suggestion-columns {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+
+@media (max-width: 900px) {
+  .suggestion-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.suggestion-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: #f8f9fb;
+  border: 1px solid #eaecef;
+  border-radius: 8px;
+  padding: 0.75rem;
+  min-width: 0;
+}
+
+.suggestion-column-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.suggestion-empty {
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 0.5rem 0;
 }
 
 /* ── Errors ──────────────────────────────── */
@@ -341,3 +430,100 @@ button:disabled {
   padding: 0.3rem 0;
   color: #c0392b;
 }
+
+/* ── Compact Clinical Recommendations card ── */
+
+.recommendations-card {
+  background: linear-gradient(135deg, #f0f7ff 0%, #f8faff 100%);
+  border: 1px solid #c8ddf5;
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+}
+
+.recommendations-card-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1e4a7a;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
+.recommendations-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #2980b9;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 50%;
+}
+
+.recommendations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.recommendation-row {
+  background: #ffffff;
+  border: 1px solid #dfe8f3;
+  border-radius: 5px;
+  padding: 0.4rem 0.6rem;
+}
+
+.recommendation-row-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.recommendation-title {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #1a1a2e;
+  line-height: 1.3;
+}
+
+.recommendation-confidence {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.recommendation-row-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-top: 0.15rem;
+}
+
+.recommendation-query {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recommendation-pdf-link {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #2e86c1;
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.recommendation-pdf-link:hover {
+  text-decoration: underline;
+}
+
