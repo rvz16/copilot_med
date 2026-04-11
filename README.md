@@ -4,6 +4,7 @@ MedCoPilot is a containerized MVP for live medical-consultation support. The roo
 
 - a React/Vite frontend in [`frontend/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/frontend)
 - a FastAPI session backend in [`backend-session-manager/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/backend-session-manager)
+- a FastAPI clinical recommendations service in [`clinical-recommendations-service/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/clinical-recommendations-service)
 - a Whisper-based ASR service in [`transcribation/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/transcribation)
 - a FastAPI realtime clinical analysis service in [`real_time_analysis/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/real_time_analysis)
 
@@ -19,6 +20,7 @@ Browser
       -> realtime-analysis (:8001 externally, :8000 internally) for live suggestions
           -> Ollama on the host at :11434 by default
           -> optional remote FHIR server for patient context
+  -> clinical-recommendations (:8002) for official recommendation lookup and PDF download
 ```
 
 Runtime behavior:
@@ -84,6 +86,7 @@ This starts:
 
 - frontend at `http://localhost:3000`
 - session-manager API at `http://localhost:8080`
+- clinical-recommendations API at `http://localhost:8002`
 - transcribation at `http://localhost:8000`
 - realtime-analysis at `http://localhost:8001`
 
@@ -131,7 +134,7 @@ docker compose logs -f frontend
 Rebuild only changed services:
 
 ```bash
-docker compose build session-manager realtime-analysis frontend
+docker compose build clinical-recommendations session-manager realtime-analysis frontend
 ```
 
 ## Health Checks
@@ -150,6 +153,12 @@ Session manager:
 curl http://localhost:8080/health
 ```
 
+Clinical recommendations:
+
+```bash
+curl http://localhost:8002/health
+```
+
 Transcribation:
 
 ```bash
@@ -165,6 +174,7 @@ curl http://localhost:8001/health
 Expected backend-style responses:
 
 - `session-manager`: `{"status":"ok","service":"session-manager"}`
+- `clinical-recommendations`: `{"status":"ok","service":"clinical-recommendations"}`
 - `transcribation`: includes `status`, `service`, `device`, `model_path`
 - `realtime-analysis`: includes `status`, `model`, `vllm_url`, `fhir_url`
 
@@ -212,6 +222,14 @@ curl http://localhost:8080/api/v1/sessions/<session_id>/extractions
   - `realtime-analysis` for live structured clinical analysis
 - Returns `realtime_analysis` and `new_hints` in chunk-upload responses
 
+### Clinical Recommendations
+
+- Source: [`clinical-recommendations-service/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/clinical-recommendations-service)
+- Published port: `8002`
+- Loads official entries from [`clinical_recommendations/clinical_recommendations.csv`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/clinical_recommendations/clinical_recommendations.csv)
+- Maps entry ids like `286_3` to PDFs like `КР286.pdf` in [`clinical_recommendations/pdf_files/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/clinical_recommendations/pdf_files)
+- Exposes list, search, detail, and PDF download endpoints
+
 ### Transcribation
 
 - Source: [`transcribation/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/transcribation)
@@ -233,6 +251,7 @@ curl http://localhost:8080/api/v1/sessions/<session_id>/extractions
   - optional patient context
   - error list
 - Uses Ollama on the host by default through `host.docker.internal`
+- Can also target OpenAI-compatible hosted APIs such as OpenRouter or Google AI Developer
 
 ## Compose Environment Overrides
 
@@ -243,8 +262,13 @@ Important root-level environment overrides:
 | `KAGGLE_API_TOKEN` | empty | Optional Kaggle auth for model bootstrap |
 | `KAGGLE_USERNAME` | empty | Optional Kaggle auth for model bootstrap |
 | `KAGGLE_KEY` | empty | Optional Kaggle auth for model bootstrap |
+| `REALTIME_ANALYSIS_LLM_PROVIDER` | `ollama` | `ollama` or `openai_compatible` |
 | `REALTIME_ANALYSIS_MODEL_NAME` | `qwen3:4b` | Model name passed to realtime-analysis |
-| `REALTIME_ANALYSIS_LLM_BASE_URL` | `http://host.docker.internal:11434` | Ollama base URL used by realtime-analysis |
+| `REALTIME_ANALYSIS_LLM_BASE_URL` | `http://host.docker.internal:11434` | Ollama base URL or OpenAI-compatible base URL |
+| `REALTIME_ANALYSIS_LLM_API_KEY` | empty | API key for hosted OpenAI-compatible providers |
+| `REALTIME_ANALYSIS_LLM_HTTP_REFERER` | empty | Optional `HTTP-Referer` header, useful for OpenRouter |
+| `REALTIME_ANALYSIS_LLM_X_TITLE` | `MedCoPilot` | Optional `X-Title` header, useful for OpenRouter |
+| `REALTIME_ANALYSIS_LLM_EXTRA_HEADERS_JSON` | empty | Optional JSON object with extra outbound LLM headers |
 | `REALTIME_ANALYSIS_FHIR_BASE_URL` | `http://158.160.84.63:8092/hapi-fhir-jpaserver/fhir` | Default FHIR endpoint |
 | `REALTIME_ANALYSIS_MAX_TOKENS` | `256` | Max generation tokens |
 | `REALTIME_ANALYSIS_TEMPERATURE` | `0.0` | Generation temperature |
@@ -256,7 +280,11 @@ Important root-level environment overrides:
 Example override:
 
 ```bash
-REALTIME_ANALYSIS_LLM_BASE_URL=http://host.docker.internal:11434 \
+REALTIME_ANALYSIS_LLM_PROVIDER=openai_compatible \
+REALTIME_ANALYSIS_MODEL_NAME=google/gemini-2.0-flash-exp:free \
+REALTIME_ANALYSIS_LLM_BASE_URL=https://openrouter.ai/api/v1 \
+REALTIME_ANALYSIS_LLM_API_KEY=your_openrouter_key \
+REALTIME_ANALYSIS_LLM_HTTP_REFERER=http://localhost:3000 \
 REALTIME_ANALYSIS_LANGUAGE=en \
 docker compose up --build
 ```

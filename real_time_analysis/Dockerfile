@@ -3,8 +3,13 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
+    LLM_PROVIDER=ollama \
     MODEL_NAME=qwen3:4b \
     LLM_BASE_URL=http://host.docker.internal:11434 \
+    LLM_API_KEY= \
+    LLM_HTTP_REFERER= \
+    LLM_X_TITLE=MedCoPilot \
+    LLM_EXTRA_HEADERS_JSON= \
     FHIR_BASE_URL=http://158.160.84.63:8092/hapi-fhir-jpaserver/fhir \
     MAX_TOKENS=256 \
     TEMPERATURE=0.0 \

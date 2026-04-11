@@ -7,7 +7,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { api } from '../api';
-import type { Hint, RealtimeAnalysis } from '../types/types';
+import type { Hint, RealtimeAnalysis, RecommendedDocument } from '../types/types';
 
 export type UploadStatus = 'idle' | 'uploading';
 type QueuedChunk = { blob: Blob; isFinal: boolean };
@@ -16,6 +16,7 @@ export function useUploader(sessionId: string | null) {
   const [transcript, setTranscript] = useState('');
   const [hints, setHints] = useState<Hint[]>([]);
   const [latestAnalysis, setLatestAnalysis] = useState<RealtimeAnalysis | null>(null);
+  const [recommendedDocuments, setRecommendedDocuments] = useState<RecommendedDocument[]>([]);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [chunksUploaded, setChunksUploaded] = useState(0);
@@ -79,6 +80,9 @@ export function useUploader(sessionId: string | null) {
         }
         if (res.realtime_analysis) {
           setLatestAnalysis(res.realtime_analysis);
+          if (res.realtime_analysis.recommended_documents) {
+            setRecommendedDocuments(res.realtime_analysis.recommended_documents);
+          }
         }
         if (res.new_hints && res.new_hints.length > 0) {
           setHints((prev) => [...prev, ...res.new_hints]);
@@ -150,6 +154,7 @@ export function useUploader(sessionId: string | null) {
     setTranscript('');
     setHints([]);
     setLatestAnalysis(null);
+    setRecommendedDocuments([]);
     setChunksUploaded(0);
   }, [discardPending]);
 
@@ -157,6 +162,7 @@ export function useUploader(sessionId: string | null) {
     transcript,
     hints,
     latestAnalysis,
+    recommendedDocuments,
     uploadStatus,
     uploadError,
     chunksUploaded,

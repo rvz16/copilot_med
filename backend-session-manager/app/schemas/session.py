@@ -97,6 +97,16 @@ class RealtimeKnowledgeRef(ApiBaseModel):
     confidence: float
 
 
+class RecommendedDocumentResponse(ApiBaseModel):
+    recommendation_id: str
+    title: str
+    matched_query: str
+    diagnosis_confidence: float
+    search_score: float
+    pdf_available: bool
+    pdf_url: str
+
+
 class RealtimePatientContext(ApiBaseModel):
     patient_name: str | None = None
     gender: str | None = None
@@ -114,6 +124,7 @@ class RealtimeAnalysisResponse(ApiBaseModel):
     drug_interactions: list[RealtimeDrugInteraction] = Field(default_factory=list)
     extracted_facts: RealtimeExtractedFacts = Field(default_factory=RealtimeExtractedFacts)
     knowledge_refs: list[RealtimeKnowledgeRef] = Field(default_factory=list)
+    recommended_documents: list[RecommendedDocumentResponse] = Field(default_factory=list)
     patient_context: RealtimePatientContext | None = None
     errors: list[str] = Field(default_factory=list)
 
