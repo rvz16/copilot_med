@@ -1,8 +1,13 @@
 from fastapi.testclient import TestClient
 
 from app.clients.clinical_recommendations import HttpClinicalRecommendationsClient
-from app.services.asr import ChunkTranscriptionResult, MockAsrProvider
+from app.services.asr import ChunkTranscriptionResult, FullTranscriptionResult, MockAsrProvider, TRANSCRIPT_FRAGMENTS
+from app.services.post_session_analytics import MockPostSessionAnalyticsProvider
 from app.services.realtime_analysis import MockRealtimeAnalysisProvider
+
+
+FULL_TRANSCRIPT = "".join(TRANSCRIPT_FRAGMENTS)
+FIRST_FRAGMENT = TRANSCRIPT_FRAGMENTS[0]
 
 
 def create_session(client: TestClient) -> str:
@@ -95,7 +100,7 @@ def test_upload_chunk_success_for_seq_one(client: TestClient):
     assert body["recording_state"] == "recording"
     assert body["ack"]["received_seq"] == 1
     assert body["speech_detected"] is True
-    assert body["transcript_update"]["stable_text"].startswith("Patient reports headache")
+    assert body["transcript_update"]["stable_text"].startswith(FIRST_FRAGMENT)
     assert body["realtime_analysis"] is None
 
 
@@ -214,7 +219,8 @@ def test_get_session_returns_profile_and_snapshot(client: TestClient):
     assert body["chief_complaint"] == "Recurring headache"
     assert body["snapshot"]["status"] == "finished"
     assert body["snapshot"]["latest_seq"] == 1
-    assert body["snapshot"]["transcript"].startswith("Patient reports headache")
+    assert body["snapshot"]["transcript"] == FULL_TRANSCRIPT
+    assert body["snapshot"]["post_session_analytics"]["full_transcript"]["full_text"] == FULL_TRANSCRIPT
     assert body["snapshot"]["finalized_at"] is not None
 
 
@@ -303,8 +309,63 @@ def test_transcript_retrieval_endpoint_works(client: TestClient):
     assert response.status_code == 200
     body = response.json()
     assert body["session_id"] == session_id
-    assert body["stable_text"].startswith("Patient reports headache")
+    assert body["stable_text"].startswith(FIRST_FRAGMENT)
     assert len(body["events"]) >= 1
+
+
+def test_close_session_falls_back_to_stable_transcript_when_full_transcription_is_short(app_factory, monkeypatch):
+    def fake_transcribe_full(
+        self,
+        *,
+        session_id: str,
+        file_bytes: bytes,
+        file_name: str,
+        mime_type: str,
+        timeout_seconds: int | None = None,
+    ) -> FullTranscriptionResult:
+        del self, session_id, file_bytes, file_name, mime_type, timeout_seconds
+        return FullTranscriptionResult(full_text=FIRST_FRAGMENT, source="mock_asr")
+
+    monkeypatch.setattr(MockAsrProvider, "transcribe_full", fake_transcribe_full)
+
+    app = app_factory()
+    with TestClient(app) as client:
+        session_id = create_session(client)
+        upload_chunk(client, session_id, seq=1)
+        upload_chunk(client, session_id, seq=2, is_final=True)
+        client.post(
+            f"/api/v1/sessions/{session_id}/close",
+            json={"trigger_post_session_analytics": True},
+        )
+
+        body = client.get(f"/api/v1/sessions/{session_id}").json()
+
+    stable_transcript = "".join(TRANSCRIPT_FRAGMENTS[:2])
+    assert body["snapshot"]["transcript"] == stable_transcript
+    assert body["snapshot"]["post_session_analytics"]["full_transcript"]["full_text"] == stable_transcript
+    assert body["snapshot"]["post_session_analytics"]["full_transcript"]["source"].endswith("_stable_fallback")
+
+
+def test_close_session_keeps_full_transcript_when_post_session_analytics_fails(app_factory, monkeypatch):
+    def fail_analyze(self, payload: dict) -> dict:
+        del self, payload
+        raise RuntimeError("analytics unavailable")
+
+    monkeypatch.setattr(MockPostSessionAnalyticsProvider, "analyze", fail_analyze)
+
+    app = app_factory()
+    with TestClient(app) as client:
+        session_id = create_session(client)
+        upload_chunk(client, session_id, seq=1, is_final=True)
+        client.post(
+            f"/api/v1/sessions/{session_id}/close",
+            json={"trigger_post_session_analytics": True},
+        )
+
+        body = client.get(f"/api/v1/sessions/{session_id}").json()
+
+    assert body["snapshot"]["transcript"] == FULL_TRANSCRIPT
+    assert body["snapshot"]["post_session_analytics"]["full_transcript"]["full_text"] == FULL_TRANSCRIPT
 
 
 def test_hints_retrieval_endpoint_works(client: TestClient):

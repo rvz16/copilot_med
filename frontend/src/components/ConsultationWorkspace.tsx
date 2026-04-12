@@ -71,6 +71,9 @@ export function ConsultationWorkspace({
 }: Props) {
   const patientContext = analysis?.patient_context ?? null;
   const recommendedDocuments = analysis?.recommended_documents ?? [];
+  const finalizedTranscript = postSessionAnalytics?.full_transcript?.full_text ?? '';
+  const archiveTranscript =
+    finalizedTranscript.trim().length >= transcript.trim().length ? finalizedTranscript : transcript;
 
   return (
     <main className="workspace-page">
@@ -131,28 +134,27 @@ export function ConsultationWorkspace({
         </div>
 
         <div className="column column-right">
+          {mode === 'archive' && (
+            <PostSessionAnalyticsPanel
+              analytics={postSessionAnalytics ?? null}
+              status={status}
+              clinicalRecommendations={recommendedDocuments}
+            />
+          )}
           <TranscriptPanel
-            title={mode === 'live' ? 'Транскрипция' : 'Финальная транскрипция'}
+            title={mode === 'live' ? 'Транскрипция' : 'Финальная транскрипция всей записи'}
             placeholder={
               mode === 'live'
                 ? 'Транскрипция появится здесь после начала записи…'
                 : 'Для этой консультации не было сохранено текста.'
             }
-            transcript={transcript}
+            transcript={mode === 'archive' ? archiveTranscript : transcript}
           />
           <HintsPanel
             hints={hints}
             analysis={analysis}
             recommendedDocuments={recommendedDocuments}
           />
-          {mode === 'archive' && (
-            <PostSessionAnalyticsPanel
-              analytics={postSessionAnalytics ?? null}
-              status={status}
-              transcript={transcript}
-              clinicalRecommendations={recommendedDocuments}
-            />
-          )}
         </div>
       </div>
 

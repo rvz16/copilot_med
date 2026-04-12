@@ -205,6 +205,7 @@ function scheduleAnalyticsCompletion(record: MockSessionRecord): void {
   globalThis.setTimeout(() => {
     const timestamp = isoNow();
     const analytics = buildPostSessionAnalytics(record.snapshot.transcript);
+    const finalizedTranscript = analytics.full_transcript?.full_text ?? record.snapshot.transcript;
 
     record.summary = {
       ...record.summary,
@@ -217,6 +218,7 @@ function scheduleAnalyticsCompletion(record: MockSessionRecord): void {
       ...record.snapshot,
       status: 'finished',
       processing_state: 'completed',
+      transcript: finalizedTranscript,
       post_session_analytics: analytics,
       updated_at: timestamp,
       finalized_at: timestamp,

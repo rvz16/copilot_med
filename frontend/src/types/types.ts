@@ -213,6 +213,7 @@ export interface PostSessionAnalytics {
   insights: PostAnalyticsCriticalInsight[];
   recommendations: PostAnalyticsFollowUp[];
   quality: PostAnalyticsQuality;
+  clinical_recommendations?: RecommendedDocument[];
   full_transcript?: {
     full_text: string;
     source: string;

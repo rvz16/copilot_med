@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime
 import logging
 from uuid import uuid4
@@ -696,9 +697,26 @@ class SessionService:
             )
             return
 
+        full_transcription = self._prefer_complete_transcript(
+            stable_text=session.stable_transcript or "",
+            full_transcription=full_transcription,
+        )
+
         if not full_transcription.full_text.strip():
             logger.info("Full transcription empty for session %s, skipping analytics", session.session_id)
             return
+
+        self.db.add(
+            ExtractedArtifact(
+                session_db_id=session.id,
+                artifact_type="post_analytics_full_transcript",
+                payload_json={
+                    "full_text": full_transcription.full_text,
+                    "source": full_transcription.source,
+                    "audio_duration": full_transcription.audio_duration,
+                },
+            )
+        )
 
         # Step 2: Build analytics payload
         snapshot = session.workspace_snapshot
@@ -753,18 +771,18 @@ class SessionService:
                         )
                     )
 
-            # Also store the full transcript
-            self.db.add(
-                ExtractedArtifact(
-                    session_db_id=session.id,
-                    artifact_type="post_analytics_full_transcript",
-                    payload_json={
-                        "full_text": full_transcription.full_text,
-                        "source": full_transcription.source,
-                        "audio_duration": full_transcription.audio_duration,
-                    },
-                )
+            post_session_recommendations = self._find_post_session_recommended_documents(
+                session=session,
+                analytics_response=response,
             )
+            if post_session_recommendations:
+                self.db.add(
+                    ExtractedArtifact(
+                        session_db_id=session.id,
+                        artifact_type="post_analytics_clinical_recommendations",
+                        payload_json=post_session_recommendations,
+                    )
+                )
 
             session.processing_state = "completed"
         except Exception as exc:
@@ -780,6 +798,101 @@ class SessionService:
             )
             session.processing_state = "failed"
             session.last_error = str(exc)
+
+    def _find_post_session_recommended_documents(
+        self,
+        *,
+        session: SessionRecord,
+        analytics_response: dict,
+        limit: int = 3,
+    ) -> list[dict]:
+        summary = analytics_response.get("medical_summary", {})
+        if not isinstance(summary, dict):
+            return []
+
+        candidates: list[str] = []
+        for key in ("primary_impressions", "differential_diagnoses"):
+            values = summary.get(key, [])
+            if not isinstance(values, list):
+                continue
+            for value in values:
+                if isinstance(value, str):
+                    normalized = value.strip()
+                    if normalized and normalized not in candidates:
+                        candidates.append(normalized)
+
+        if not candidates:
+            return []
+
+        results: list[dict] = []
+        seen_ids: set[str] = set()
+        for query in candidates:
+            request_payload = {"query": query, "limit": limit, "source": "post_session_analytics"}
+            try:
+                response = self.clinical_recommendations.search(query=query, limit=limit)
+                self._log_external_call(
+                    session=session,
+                    service_name=self.clinical_recommendations.service_name,
+                    endpoint=self.clinical_recommendations.endpoint,
+                    request_payload=request_payload,
+                    response_payload=response,
+                    status="success",
+                    error_message=None,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Post-session clinical recommendations lookup failed for session %s query %s: %s",
+                    session.session_id,
+                    query,
+                    exc,
+                )
+                self._log_external_call(
+                    session=session,
+                    service_name=self.clinical_recommendations.service_name,
+                    endpoint=self.clinical_recommendations.endpoint,
+                    request_payload=request_payload,
+                    response_payload=None,
+                    status="failed",
+                    error_message=str(exc),
+                )
+                continue
+
+            items = response.get("items", [])
+            if not isinstance(items, list):
+                continue
+
+            for match in items:
+                if not isinstance(match, dict):
+                    continue
+                recommendation_id = match.get("id")
+                title = match.get("title")
+                pdf_available = bool(match.get("pdf_available"))
+                pdf_url = self.clinical_recommendations.build_pdf_url(str(recommendation_id))
+                if not isinstance(recommendation_id, str) or not recommendation_id.strip():
+                    continue
+                if recommendation_id in seen_ids:
+                    continue
+                if not isinstance(title, str) or not title.strip():
+                    continue
+                if not pdf_available or not pdf_url:
+                    continue
+
+                results.append(
+                    {
+                        "recommendation_id": recommendation_id,
+                        "title": title.strip(),
+                        "matched_query": query,
+                        "diagnosis_confidence": 1.0,
+                        "search_score": float(match.get("score", 0.0)),
+                        "pdf_available": True,
+                        "pdf_url": pdf_url,
+                    }
+                )
+                seen_ids.add(recommendation_id)
+                if len(results) >= limit:
+                    return results
+
+        return results
 
     def _find_recording_path(self, session_id: str):
         from pathlib import Path
@@ -804,6 +917,46 @@ class SessionService:
             key = artifact.artifact_type.replace("post_analytics_", "")
             result[key] = artifact.payload_json
         return result
+
+    @staticmethod
+    def _extract_full_transcript_text(post_analytics_snapshot: dict | None) -> str | None:
+        if not isinstance(post_analytics_snapshot, dict):
+            return None
+        full_transcript = post_analytics_snapshot.get("full_transcript")
+        if not isinstance(full_transcript, dict):
+            return None
+        full_text = full_transcript.get("full_text")
+        if not isinstance(full_text, str) or not full_text.strip():
+            return None
+        return full_text
+
+    def _prefer_complete_transcript(self, *, stable_text: str, full_transcription):
+        candidate = full_transcription.full_text.strip()
+        stable = stable_text.strip()
+        if not stable:
+            return full_transcription
+        if not candidate:
+            logger.warning("Full transcription empty while stable transcript exists; using stable transcript instead")
+            return replace(
+                full_transcription,
+                full_text=stable_text,
+                source=f"{full_transcription.source}_stable_fallback",
+            )
+
+        normalized_candidate_len = len(normalize_transcript_text(candidate))
+        normalized_stable_len = len(normalize_transcript_text(stable))
+        if normalized_candidate_len < int(normalized_stable_len * 0.75):
+            logger.warning(
+                "Full transcription shorter than stable transcript (%d vs %d chars); using stable transcript",
+                normalized_candidate_len,
+                normalized_stable_len,
+            )
+            return replace(
+                full_transcription,
+                full_text=stable_text,
+                source=f"{full_transcription.source}_stable_fallback",
+            )
+        return full_transcription
 
     def _log_external_call(
         self,
@@ -918,23 +1071,28 @@ class SessionService:
         previous_payload = snapshot.payload_json if snapshot is not None and isinstance(snapshot.payload_json, dict) else {}
         hints = self._build_hint_list_items(session.id)
         updated_at = session.updated_at or utcnow()
+        post_session_analytics = (
+            self._build_post_analytics_snapshot(session)
+            if finalized
+            else previous_payload.get("post_session_analytics")
+        )
+        transcript_text = session.stable_transcript or session.current_transcript or ""
+        archived_full_text = self._extract_full_transcript_text(post_session_analytics)
+        if finalized and archived_full_text:
+            transcript_text = archived_full_text
         payload = {
             "status": self._public_status(session),
             "recording_state": session.recording_state,
             "processing_state": session.processing_state,
             "latest_seq": session.latest_seq,
-            "transcript": session.stable_transcript or session.current_transcript or "",
+            "transcript": transcript_text,
             "hints": [item.model_dump(mode="json") for item in hints],
             "realtime_analysis": (
                 realtime_analysis.model_dump(mode="json")
                 if realtime_analysis is not None
                 else previous_payload.get("realtime_analysis")
             ),
-            "post_session_analytics": (
-                self._build_post_analytics_snapshot(session)
-                if finalized
-                else previous_payload.get("post_session_analytics")
-            ),
+            "post_session_analytics": post_session_analytics,
             "last_error": session.last_error,
             "updated_at": updated_at.isoformat(),
             "finalized_at": (

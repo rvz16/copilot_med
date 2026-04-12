@@ -3,7 +3,6 @@ import type { PostSessionAnalytics, RecommendedDocument } from '../types/types';
 interface Props {
   analytics: PostSessionAnalytics | null;
   status?: string;
-  transcript?: string;
   clinicalRecommendations?: RecommendedDocument[];
 }
 
@@ -55,7 +54,6 @@ function ScoreBar({ score, label }: { score: number; label?: string }) {
 export function PostSessionAnalyticsPanel({
   analytics,
   status,
-  transcript = '',
   clinicalRecommendations = [],
 }: Props) {
   if (!analytics) {
@@ -83,9 +81,7 @@ export function PostSessionAnalyticsPanel({
   }
 
   const { summary, insights, recommendations, quality } = analytics;
-  const transcriptUsed = analytics.full_transcript?.full_text?.trim() || transcript.trim();
-  const transcriptPreview =
-    transcriptUsed.length > 900 ? `${transcriptUsed.slice(0, 900)}...` : transcriptUsed;
+  const attachedRecommendations = analytics.clinical_recommendations ?? clinicalRecommendations;
 
   return (
     <section className="panel psa-panel" id="post-session-analytics-panel">
@@ -96,26 +92,10 @@ export function PostSessionAnalyticsPanel({
 
       <div className="psa-context-grid">
         <div className="psa-context-card">
-          <h3 className="psa-section-title">Транскрипт для анализа</h3>
-          {transcriptUsed ? (
-            <>
-              <p className="psa-context-meta">
-                Источник: {analytics.full_transcript?.source ?? 'архивная транскрипция'}
-              </p>
-              <div className="psa-transcript-preview">
-                <p>{transcriptPreview}</p>
-              </div>
-            </>
-          ) : (
-            <p className="placeholder-text">Финальный транскрипт пока не сохранён.</p>
-          )}
-        </div>
-
-        <div className="psa-context-card">
           <h3 className="psa-section-title">Клинические рекомендации в контексте</h3>
-          {clinicalRecommendations.length > 0 ? (
+          {attachedRecommendations.length > 0 ? (
             <div className="psa-guidelines-list">
-              {clinicalRecommendations.map((doc, index) => (
+              {attachedRecommendations.map((doc, index) => (
                 <div key={`${doc.recommendation_id}-${index}`} className="psa-guideline-card">
                   <strong>{doc.title}</strong>
                   <span>{doc.matched_query}</span>
