@@ -47,6 +47,9 @@ Rules:
 - All text values MUST be in Russian.
 - If real-time hints are provided, compare them with the full transcript. Identify anything \
 the live analysis missed — these are "critical_insights".
+- If clinical recommendations are provided, use them as supporting guideline context for \
+  follow-up recommendations and diagnostic reasoning. Do not hallucinate guideline facts \
+  beyond what is explicitly supplied.
 - Quality metrics should evaluate: completeness of history taking, review of systems coverage, \
 documentation quality, patient engagement, and differential reasoning.
 - "critical_insights" must only list genuinely significant clinical observations — not trivial \
@@ -63,6 +66,7 @@ def build_user_prompt(
     realtime_transcript: str | None = None,
     realtime_hints: list[dict] | None = None,
     realtime_analysis: dict | None = None,
+    clinical_recommendations: list[dict] | None = None,
 ) -> str:
     parts = []
 
@@ -91,5 +95,27 @@ def build_user_prompt(
                 for s in suggestions
             )
             parts.append(f"\n--- Результаты анализа реального времени ---\n{sugg_text}")
+
+    if clinical_recommendations:
+        recommendation_lines = []
+        for item in clinical_recommendations:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title", "")).strip()
+            query = str(item.get("matched_query", "")).strip()
+            url = str(item.get("pdf_url", "")).strip()
+            if not title:
+                continue
+            line = f"- {title}"
+            if query:
+                line += f" | основание: {query}"
+            if url:
+                line += f" | pdf: {url}"
+            recommendation_lines.append(line)
+        if recommendation_lines:
+            parts.append(
+                "\n--- Клинические рекомендации, найденные во время консультации ---\n"
+                + "\n".join(recommendation_lines)
+            )
 
     return "\n".join(parts)

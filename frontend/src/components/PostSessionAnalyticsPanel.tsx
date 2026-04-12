@@ -1,8 +1,10 @@
-import type { PostSessionAnalytics } from '../types/types';
+import type { PostSessionAnalytics, RecommendedDocument } from '../types/types';
 
 interface Props {
   analytics: PostSessionAnalytics | null;
   status?: string;
+  transcript?: string;
+  clinicalRecommendations?: RecommendedDocument[];
 }
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -50,7 +52,12 @@ function ScoreBar({ score, label }: { score: number; label?: string }) {
   );
 }
 
-export function PostSessionAnalyticsPanel({ analytics, status }: Props) {
+export function PostSessionAnalyticsPanel({
+  analytics,
+  status,
+  transcript = '',
+  clinicalRecommendations = [],
+}: Props) {
   if (!analytics) {
     if (status !== 'analyzing') {
       return null;
@@ -76,12 +83,54 @@ export function PostSessionAnalyticsPanel({ analytics, status }: Props) {
   }
 
   const { summary, insights, recommendations, quality } = analytics;
+  const transcriptUsed = analytics.full_transcript?.full_text?.trim() || transcript.trim();
+  const transcriptPreview =
+    transcriptUsed.length > 900 ? `${transcriptUsed.slice(0, 900)}...` : transcriptUsed;
 
   return (
     <section className="panel psa-panel" id="post-session-analytics-panel">
       <div className="psa-header">
-        <h2>Углублённый анализ консультации</h2>
+        <h2>Результаты Post-Session Analytics</h2>
         <span className="psa-badge">gpt-oss-120b</span>
+      </div>
+
+      <div className="psa-context-grid">
+        <div className="psa-context-card">
+          <h3 className="psa-section-title">Транскрипт для анализа</h3>
+          {transcriptUsed ? (
+            <>
+              <p className="psa-context-meta">
+                Источник: {analytics.full_transcript?.source ?? 'архивная транскрипция'}
+              </p>
+              <div className="psa-transcript-preview">
+                <p>{transcriptPreview}</p>
+              </div>
+            </>
+          ) : (
+            <p className="placeholder-text">Финальный транскрипт пока не сохранён.</p>
+          )}
+        </div>
+
+        <div className="psa-context-card">
+          <h3 className="psa-section-title">Клинические рекомендации в контексте</h3>
+          {clinicalRecommendations.length > 0 ? (
+            <div className="psa-guidelines-list">
+              {clinicalRecommendations.map((doc, index) => (
+                <div key={`${doc.recommendation_id}-${index}`} className="psa-guideline-card">
+                  <strong>{doc.title}</strong>
+                  <span>{doc.matched_query}</span>
+                  <a href={doc.pdf_url} target="_blank" rel="noreferrer">
+                    Открыть PDF
+                  </a>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="placeholder-text">
+              Во время сессии не было найдено клинических рекомендаций для передачи в глубокий анализ.
+            </p>
+          )}
+        </div>
       </div>
 
       {/* ── Medical Summary ────────────────── */}

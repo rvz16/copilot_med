@@ -400,6 +400,9 @@ class SessionService:
             self.db.flush()
             self._run_full_transcript_analytics(session)
 
+        # Pending analytics artifacts must be flushed before snapshot assembly,
+        # otherwise the finalized snapshot will miss post-session results.
+        self.db.flush()
         session.updated_at = utcnow()
         self._upsert_session_snapshot(
             session=session,
@@ -702,6 +705,11 @@ class SessionService:
         previous_payload = snapshot.payload_json if snapshot and isinstance(snapshot.payload_json, dict) else {}
         hints_data = previous_payload.get("hints", [])
         realtime_analysis_data = previous_payload.get("realtime_analysis")
+        recommended_documents = []
+        if isinstance(realtime_analysis_data, dict):
+            docs = realtime_analysis_data.get("recommended_documents", [])
+            if isinstance(docs, list):
+                recommended_documents = [doc for doc in docs if isinstance(doc, dict)]
         chief_complaint = session.profile.chief_complaint if session.profile else None
 
         analytics_payload = {
@@ -712,6 +720,7 @@ class SessionService:
             "realtime_transcript": session.stable_transcript or "",
             "realtime_hints": hints_data if isinstance(hints_data, list) else [],
             "realtime_analysis": realtime_analysis_data,
+            "clinical_recommendations": recommended_documents,
             "chief_complaint": chief_complaint,
         }
 
@@ -782,6 +791,7 @@ class SessionService:
         return None
 
     def _build_post_analytics_snapshot(self, session: SessionRecord) -> dict | None:
+        self.db.flush()
         artifacts = self.db.scalars(
             select(ExtractedArtifact)
             .where(ExtractedArtifact.session_db_id == session.id)

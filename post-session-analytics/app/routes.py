@@ -139,6 +139,7 @@ def analyze(request: AnalyticsRequest) -> AnalyticsResponse:
         realtime_transcript=request.realtime_transcript,
         realtime_hints=request.realtime_hints,
         realtime_analysis=request.realtime_analysis,
+        clinical_recommendations=request.clinical_recommendations,
     )
 
     start = time.perf_counter()

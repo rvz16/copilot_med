@@ -9,6 +9,7 @@ class AnalyticsRequest(BaseModel):
     realtime_transcript: str | None = None
     realtime_hints: list[dict] | None = None
     realtime_analysis: dict | None = None
+    clinical_recommendations: list[dict] | None = None
     chief_complaint: str | None = None
 
 

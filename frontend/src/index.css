@@ -975,6 +975,76 @@ button:disabled,
   letter-spacing: -0.02em;
 }
 
+.psa-context-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.psa-context-card {
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(51, 71, 128, 0.1);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.psa-context-meta {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.psa-transcript-preview {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(51, 71, 128, 0.05);
+}
+
+.psa-transcript-preview p {
+  margin: 0;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.psa-guidelines-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.psa-guideline-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(46, 122, 114, 0.08);
+}
+
+.psa-guideline-card strong {
+  font-size: 0.92rem;
+}
+
+.psa-guideline-card span {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.psa-guideline-card a {
+  width: fit-content;
+  color: var(--accent-strong);
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.psa-guideline-card a:hover {
+  text-decoration: underline;
+}
+
 .psa-pending {
   display: flex;
   flex-direction: column;
@@ -1231,7 +1301,8 @@ button:disabled,
   .dashboard-stats,
   .suggestion-columns,
   .analysis-main-grid,
-  .psa-quality-overview {
+  .psa-quality-overview,
+  .psa-context-grid {
     grid-template-columns: 1fr;
   }
 

@@ -146,7 +146,12 @@ export function ConsultationWorkspace({
             recommendedDocuments={recommendedDocuments}
           />
           {mode === 'archive' && (
-            <PostSessionAnalyticsPanel analytics={postSessionAnalytics ?? null} status={status} />
+            <PostSessionAnalyticsPanel
+              analytics={postSessionAnalytics ?? null}
+              status={status}
+              transcript={transcript}
+              clinicalRecommendations={recommendedDocuments}
+            />
           )}
         </div>
       </div>
