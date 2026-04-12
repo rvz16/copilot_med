@@ -34,12 +34,17 @@ def test_extract_contract_preview_mode() -> None:
     assert "summary" in data
     assert "counts" in data["summary"]
     assert "total_items" in data["summary"]
+    assert data["validation"]["all_sections_populated"] is True
+    assert "confidence_scores" in data
+    assert "ehr_sync" in data
+    assert data["ehr_sync"]["status"] == "preview"
 
     assert "symptoms" in data["extracted_facts"]
     assert "follow_up_instructions" in data["extracted_facts"]
 
     assert isinstance(data["fhir_resources"], list)
     assert any(resource["resourceType"] == "Condition" for resource in data["fhir_resources"])
+    assert any(resource["resourceType"] == "DocumentReference" for resource in data["fhir_resources"])
 
     assert data["persistence"]["enabled"] is False
     assert "prepared" in data["persistence"]

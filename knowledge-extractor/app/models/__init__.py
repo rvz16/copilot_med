@@ -1,6 +1,8 @@
 from app.models.canonical import CanonicalExtraction
 from app.models.schemas import (
     AssessmentSection,
+    EhrSyncResult,
+    ExtractionConfidence,
     ExtractionRequest,
     ExtractionResponse,
     ExtractionSummary,
@@ -8,12 +10,16 @@ from app.models.schemas import (
     PersistenceResult,
     PlanSection,
     SoapNote,
+    SoapSectionValidation,
+    SoapValidation,
     SubjectiveSection,
 )
 
 __all__ = [
     "AssessmentSection",
+    "EhrSyncResult",
     "CanonicalExtraction",
+    "ExtractionConfidence",
     "ExtractionRequest",
     "ExtractionResponse",
     "ExtractionSummary",
@@ -21,5 +27,7 @@ __all__ = [
     "PersistenceResult",
     "PlanSection",
     "SoapNote",
+    "SoapSectionValidation",
+    "SoapValidation",
     "SubjectiveSection",
 ]

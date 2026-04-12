@@ -221,6 +221,9 @@ def test_get_session_returns_profile_and_snapshot(client: TestClient):
     assert body["snapshot"]["status"] == "finished"
     assert body["snapshot"]["latest_seq"] == 1
     assert body["snapshot"]["transcript"] == FULL_TRANSCRIPT
+    assert body["snapshot"]["knowledge_extraction"]["soap_note"] is not None
+    assert body["snapshot"]["knowledge_extraction"]["persistence"]["enabled"] is True
+    assert body["snapshot"]["knowledge_extraction"]["ehr_sync"]["status"] == "synced"
     assert body["snapshot"]["post_session_analytics"]["full_transcript"]["full_text"] == FULL_TRANSCRIPT
     assert body["snapshot"]["finalized_at"] is not None
 
@@ -300,6 +303,9 @@ def test_close_with_knowledge_extractor_mock_success(client: TestClient):
     assert close_response.json()["processing_state"] == "completed"
     assert extraction_response.status_code == 200
     assert extraction_response.json()["soap_note"] is not None
+    assert extraction_response.json()["persistence"]["enabled"] is True
+    assert extraction_response.json()["validation"]["all_sections_populated"] is True
+    assert extraction_response.json()["ehr_sync"]["status"] == "synced"
 
 
 def test_knowledge_extractor_failure_does_not_crash_close(app_factory):
@@ -607,3 +613,5 @@ def test_extractor_results_endpoint_returns_processing_state(client: TestClient)
     body = response.json()
     assert body["processing_state"] == "completed"
     assert body["summary"] is not None
+    assert body["validation"]["all_sections_populated"] is True
+    assert body["confidence_scores"]["overall"] > 0

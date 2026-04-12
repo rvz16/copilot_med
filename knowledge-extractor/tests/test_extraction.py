@@ -3,7 +3,8 @@ import httpx
 from app.core.config import settings
 from app.extractors import OllamaMedicalExtractor, RuleBasedMedicalExtractor
 from app.llm import OllamaClient
-from app.services.documentation_service import _build_default_extractor
+from app.models import ExtractionRequest
+from app.services.documentation_service import DocumentationService, _build_default_extractor
 
 
 def test_rule_based_extraction_covers_required_categories() -> None:
@@ -132,3 +133,21 @@ def test_default_extractor_switches_to_ollama_backend(monkeypatch) -> None:
     extractor = _build_default_extractor()
 
     assert isinstance(extractor, OllamaMedicalExtractor)
+
+
+def test_documentation_service_populates_missing_soap_sections() -> None:
+    service = DocumentationService(extractor=RuleBasedMedicalExtractor())
+
+    response = service.build_documentation(
+        ExtractionRequest(
+            session_id="sess-1",
+            patient_id="pat-1",
+            transcript="Patient reports fatigue.",
+            persist=False,
+            sync_ehr=True,
+        )
+    )
+
+    assert response.validation.all_sections_populated is True
+    assert response.validation.sections["objective"].used_fallback is True
+    assert response.confidence_scores.soap_sections["objective"] == 0.35

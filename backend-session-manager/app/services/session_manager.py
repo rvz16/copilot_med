@@ -249,7 +249,10 @@ class SessionService:
                         )
                         if recommended_documents:
                             realtime_analysis_response = realtime_analysis_response.model_copy(
-                                update={"recommended_documents": recommended_documents}
+                                update={
+                                    "recommended_document": recommended_documents[0],
+                                    "recommended_documents": recommended_documents,
+                                }
                             )
                         self._log_external_call(
                             session=session,
@@ -398,7 +401,8 @@ class SessionService:
             self._run_post_session_analytics(session)
 
         if trigger_post_session_analytics and self.settings.post_session_analytics_enabled:
-            session.processing_state = "processing"
+            if session.processing_state != "failed":
+                session.processing_state = "processing"
             self.db.flush()
             self._run_full_transcript_analytics(session)
 
@@ -420,7 +424,7 @@ class SessionService:
         *,
         session: SessionRecord,
         analysis: RealtimeAnalysisResponse,
-        limit: int = 3,
+        limit: int = 1,
     ) -> list[RecommendedDocumentResponse]:
         diagnosis_candidates = [
             suggestion
@@ -612,6 +616,9 @@ class SessionService:
             summary=artifact_map.get("summary"),
             fhir_resources=artifact_map.get("fhir_resources"),
             persistence=artifact_map.get("persistence_report"),
+            validation=artifact_map.get("validation"),
+            confidence_scores=artifact_map.get("confidence_scores"),
+            ehr_sync=artifact_map.get("ehr_sync"),
             post_analytics_summary=artifact_map.get("post_analytics_summary"),
             post_analytics_insights=artifact_map.get("post_analytics_insights"),
             post_analytics_recommendations=artifact_map.get("post_analytics_recommendations"),
@@ -619,12 +626,19 @@ class SessionService:
         )
 
     def _run_post_session_analytics(self, session: SessionRecord) -> None:
+        profile = session.profile
         payload = {
             "session_id": session.session_id,
             "patient_id": session.patient_id,
             "encounter_id": session.encounter_id,
+            "patient_name": profile.patient_name if profile else None,
+            "doctor_id": session.doctor_id,
+            "doctor_name": profile.doctor_name if profile else None,
+            "doctor_specialty": profile.doctor_specialty if profile else None,
+            "chief_complaint": profile.chief_complaint if profile else None,
             "transcript": session.stable_transcript or "",
-            "persist": False,
+            "persist": self.settings.knowledge_extractor_persist_fhir,
+            "sync_ehr": self.settings.knowledge_extractor_sync_ehr,
         }
         try:
             response = self.knowledge_extractor.extract(payload)
@@ -643,6 +657,9 @@ class SessionService:
                 ("summary", "summary"),
                 ("fhir_resources", "fhir_resources"),
                 ("persistence_report", "persistence"),
+                ("validation", "validation"),
+                ("confidence_scores", "confidence_scores"),
+                ("ehr_sync", "ehr_sync"),
             ):
                 if key in response:
                     self.db.add(
@@ -652,7 +669,8 @@ class SessionService:
                             payload_json=response[key],
                         )
                     )
-            session.processing_state = "completed"
+            if session.processing_state != "failed":
+                session.processing_state = "completed"
         except Exception as exc:
             logger.warning("Knowledge extractor failed for session %s: %s", session.session_id, exc)
             self._log_external_call(
@@ -793,7 +811,8 @@ class SessionService:
                     )
                 )
 
-            session.processing_state = "completed"
+            if session.processing_state != "failed":
+                session.processing_state = "completed"
         except Exception as exc:
             logger.warning("Post-session analytics failed for session %s: %s", session.session_id, exc)
             self._log_external_call(
@@ -930,6 +949,38 @@ class SessionService:
             key = artifact.artifact_type.replace("post_analytics_", "")
             result[key] = artifact.payload_json
         return result
+
+    def _build_knowledge_extraction_snapshot(self, session: SessionRecord) -> dict | None:
+        self.db.flush()
+        artifact_names = (
+            "soap_note",
+            "extracted_facts",
+            "summary",
+            "fhir_resources",
+            "persistence_report",
+            "validation",
+            "confidence_scores",
+            "ehr_sync",
+        )
+        artifacts = self.db.scalars(
+            select(ExtractedArtifact)
+            .where(ExtractedArtifact.session_db_id == session.id)
+            .where(ExtractedArtifact.artifact_type.in_(artifact_names))
+        ).all()
+        if not artifacts:
+            return None
+
+        artifact_map = {artifact.artifact_type: artifact.payload_json for artifact in artifacts}
+        return {
+            "soap_note": artifact_map.get("soap_note"),
+            "extracted_facts": artifact_map.get("extracted_facts"),
+            "summary": artifact_map.get("summary"),
+            "fhir_resources": artifact_map.get("fhir_resources"),
+            "persistence": artifact_map.get("persistence_report"),
+            "validation": artifact_map.get("validation"),
+            "confidence_scores": artifact_map.get("confidence_scores"),
+            "ehr_sync": artifact_map.get("ehr_sync"),
+        }
 
     @staticmethod
     def _extract_full_transcript_text(post_analytics_snapshot: dict | None) -> str | None:
@@ -1084,6 +1135,11 @@ class SessionService:
         previous_payload = snapshot.payload_json if snapshot is not None and isinstance(snapshot.payload_json, dict) else {}
         hints = self._build_hint_list_items(session.id)
         updated_at = session.updated_at or utcnow()
+        knowledge_extraction = (
+            self._build_knowledge_extraction_snapshot(session)
+            if finalized
+            else previous_payload.get("knowledge_extraction")
+        )
         post_session_analytics = (
             self._build_post_analytics_snapshot(session)
             if finalized
@@ -1105,6 +1161,7 @@ class SessionService:
                 if realtime_analysis is not None
                 else previous_payload.get("realtime_analysis")
             ),
+            "knowledge_extraction": knowledge_extraction,
             "post_session_analytics": post_session_analytics,
             "last_error": session.last_error,
             "updated_at": updated_at.isoformat(),

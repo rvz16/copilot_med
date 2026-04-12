@@ -130,6 +130,7 @@ class RealtimePatientContext(ApiBaseModel):
     conditions: list[str] = Field(default_factory=list)
     medications: list[str] = Field(default_factory=list)
     allergies: list[str] = Field(default_factory=list)
+    observations: list[str] = Field(default_factory=list)
 
 
 class RealtimeAnalysisResponse(ApiBaseModel):
@@ -140,6 +141,7 @@ class RealtimeAnalysisResponse(ApiBaseModel):
     drug_interactions: list[RealtimeDrugInteraction] = Field(default_factory=list)
     extracted_facts: RealtimeExtractedFacts = Field(default_factory=RealtimeExtractedFacts)
     knowledge_refs: list[RealtimeKnowledgeRef] = Field(default_factory=list)
+    recommended_document: RecommendedDocumentResponse | None = None
     recommended_documents: list[RecommendedDocumentResponse] = Field(default_factory=list)
     patient_context: RealtimePatientContext | None = None
     errors: list[str] = Field(default_factory=list)
@@ -264,6 +266,7 @@ class ConsultationSnapshotResponse(ApiBaseModel):
     transcript: str
     hints: list[HintListItem] = Field(default_factory=list)
     realtime_analysis: RealtimeAnalysisResponse | None = None
+    knowledge_extraction: dict | None = None
     post_session_analytics: dict | None = None
     last_error: str | None = None
     updated_at: datetime
@@ -282,6 +285,9 @@ class ExtractionsResponse(ApiBaseModel):
     summary: Any = None
     fhir_resources: Any = None
     persistence: Any = None
+    validation: Any = None
+    confidence_scores: Any = None
+    ehr_sync: Any = None
     post_analytics_summary: Any = None
     post_analytics_insights: Any = None
     post_analytics_recommendations: Any = None

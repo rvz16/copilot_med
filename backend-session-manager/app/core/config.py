@@ -65,6 +65,14 @@ class Settings(BaseSettings):
         default="http://localhost:8000/extract",
         alias="KNOWLEDGE_EXTRACTOR_URL",
     )
+    knowledge_extractor_persist_fhir: bool = Field(
+        default=True,
+        alias="KNOWLEDGE_EXTRACTOR_PERSIST_FHIR",
+    )
+    knowledge_extractor_sync_ehr: bool = Field(
+        default=True,
+        alias="KNOWLEDGE_EXTRACTOR_SYNC_EHR",
+    )
     post_session_analytics_enabled: bool = Field(default=True, alias="POST_SESSION_ANALYTICS_ENABLED")
     post_session_analytics_mode: str = Field(default="mock", alias="POST_SESSION_ANALYTICS_MODE")
     post_session_analytics_url: str = Field(

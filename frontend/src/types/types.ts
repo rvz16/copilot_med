@@ -118,6 +118,7 @@ export interface RealtimePatientContext {
   conditions: string[];
   medications: string[];
   allergies: string[];
+  observations: string[];
 }
 
 export interface RealtimeAnalysis {
@@ -128,6 +129,7 @@ export interface RealtimeAnalysis {
   drug_interactions: RealtimeDrugInteraction[];
   extracted_facts: RealtimeExtractedFacts;
   knowledge_refs: RealtimeKnowledgeRef[];
+  recommended_document?: RecommendedDocument | null;
   recommended_documents?: RecommendedDocument[];
   patient_context: RealtimePatientContext | null;
   errors: string[];
@@ -221,6 +223,86 @@ export interface PostSessionAnalytics {
   };
 }
 
+export interface KnowledgeSoapSubjective {
+  reported_symptoms: string[];
+  reported_concerns: string[];
+}
+
+export interface KnowledgeSoapObjective {
+  observations: string[];
+  measurements: string[];
+}
+
+export interface KnowledgeSoapAssessment {
+  diagnoses: string[];
+  evaluation: string[];
+}
+
+export interface KnowledgeSoapPlan {
+  treatment: string[];
+  follow_up_instructions: string[];
+}
+
+export interface KnowledgeSoapNote {
+  subjective: KnowledgeSoapSubjective;
+  objective: KnowledgeSoapObjective;
+  assessment: KnowledgeSoapAssessment;
+  plan: KnowledgeSoapPlan;
+}
+
+export interface KnowledgeSectionValidation {
+  populated: boolean;
+  item_count: number;
+  used_fallback: boolean;
+}
+
+export interface KnowledgeValidation {
+  all_sections_populated: boolean;
+  missing_sections: string[];
+  sections: Record<string, KnowledgeSectionValidation>;
+}
+
+export interface KnowledgeConfidenceScores {
+  overall: number;
+  soap_sections: Record<string, number>;
+  extracted_fields: Record<string, number>;
+}
+
+export interface KnowledgePersistence {
+  enabled: boolean;
+  target_base_url?: string | null;
+  prepared: Array<Record<string, unknown>>;
+  sent_successfully: number;
+  sent_failed: number;
+  created: Array<Record<string, unknown>>;
+  errors: Array<Record<string, unknown>>;
+}
+
+export interface KnowledgeEhrSync {
+  enabled: boolean;
+  mode: string;
+  system: string;
+  status: string;
+  record_id?: string | null;
+  synced_at?: string | null;
+  synced_fields: string[];
+  response: Record<string, unknown>;
+}
+
+export interface KnowledgeExtraction {
+  soap_note: KnowledgeSoapNote | null;
+  extracted_facts: Record<string, string[]>;
+  summary: {
+    counts: Record<string, number>;
+    total_items: number;
+  } | null;
+  fhir_resources: Array<Record<string, unknown>>;
+  persistence: KnowledgePersistence | null;
+  validation: KnowledgeValidation | null;
+  confidence_scores: KnowledgeConfidenceScores | null;
+  ehr_sync: KnowledgeEhrSync | null;
+}
+
 export interface SessionSnapshot {
   status: string;
   recording_state: string;
@@ -229,6 +311,7 @@ export interface SessionSnapshot {
   transcript: string;
   hints: StoredHint[];
   realtime_analysis: RealtimeAnalysis | null;
+  knowledge_extraction?: KnowledgeExtraction | null;
   post_session_analytics?: PostSessionAnalytics | null;
   last_error: string | null;
   updated_at: string;

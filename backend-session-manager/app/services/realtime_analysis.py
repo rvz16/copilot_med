@@ -28,7 +28,7 @@ class MockRealtimeAnalysisProvider:
         symptoms: list[str] = []
         medications: list[str] = []
 
-        if "headache" in lowered or "головная боль" in lowered:
+        if "headache" in lowered or "головн" in lowered:
             suggestions.append(
                 {
                     "type": "question_to_ask",
@@ -39,7 +39,7 @@ class MockRealtimeAnalysisProvider:
             )
             symptoms.append("головная боль")
 
-        if "nausea" in lowered or "тошнота" in lowered:
+        if "nausea" in lowered or "тошнот" in lowered:
             suggestions.append(
                 {
                     "type": "next_step",
@@ -69,7 +69,7 @@ class MockRealtimeAnalysisProvider:
         return {
             "request_id": payload.get("request_id", "mock-request"),
             "latency_ms": 12,
-            "model": {"name": "тестовый модуль анализа", "quantization": "none"},
+            "model": {"name": "mock-realtime-analysis", "quantization": "none"},
             "suggestions": suggestions,
             "drug_interactions": interactions,
             "extracted_facts": {
@@ -87,6 +87,8 @@ class MockRealtimeAnalysisProvider:
                 },
             },
             "knowledge_refs": [],
+            "recommended_document": None,
+            "recommended_documents": [],
             "patient_context": None,
             "errors": [],
         }

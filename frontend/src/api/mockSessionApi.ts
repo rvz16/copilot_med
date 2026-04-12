@@ -11,6 +11,7 @@ import type {
   CreateSessionResponse,
   HealthResponse,
   Hint,
+  KnowledgeExtraction,
   ListSessionsResponse,
   RealtimeAnalysis,
   PostSessionAnalytics,
@@ -106,6 +107,15 @@ function buildRealtimeAnalysis(stableText: string, seq: number): RealtimeAnalysi
       },
     },
     knowledge_refs: [],
+    recommended_document: {
+      recommendation_id: `rec-${seq}`,
+      title: 'Клиническая рекомендация по ведению головной боли',
+      matched_query: 'Оценка головной боли',
+      diagnosis_confidence: 0.8,
+      search_score: 0.77,
+      pdf_available: true,
+      pdf_url: 'https://example.org/guidelines/headache.pdf',
+    },
     recommended_documents: [
       {
         recommendation_id: `rec-${seq}`,
@@ -124,6 +134,7 @@ function buildRealtimeAnalysis(stableText: string, seq: number): RealtimeAnalysi
       conditions: ['Сезонный аллергический ринит'],
       medications: ['Ибупрофен'],
       allergies: ['Пенициллин'],
+      observations: ['Головная боль в течение двух дней'],
     },
     errors: [],
   };
@@ -138,9 +149,120 @@ function buildEmptySnapshot(summary: SessionSummary): SessionSnapshot {
     transcript: '',
     hints: [],
     realtime_analysis: null,
+    knowledge_extraction: null,
     last_error: summary.last_error,
     updated_at: summary.updated_at,
     finalized_at: null,
+  };
+}
+
+function buildKnowledgeExtraction(transcript: string): KnowledgeExtraction {
+  return {
+    soap_note: {
+      subjective: {
+        reported_symptoms: transcript ? ['Головная боль в течение двух дней'] : [],
+        reported_concerns: ['Пациент беспокоится о причинах боли'],
+      },
+      objective: {
+        observations: ['Объективные наблюдения в записи ограничены'],
+        measurements: ['No objective clinical observations or measurements were explicitly documented in the transcript.'],
+      },
+      assessment: {
+        diagnoses: ['Головная боль требует уточнения причины'],
+        evaluation: ['Нужна дополнительная клиническая оценка'],
+      },
+      plan: {
+        treatment: ['Сформировать окончательный план терапии после очного осмотра'],
+        follow_up_instructions: ['Контрольный визит в течение недели'],
+      },
+    },
+    extracted_facts: {
+      symptoms: ['головная боль'],
+      concerns: ['причина боли'],
+      observations: ['ограниченные объективные данные'],
+      measurements: [],
+      diagnoses: ['головная боль неуточнённая'],
+      evaluation: ['нужна дополнительная оценка'],
+      medications: [],
+      allergies: [],
+      treatment: ['наблюдение'],
+      follow_up_instructions: ['повторный визит'],
+    },
+    summary: {
+      counts: {
+        symptoms: 1,
+        concerns: 1,
+        observations: 1,
+        measurements: 0,
+        diagnoses: 1,
+        evaluation: 1,
+        medications: 0,
+        allergies: 0,
+        treatment: 1,
+        follow_up_instructions: 1,
+      },
+      total_items: 7,
+    },
+    fhir_resources: [
+      { resourceType: 'Condition' },
+      { resourceType: 'DocumentReference' },
+    ],
+    persistence: {
+      enabled: true,
+      target_base_url: 'http://fhir:8092/fhir',
+      prepared: [
+        { index: 0, resource_type: 'Condition' },
+        { index: 1, resource_type: 'DocumentReference' },
+      ],
+      sent_successfully: 2,
+      sent_failed: 0,
+      created: [
+        { index: 0, resource_type: 'Condition', id: 'condition-1' },
+        { index: 1, resource_type: 'DocumentReference', id: 'documentreference-1' },
+      ],
+      errors: [],
+    },
+    validation: {
+      all_sections_populated: true,
+      missing_sections: [],
+      sections: {
+        subjective: { populated: true, item_count: 2, used_fallback: false },
+        objective: { populated: true, item_count: 1, used_fallback: true },
+        assessment: { populated: true, item_count: 2, used_fallback: false },
+        plan: { populated: true, item_count: 2, used_fallback: false },
+      },
+    },
+    confidence_scores: {
+      overall: 0.74,
+      soap_sections: {
+        subjective: 0.84,
+        objective: 0.35,
+        assessment: 0.77,
+        plan: 0.79,
+      },
+      extracted_fields: {
+        symptoms: 0.84,
+        concerns: 0.68,
+        observations: 0.55,
+        measurements: 0.25,
+        diagnoses: 0.74,
+        evaluation: 0.71,
+        medications: 0.25,
+        allergies: 0.25,
+        treatment: 0.63,
+        follow_up_instructions: 0.7,
+      },
+    },
+    ehr_sync: {
+      enabled: true,
+      mode: 'fhir',
+      system: 'EHR (FHIR)',
+      status: 'synced',
+      record_id: 'pat_mock_1',
+      synced_at: isoNow(),
+      synced_fields: ['soap_note', 'extracted_facts', 'summary', 'validation', 'confidence_scores'],
+      response: { fhir_base_url: 'http://fhir:8092/fhir' },
+    },
   };
 }
 
@@ -205,6 +327,7 @@ function scheduleAnalyticsCompletion(record: MockSessionRecord): void {
   globalThis.setTimeout(() => {
     const timestamp = isoNow();
     const analytics = buildPostSessionAnalytics(record.snapshot.transcript);
+    const knowledgeExtraction = buildKnowledgeExtraction(record.snapshot.transcript);
     const finalizedTranscript = analytics.full_transcript?.full_text ?? record.snapshot.transcript;
 
     record.summary = {
@@ -219,6 +342,7 @@ function scheduleAnalyticsCompletion(record: MockSessionRecord): void {
       status: 'finished',
       processing_state: 'completed',
       transcript: finalizedTranscript,
+      knowledge_extraction: knowledgeExtraction,
       post_session_analytics: analytics,
       updated_at: timestamp,
       finalized_at: timestamp,

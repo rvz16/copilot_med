@@ -29,38 +29,154 @@ class MockKnowledgeExtractorProvider:
         if "nausea" in lower_text:
             symptoms.append("nausea")
 
-        duration = "two days" if "two days" in lower_text else None
         summary_text = transcript or "No transcript available."
+        persist_enabled = payload.get("persist", False)
+        prepared_resources = [
+            {
+                "index": 0,
+                "resource_type": "Condition",
+            },
+            {
+                "index": 1,
+                "resource_type": "DocumentReference",
+            },
+        ]
 
         return {
             "status": "ok",
             "session_id": payload["session_id"],
             "soap_note": {
-                "subjective": summary_text,
-                "objective": "No vitals captured in MVP session manager.",
-                "assessment": "Primary headache complaint under evaluation.",
-                "plan": "Review severity, associated symptoms, and relevant history.",
+                "subjective": {
+                    "reported_symptoms": symptoms or [summary_text],
+                    "reported_concerns": ["Patient concern captured from transcript."],
+                },
+                "objective": {
+                    "observations": ["No vitals captured in MVP session manager."],
+                    "measurements": [],
+                },
+                "assessment": {
+                    "diagnoses": ["Primary headache complaint under evaluation."],
+                    "evaluation": ["Additional clinician review recommended."],
+                },
+                "plan": {
+                    "treatment": ["Review severity, associated symptoms, and relevant history."],
+                    "follow_up_instructions": ["Arrange follow-up after the consultation."],
+                },
             },
             "extracted_facts": {
                 "symptoms": symptoms,
-                "duration": duration,
-                "patient_id": payload.get("patient_id"),
-                "encounter_id": payload.get("encounter_id"),
+                "concerns": ["Patient concern captured from transcript."],
+                "observations": ["No vitals captured in MVP session manager."],
+                "measurements": [],
+                "diagnoses": ["Primary headache complaint under evaluation."],
+                "evaluation": ["Additional clinician review recommended."],
+                "medications": [],
+                "allergies": [],
+                "treatment": ["Review severity, associated symptoms, and relevant history."],
+                "follow_up_instructions": ["Arrange follow-up after the consultation."],
             },
             "summary": {
-                "clinical_summary": summary_text,
-                "confidence": 0.81,
+                "counts": {
+                    "symptoms": len(symptoms),
+                    "concerns": 1 if summary_text else 0,
+                    "observations": 1,
+                    "measurements": 0,
+                    "diagnoses": 1,
+                    "evaluation": 1,
+                    "medications": 0,
+                    "allergies": 0,
+                    "treatment": 1,
+                    "follow_up_instructions": 1,
+                },
+                "total_items": 7 + len(symptoms),
             },
             "fhir_resources": [
                 {
-                    "resourceType": "Observation",
-                    "status": "preliminary",
-                    "code": {"text": "Consultation summary placeholder"},
-                }
+                    "resourceType": "Condition",
+                    "subject": {"reference": f"Patient/{payload.get('patient_id', 'unknown')}"},
+                    "code": {"text": "Primary headache complaint"},
+                },
+                {
+                    "resourceType": "DocumentReference",
+                    "status": "current",
+                    "subject": {"reference": f"Patient/{payload.get('patient_id', 'unknown')}"},
+                    "type": {"text": "SOAP note"},
+                },
             ],
             "persistence": {
-                "persisted": payload.get("persist", False),
-                "mode": "mock",
+                "enabled": persist_enabled,
+                "target_base_url": "mock://fhir",
+                "prepared": prepared_resources,
+                "sent_successfully": len(prepared_resources) if persist_enabled else 0,
+                "sent_failed": 0,
+                "created": (
+                    [
+                        {
+                            "index": idx,
+                            "resource_type": item["resource_type"],
+                            "id": f"mock-{item['resource_type'].lower()}-{idx + 1}",
+                            "status_code": 201,
+                            "location": f"mock://fhir/{item['resource_type']}/{idx + 1}",
+                        }
+                        for idx, item in enumerate(prepared_resources)
+                    ]
+                    if persist_enabled
+                    else []
+                ),
+                "errors": [],
+            },
+            "validation": {
+                "all_sections_populated": True,
+                "missing_sections": [],
+                "sections": {
+                    "subjective": {"populated": True, "item_count": 1, "used_fallback": False},
+                    "objective": {"populated": True, "item_count": 1, "used_fallback": True},
+                    "assessment": {"populated": True, "item_count": 1, "used_fallback": False},
+                    "plan": {"populated": True, "item_count": 1, "used_fallback": False},
+                },
+            },
+            "confidence_scores": {
+                "overall": 0.73,
+                "soap_sections": {
+                    "subjective": 0.84,
+                    "objective": 0.35,
+                    "assessment": 0.78,
+                    "plan": 0.77,
+                },
+                "extracted_fields": {
+                    "symptoms": 0.84 if symptoms else 0.25,
+                    "concerns": 0.6,
+                    "observations": 0.25,
+                    "measurements": 0.25,
+                    "diagnoses": 0.75,
+                    "evaluation": 0.7,
+                    "medications": 0.25,
+                    "allergies": 0.25,
+                    "treatment": 0.68,
+                    "follow_up_instructions": 0.7,
+                },
+            },
+            "ehr_sync": {
+                "enabled": payload.get("sync_ehr", True),
+                "mode": "fhir",
+                "system": "EHR (FHIR)",
+                "status": "synced" if persist_enabled else "preview",
+                "record_id": payload.get("patient_id"),
+                "synced_at": "2026-01-01T00:00:00+00:00",
+                "synced_fields": [
+                    "soap_note",
+                    "extracted_facts",
+                    "summary",
+                    "validation",
+                    "confidence_scores",
+                ],
+                "response": {
+                    "fhir_base_url": "mock://fhir",
+                    "patient_id": payload.get("patient_id"),
+                    "patient_name": payload.get("patient_name"),
+                    "total_prepared": len(prepared_resources),
+                    "total_written": len(prepared_resources) if persist_enabled else 0,
+                },
             },
         }
 

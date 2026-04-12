@@ -17,6 +17,25 @@ def test_condition_mapping_from_symptoms_and_diagnoses() -> None:
     assert all(r["encounter"]["reference"] == "Encounter/e1" for r in conditions)
 
 
+def test_document_reference_mapping_for_soap_note() -> None:
+    mapper = FhirMapper()
+    canonical = CanonicalExtraction(symptoms=["Headache for 3 days"])
+
+    resources = mapper.map_to_resources(
+        canonical,
+        patient_id="p1",
+        encounter_id="e1",
+        soap_note=canonical.to_soap_note(),
+        session_id="sess-1",
+    )
+    documents = [r for r in resources if r["resourceType"] == "DocumentReference"]
+
+    assert len(documents) == 1
+    assert documents[0]["subject"]["reference"] == "Patient/p1"
+    assert documents[0]["context"]["encounter"][0]["reference"] == "Encounter/e1"
+    assert documents[0]["content"][0]["attachment"]["contentType"] == "application/json"
+
+
 def test_observation_mapping_from_observations_and_measurements() -> None:
     mapper = FhirMapper()
     canonical = CanonicalExtraction(

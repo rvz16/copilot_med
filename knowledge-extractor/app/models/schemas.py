@@ -9,8 +9,14 @@ class ExtractionRequest(BaseModel):
     session_id: str
     patient_id: str
     encounter_id: str | None = None
+    patient_name: str | None = None
+    doctor_id: str | None = None
+    doctor_name: str | None = None
+    doctor_specialty: str | None = None
+    chief_complaint: str | None = None
     transcript: str
     persist: bool = False
+    sync_ehr: bool = True
 
 
 class SubjectiveSection(BaseModel):
@@ -42,6 +48,7 @@ class SoapNote(BaseModel):
 
 class PersistenceResult(BaseModel):
     enabled: bool
+    target_base_url: str | None = None
     prepared: list[dict[str, Any]] = Field(default_factory=list)
     sent_successfully: int = 0
     sent_failed: int = 0
@@ -54,6 +61,35 @@ class ExtractionSummary(BaseModel):
     total_items: int = 0
 
 
+class SoapSectionValidation(BaseModel):
+    populated: bool
+    item_count: int = 0
+    used_fallback: bool = False
+
+
+class SoapValidation(BaseModel):
+    all_sections_populated: bool = False
+    missing_sections: list[str] = Field(default_factory=list)
+    sections: dict[str, SoapSectionValidation] = Field(default_factory=dict)
+
+
+class ExtractionConfidence(BaseModel):
+    overall: float = 0.0
+    soap_sections: dict[str, float] = Field(default_factory=dict)
+    extracted_fields: dict[str, float] = Field(default_factory=dict)
+
+
+class EhrSyncResult(BaseModel):
+    enabled: bool
+    mode: str = "fhir"
+    system: str = "EHR (FHIR)"
+    status: str = "skipped"
+    record_id: str | None = None
+    synced_at: str | None = None
+    synced_fields: list[str] = Field(default_factory=list)
+    response: dict[str, Any] = Field(default_factory=dict)
+
+
 class ExtractionResponse(BaseModel):
     status: str = "ok"
     session_id: str
@@ -62,3 +98,6 @@ class ExtractionResponse(BaseModel):
     summary: ExtractionSummary = Field(default_factory=ExtractionSummary)
     fhir_resources: list[dict[str, Any]] = Field(default_factory=list)
     persistence: PersistenceResult
+    validation: SoapValidation = Field(default_factory=SoapValidation)
+    confidence_scores: ExtractionConfidence = Field(default_factory=ExtractionConfidence)
+    ehr_sync: EhrSyncResult

@@ -396,6 +396,7 @@ export default function App() {
           transcript={selectedSession.snapshot?.transcript ?? selectedSession.stable_transcript ?? ''}
           hints={selectedSession.snapshot?.hints ?? []}
           analysis={selectedSession.snapshot?.realtime_analysis ?? null}
+          knowledgeExtraction={selectedSession.snapshot?.knowledge_extraction ?? null}
           postSessionAnalytics={selectedSession.snapshot?.post_session_analytics ?? null}
           chunksUploaded={selectedSession.snapshot?.latest_seq ?? selectedSession.latest_seq}
           uploadStatus="idle"
@@ -447,6 +448,7 @@ export default function App() {
         transcript={uploader.transcript}
         hints={uploader.hints}
         analysis={uploader.latestAnalysis}
+        knowledgeExtraction={null}
         chunksUploaded={uploader.chunksUploaded}
         uploadStatus={uploader.uploadStatus}
         isRecording={recorder.isRecording}

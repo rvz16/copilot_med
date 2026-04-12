@@ -100,6 +100,7 @@ class PatientContext(BaseModel):
     conditions: list[str] = Field(default_factory=list)
     medications: list[str] = Field(default_factory=list)
     allergies: list[str] = Field(default_factory=list)
+    observations: list[str] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="forbid")
 

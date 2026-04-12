@@ -6,6 +6,7 @@ from app.services.documentation_service import DocumentationService
 
 class FakeFhirClient:
     def __init__(self) -> None:
+        self.base_url = "http://example-fhir"
         self.calls: list[tuple[str, dict]] = []
 
     def create_resource(self, resource_type: str, payload: dict) -> dict:
@@ -45,6 +46,8 @@ def test_persistence_preview_mode_does_not_send() -> None:
     response = service.build_documentation(request)
 
     assert response.persistence.enabled is False
+    assert response.validation.all_sections_populated is True
+    assert response.ehr_sync.status == "preview"
     assert response.persistence.sent_successfully == 0
     assert response.persistence.sent_failed == 0
     assert client.calls == []
@@ -74,8 +77,10 @@ def test_persistence_enabled_collects_successes_and_errors() -> None:
     response = service.build_documentation(request)
 
     assert response.persistence.enabled is True
+    assert response.persistence.target_base_url == "http://example-fhir"
     assert response.persistence.prepared
     assert response.persistence.sent_successfully >= 1
     assert response.persistence.sent_failed >= 1
     assert response.persistence.created
     assert response.persistence.errors
+    assert response.ehr_sync.status == "partial"

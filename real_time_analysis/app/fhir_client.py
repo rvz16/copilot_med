@@ -13,7 +13,7 @@ DEFAULT_FHIR_BASE_URL = os.getenv("FHIR_BASE_URL", "http://158.160.84.63:8092/ha
 
 
 class FHIRClient:
-    """Async FHIR client that pulls patient demographics, conditions, meds, and allergies."""
+    """Async FHIR client that pulls patient demographics and prior context from EHR via FHIR."""
 
     def __init__(self, base_url: str | None = None, timeout: float = 5.0) -> None:
         self.base_url = (base_url or DEFAULT_FHIR_BASE_URL).rstrip("/")
@@ -26,25 +26,39 @@ class FHIRClient:
     async def get_patient_context(self, patient_id: str) -> dict[str, Any] | None:
         """Fetch patient data and return structured context dict, or None on failure."""
         try:
-            patient, conditions, medications, allergies = await self._fetch_all(patient_id)
-            return self._build_context(patient, conditions, medications, allergies)
+            patient, conditions, medication_requests, medication_statements, allergies, observations = await self._fetch_all(patient_id)
+            return self._build_context(
+                patient,
+                conditions,
+                medication_requests,
+                medication_statements,
+                allergies,
+                observations,
+            )
         except Exception as exc:
             logger.warning("FHIR fetch failed for patient %s: %s", patient_id, exc)
             return None
 
-    async def _fetch_all(self, patient_id: str) -> tuple[dict, list, list, list]:
+    async def _fetch_all(self, patient_id: str) -> tuple[dict, list, list, list, list, list]:
         """Fetch Patient resource + related clinical data in parallel."""
         import asyncio
 
         patient_task = self._get_resource(f"Patient/{patient_id}")
         conditions_task = self._search(f"Condition?patient={patient_id}&_count=20")
-        meds_task = self._search(f"MedicationRequest?patient={patient_id}&_count=20")
+        medication_requests_task = self._search(f"MedicationRequest?patient={patient_id}&_count=20")
+        medication_statements_task = self._search(f"MedicationStatement?patient={patient_id}&_count=20")
         allergies_task = self._search(f"AllergyIntolerance?patient={patient_id}&_count=20")
+        observations_task = self._search(f"Observation?patient={patient_id}&_count=10")
 
-        patient, conditions, medications, allergies = await asyncio.gather(
-            patient_task, conditions_task, meds_task, allergies_task,
+        patient, conditions, medication_requests, medication_statements, allergies, observations = await asyncio.gather(
+            patient_task,
+            conditions_task,
+            medication_requests_task,
+            medication_statements_task,
+            allergies_task,
+            observations_task,
         )
-        return patient or {}, conditions, medications, allergies
+        return patient or {}, conditions, medication_requests, medication_statements, allergies, observations
 
     async def _get_resource(self, path: str) -> dict[str, Any] | None:
         try:
@@ -75,8 +89,10 @@ class FHIRClient:
     def _build_context(
         patient: dict,
         conditions: list[dict],
-        medications: list[dict],
+        medication_requests: list[dict],
+        medication_statements: list[dict],
         allergies: list[dict],
+        observations: list[dict],
     ) -> dict[str, Any]:
         # Patient demographics
         name = FHIRClient._extract_name(patient)
@@ -93,7 +109,7 @@ class FHIRClient:
 
         # Medications
         med_list: list[str] = []
-        for m in medications:
+        for m in [*medication_requests, *medication_statements]:
             med_code = m.get("medicationCodeableConcept", {})
             text = med_code.get("text") or _first_coding_display(med_code)
             if text:
@@ -107,13 +123,26 @@ class FHIRClient:
             if text:
                 allergy_list.append(text)
 
+        # Observations
+        observation_list: list[str] = []
+        for o in observations:
+            value = o.get("valueString")
+            if isinstance(value, str) and value.strip():
+                observation_list.append(value.strip())
+                continue
+            code = o.get("code", {})
+            text = code.get("text") or _first_coding_display(code)
+            if text:
+                observation_list.append(text)
+
         return {
             "patient_name": name,
             "gender": gender,
             "birth_date": birth_date,
             "conditions": condition_list,
-            "medications": med_list,
+            "medications": list(dict.fromkeys(med_list)),
             "allergies": allergy_list,
+            "observations": list(dict.fromkeys(observation_list)),
         }
 
     @staticmethod
@@ -141,6 +170,8 @@ class FHIRClient:
             lines.append(f"Current medications: {', '.join(ctx['medications'])}")
         if ctx.get("allergies"):
             lines.append(f"Allergies: {', '.join(ctx['allergies'])}")
+        if ctx.get("observations"):
+            lines.append(f"Recent observations: {', '.join(ctx['observations'])}")
         return "\n".join(lines)
 
 

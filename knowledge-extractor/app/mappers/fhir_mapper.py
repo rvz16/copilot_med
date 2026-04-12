@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import base64
+import json
 from typing import Any
 
 from app.models import CanonicalExtraction
+from app.models.schemas import SoapNote
 
 
 class FhirMapper:
@@ -13,6 +16,8 @@ class FhirMapper:
         extraction: CanonicalExtraction,
         patient_id: str,
         encounter_id: str | None = None,
+        soap_note: SoapNote | None = None,
+        session_id: str | None = None,
     ) -> list[dict[str, Any]]:
         resources: list[dict[str, Any]] = []
 
@@ -20,6 +25,7 @@ class FhirMapper:
         resources.extend(self._map_observations(extraction, patient_id, encounter_id))
         resources.extend(self._map_medication_statements(extraction, patient_id, encounter_id))
         resources.extend(self._map_allergies(extraction, patient_id, encounter_id))
+        resources.extend(self._map_document_reference(soap_note, patient_id, encounter_id, session_id))
 
         return resources
 
@@ -117,3 +123,37 @@ class FhirMapper:
             allergies.append(resource)
 
         return allergies
+
+    def _map_document_reference(
+        self,
+        soap_note: SoapNote | None,
+        patient_id: str,
+        encounter_id: str | None,
+        session_id: str | None,
+    ) -> list[dict[str, Any]]:
+        if soap_note is None:
+            return []
+
+        attachment_data = base64.b64encode(
+            json.dumps(soap_note.model_dump(mode="json"), ensure_ascii=False).encode("utf-8")
+        ).decode("ascii")
+        resource: dict[str, Any] = {
+            "resourceType": "DocumentReference",
+            "status": "current",
+            "subject": self._base_subject(patient_id),
+            "type": {"text": "SOAP note"},
+            "description": "Structured SOAP note generated after consultation",
+            "content": [
+                {
+                    "attachment": {
+                        "contentType": "application/json",
+                        "title": f"SOAP note {session_id or patient_id}",
+                        "data": attachment_data,
+                    }
+                }
+            ],
+        }
+        encounter_ref = self._encounter_ref(encounter_id)
+        if encounter_ref:
+            resource["context"] = {"encounter": [encounter_ref]}
+        return [resource]

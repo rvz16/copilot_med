@@ -11,12 +11,13 @@ export function PatientContextPanel({ patientContext }: Props) {
     !!patientContext.birth_date ||
     patientContext.conditions.length > 0 ||
     patientContext.medications.length > 0 ||
-    patientContext.allergies.length > 0
+    patientContext.allergies.length > 0 ||
+    patientContext.observations.length > 0
   );
 
   return (
     <section className="panel patient-context-panel" id="patient-context-panel">
-      <h2>Контекст пациента (FHIR)</h2>
+      <h2>Контекст пациента из EHR (FHIR)</h2>
 
       {!hasPatientContext || !patientContext ? (
         <p className="placeholder-text patient-context-empty">
@@ -76,6 +77,19 @@ export function PatientContextPanel({ patientContext }: Props) {
               <span className="analysis-stat-label">Аллергии</span>
               <div className="fact-pills">
                 {patientContext.allergies.map((value) => (
+                  <span key={value} className="fact-pill">
+                    {value}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {patientContext.observations.length > 0 && (
+            <div className="facts-group">
+              <span className="analysis-stat-label">Последние наблюдения</span>
+              <div className="fact-pills">
+                {patientContext.observations.map((value) => (
                   <span key={value} className="fact-pill">
                     {value}
                   </span>
