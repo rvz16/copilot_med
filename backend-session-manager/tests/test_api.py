@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from pathlib import Path
 
 from app.clients.clinical_recommendations import HttpClinicalRecommendationsClient
 from app.services.asr import ChunkTranscriptionResult, FullTranscriptionResult, MockAsrProvider, TRANSCRIPT_FRAGMENTS
@@ -249,6 +250,27 @@ def test_list_sessions_filters_by_doctor_and_returns_snapshot_flag(client: TestC
     assert first_list.json()["items"][0]["snapshot_available"] is True
     assert first_list.json()["items"][0]["patient_name"] == "Olivia Bennett"
     assert [item["session_id"] for item in second_list.json()["items"]] == [second.json()["session_id"]]
+
+
+def test_delete_session_removes_detail_list_entry_and_storage(client: TestClient):
+    session_id = create_session(client)
+    upload_chunk(client, session_id, seq=1, is_final=True)
+    client.post(
+        f"/api/v1/sessions/{session_id}/close",
+        json={"trigger_post_session_analytics": True},
+    )
+
+    storage_dir = Path(client.app.state.settings.storage_dir)
+
+    response = client.delete(f"/api/v1/sessions/{session_id}")
+    detail_response = client.get(f"/api/v1/sessions/{session_id}")
+    list_response = client.get("/api/v1/sessions", params={"doctor_id": "doc_001"})
+
+    assert response.status_code == 204
+    assert detail_response.status_code == 404
+    assert list_response.status_code == 200
+    assert list_response.json()["items"] == []
+    assert not (storage_dir / "sessions" / session_id).exists()
 
 
 def test_upload_after_close_returns_409(client: TestClient):

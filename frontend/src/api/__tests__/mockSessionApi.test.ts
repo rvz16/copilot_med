@@ -148,6 +148,29 @@ describe('mockSessionApi', () => {
     expect(list.items.some((item) => item.session_id === created.session_id)).toBe(true);
   });
 
+  it('deleteSession removes the session from subsequent list results', async () => {
+    const createdPromise = mockSessionApi.createSession({
+      doctor_id: 'doc_1',
+      doctor_name: 'Dr. Amelia Carter',
+      doctor_specialty: 'Family Medicine',
+      patient_id: 'pat_250',
+      patient_name: 'Ivy Lane',
+      chief_complaint: 'Follow-up',
+    });
+    await vi.runAllTimersAsync();
+    const created = await createdPromise;
+
+    const deletePromise = mockSessionApi.deleteSession(created.session_id);
+    await vi.runAllTimersAsync();
+    await deletePromise;
+
+    const listPromise = mockSessionApi.listSessions({ doctorId: 'doc_1' });
+    await vi.runAllTimersAsync();
+    const list = await listPromise;
+
+    expect(list.items.some((item) => item.session_id === created.session_id)).toBe(false);
+  });
+
   it('getSession returns a snapshot payload', async () => {
     const createdPromise = mockSessionApi.createSession({
       doctor_id: 'doc_1',

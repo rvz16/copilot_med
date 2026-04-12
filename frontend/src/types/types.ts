@@ -302,6 +302,7 @@ export interface SessionApi {
   stopRecording(sessionId: string): Promise<StopRecordingResponse>;
   closeSession(sessionId: string): Promise<CloseSessionResponse>;
   getSession(sessionId: string): Promise<SessionDetail>;
+  deleteSession(sessionId: string): Promise<void>;
   listSessions(params?: {
     doctorId?: string;
     patientId?: string;

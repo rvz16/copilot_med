@@ -192,6 +192,20 @@ describe('sessionApi', () => {
     expect(result.snapshot?.status).toBe('finished');
   });
 
+  it('deleteSession sends DELETE to the detail endpoint', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+      json: () => Promise.resolve(null),
+    } as unknown as Response);
+
+    await sessionApi.deleteSession('sess_1');
+
+    const [url, opts] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toContain('/api/v1/sessions/sess_1');
+    expect(opts.method).toBe('DELETE');
+  });
+
   it('listSessions serializes filters into query params', async () => {
     const response: ListSessionsResponse = {
       items: [],

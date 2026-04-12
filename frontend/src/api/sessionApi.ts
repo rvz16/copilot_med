@@ -81,6 +81,18 @@ export const sessionApi: SessionApi = {
     return handleResponse<SessionDetail>(res);
   },
 
+  async deleteSession(sessionId) {
+    const res = await fetch(withBaseUrl(`/api/v1/sessions/${sessionId}`), {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      const msg =
+        body?.error?.message ?? `Запрос завершился с ошибкой ${res.status}`;
+      throw new Error(msg);
+    }
+  },
+
   async listSessions(params = {}) {
     const query = new URLSearchParams();
     if (params.doctorId) query.set('doctor_id', params.doctorId);

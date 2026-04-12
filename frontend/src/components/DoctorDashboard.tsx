@@ -18,6 +18,7 @@ interface Props {
   onRefresh: () => void;
   onLogout: () => void;
   onOpenSession: (sessionId: string) => Promise<void>;
+  onDeleteSession: (sessionId: string) => Promise<void>;
   onStartSession: (payload: NewSessionFormData) => Promise<void>;
 }
 
@@ -30,6 +31,7 @@ export function DoctorDashboard({
   onRefresh,
   onLogout,
   onOpenSession,
+  onDeleteSession,
   onStartSession,
 }: Props) {
   const [patientId, setPatientId] = useState('');
@@ -38,6 +40,7 @@ export function DoctorDashboard({
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'analyzing' | 'finished'>('all');
   const [openingSessionId, setOpeningSessionId] = useState<string | null>(null);
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
 
   const stats = useMemo(() => {
     const total = sessions.length;
@@ -92,6 +95,19 @@ export function DoctorDashboard({
       await onOpenSession(sessionId);
     } finally {
       setOpeningSessionId(null);
+    }
+  };
+
+  const handleDeleteSession = async (session: SessionSummary) => {
+    const patientLabel = session.patient_name || session.patient_id;
+    const confirmed = window.confirm(`Удалить сессию ${session.session_id} для пациента ${patientLabel}?`);
+    if (!confirmed) return;
+
+    try {
+      setDeletingSessionId(session.session_id);
+      await onDeleteSession(session.session_id);
+    } finally {
+      setDeletingSessionId(null);
     }
   };
 
@@ -255,14 +271,41 @@ export function DoctorDashboard({
                     <p className="history-preview">{session.transcript_preview}</p>
                   )}
 
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={() => handleOpenSession(session.session_id)}
-                    disabled={openingSessionId === session.session_id}
-                  >
-                    {openingSessionId === session.session_id ? 'Открываем…' : 'Открыть консультацию'}
-                  </button>
+                  <div className="history-card-actions">
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => handleOpenSession(session.session_id)}
+                      disabled={
+                        openingSessionId === session.session_id ||
+                        deletingSessionId === session.session_id
+                      }
+                    >
+                      {openingSessionId === session.session_id ? 'Открываем…' : 'Открыть консультацию'}
+                    </button>
+                    <button
+                      type="button"
+                      className="danger-icon-button"
+                      aria-label={`Удалить сессию ${session.session_id}`}
+                      title="Удалить сессию"
+                      onClick={() => void handleDeleteSession(session)}
+                      disabled={
+                        deletingSessionId === session.session_id ||
+                        openingSessionId === session.session_id
+                      }
+                    >
+                      {deletingSessionId === session.session_id ? (
+                        '…'
+                      ) : (
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 6h2v8h-2V9Zm4 0h2v8h-2V9ZM7 9h2v8H7V9Zm-1 11V8h12v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2Z"
+                            fill="currentColor"
+                          />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                 </article>
               ))}
             </div>

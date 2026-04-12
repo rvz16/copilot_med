@@ -548,6 +548,46 @@ button:disabled,
   line-height: 1.6;
 }
 
+.history-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.danger-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba(190, 57, 57, 0.18);
+  background: rgba(190, 57, 57, 0.08);
+  color: #a62d2d;
+  transition:
+    transform 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.danger-icon-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.danger-icon-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: rgba(190, 57, 57, 0.14);
+  border-color: rgba(190, 57, 57, 0.28);
+  color: #8e2323;
+}
+
+.danger-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .workspace-header h1 {
   font-size: clamp(2rem, 3vw, 3rem);
   display: flex;

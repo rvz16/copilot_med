@@ -1,6 +1,7 @@
 from dataclasses import replace
 from datetime import UTC, datetime
 import logging
+import shutil
 from uuid import uuid4
 
 from sqlalchemy import func, select
@@ -525,6 +526,14 @@ class SessionService:
         session = self._get_session(session_id)
         return self._build_session_detail(session)
 
+    def delete_session(self, session_id: str) -> None:
+        session = self._get_session(session_id)
+        session_storage_dir = self._session_storage_dir(session.session_id)
+        self.db.delete(session)
+        self.db.commit()
+        if session_storage_dir.exists():
+            shutil.rmtree(session_storage_dir, ignore_errors=True)
+
     def list_sessions(
         self,
         *,
@@ -895,13 +904,17 @@ class SessionService:
         return results
 
     def _find_recording_path(self, session_id: str):
-        from pathlib import Path
-        session_dir = Path(self.settings.storage_dir) / "sessions" / session_id
+        session_dir = self._session_storage_dir(session_id)
         if not session_dir.exists():
             return None
         for recording in session_dir.glob("recording.*"):
             return recording
         return None
+
+    def _session_storage_dir(self, session_id: str):
+        from pathlib import Path
+
+        return Path(self.settings.storage_dir) / "sessions" / session_id
 
     def _build_post_analytics_snapshot(self, session: SessionRecord) -> dict | None:
         self.db.flush()

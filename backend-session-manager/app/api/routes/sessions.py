@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
 
 from app.api.dependencies import get_session_service
 from app.schemas.session import (
@@ -84,6 +84,15 @@ def get_session(
     service: SessionService = Depends(get_session_service),
 ) -> SessionDetailResponse:
     return service.get_session(session_id)
+
+
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete session")
+def delete_session(
+    session_id: str,
+    service: SessionService = Depends(get_session_service),
+) -> Response:
+    service.delete_session(session_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/sessions", response_model=ListSessionsResponse, summary="List sessions")

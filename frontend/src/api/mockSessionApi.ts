@@ -430,6 +430,13 @@ export const mockSessionApi: SessionApi = {
     return detailFromRecord(getRecord(sessionId));
   },
 
+  async deleteSession(sessionId) {
+    await delay(MOCK_DELAY_MS);
+    if (!sessions.delete(sessionId)) {
+      throw new Error(`Тестовая сессия ${sessionId} не найдена`);
+    }
+  },
+
   async listSessions(params = {}) {
     await delay(MOCK_DELAY_MS);
     const doctorId = params.doctorId;

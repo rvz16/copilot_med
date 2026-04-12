@@ -194,6 +194,22 @@ export default function App() {
     }
   }, []);
 
+  const handleDeleteSession = useCallback(async (sessionId: string) => {
+    try {
+      setSessionsError(null);
+      await api.deleteSession(sessionId);
+      setSessions((prev) => prev.filter((sessionItem) => sessionItem.session_id !== sessionId));
+      if (selectedSession?.session_id === sessionId) {
+        setSelectedSession(null);
+      }
+      await refreshSessions(activeDoctor);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось удалить сессию';
+      setSessionsError(message);
+      throw error;
+    }
+  }, [activeDoctor, refreshSessions, selectedSession]);
+
   const ensureRecordingStopped = useCallback(async () => {
     const hadActiveRecording = recorder.isRecording || session.recordingState === 'recording';
 
@@ -341,6 +357,7 @@ export default function App() {
           onRefresh={() => void refreshSessions()}
           onLogout={handleLogout}
           onOpenSession={handleOpenSession}
+          onDeleteSession={handleDeleteSession}
           onStartSession={handleStartSession}
         />
       </div>
