@@ -101,6 +101,35 @@ services:
       retries: 10
       start_period: 15s
 
+  post-session-analytics:
+    build:
+      context: ./post-session-analytics
+    environment:
+      POST_ANALYTICS_LLM_BASE_URL: ${POST_ANALYTICS_LLM_BASE_URL:-https://openrouter.ai/api/v1}
+      POST_ANALYTICS_MODEL_NAME: ${POST_ANALYTICS_MODEL_NAME:-gpt-oss-120b}
+      POST_ANALYTICS_LLM_API_KEY: ${POST_ANALYTICS_LLM_API_KEY:-}
+      POST_ANALYTICS_MAX_TOKENS: ${POST_ANALYTICS_MAX_TOKENS:-4096}
+      POST_ANALYTICS_TEMPERATURE: ${POST_ANALYTICS_TEMPERATURE:-0.1}
+      POST_ANALYTICS_TIMEOUT: ${POST_ANALYTICS_TIMEOUT:-120.0}
+      POST_ANALYTICS_LLM_HTTP_REFERER: ${POST_ANALYTICS_LLM_HTTP_REFERER:-}
+      POST_ANALYTICS_LLM_X_TITLE: ${POST_ANALYTICS_LLM_X_TITLE:-MedCoPilot}
+      POST_ANALYTICS_LLM_EXTRA_HEADERS_JSON: ${POST_ANALYTICS_LLM_EXTRA_HEADERS_JSON:-}
+      LOG_LEVEL: ${POST_ANALYTICS_LOG_LEVEL:-INFO}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8003:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status == 200 else 1)
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
   session-manager:
     build:
       context: ./backend-session-manager
@@ -110,6 +139,8 @@ services:
       transcribation:
         condition: service_healthy
       realtime-analysis:
+        condition: service_healthy
+      post-session-analytics:
         condition: service_healthy
     environment:
       APP_ENV: container
@@ -129,6 +160,11 @@ services:
       CLINICAL_RECOMMENDATIONS_MIN_CONFIDENCE: 0.6
       KNOWLEDGE_EXTRACTOR_MODE: mock
       KNOWLEDGE_EXTRACTOR_ENABLED: "true"
+      POST_SESSION_ANALYTICS_ENABLED: "true"
+      POST_SESSION_ANALYTICS_MODE: http
+      POST_SESSION_ANALYTICS_URL: http://post-session-analytics:8000/analyze
+      POST_SESSION_ANALYTICS_TIMEOUT_SECONDS: 180
+      FULL_TRANSCRIPTION_TIMEOUT_SECONDS: 300
       HTTP_TIMEOUT_SECONDS: 120
       CORS_ORIGINS: http://localhost:3000,http://localhost:5173
     ports:

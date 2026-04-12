@@ -264,6 +264,7 @@ class ConsultationSnapshotResponse(ApiBaseModel):
     transcript: str
     hints: list[HintListItem] = Field(default_factory=list)
     realtime_analysis: RealtimeAnalysisResponse | None = None
+    post_session_analytics: dict | None = None
     last_error: str | None = None
     updated_at: datetime
     finalized_at: datetime | None = None
@@ -281,6 +282,10 @@ class ExtractionsResponse(ApiBaseModel):
     summary: Any = None
     fhir_resources: Any = None
     persistence: Any = None
+    post_analytics_summary: Any = None
+    post_analytics_insights: Any = None
+    post_analytics_recommendations: Any = None
+    post_analytics_quality: Any = None
 
 
 class ListSessionsResponse(ApiBaseModel):

@@ -87,6 +87,26 @@ export default function App() {
     void refreshSessions(activeDoctor);
   }, [activeDoctor, refreshSessions]);
 
+  useEffect(() => {
+    if (workspaceMode !== 'archive' || !selectedSession || selectedSession.status !== 'analyzing') {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const detail = await api.getSession(selectedSession.session_id);
+          setSelectedSession(detail);
+          await refreshSessions(activeDoctor);
+        } catch {
+          // The current archive view can tolerate a failed refresh.
+        }
+      })();
+    }, 2500);
+
+    return () => window.clearTimeout(timer);
+  }, [activeDoctor, refreshSessions, selectedSession, workspaceMode]);
+
   const handleLogin = useCallback(async (username: string, password: string) => {
     const doctor = authenticateDoctor(username, password);
     if (!doctor) {
@@ -223,6 +243,7 @@ export default function App() {
       await ensureRecordingStopped();
       await uploader.waitForIdle();
       const closingSessionId = session.sessionId;
+      session.setSessionStatus('analyzing');
       await session.closeSession();
       const detail = await api.getSession(closingSessionId);
       setSelectedSession(detail);
@@ -358,6 +379,7 @@ export default function App() {
           transcript={selectedSession.snapshot?.transcript ?? selectedSession.stable_transcript ?? ''}
           hints={selectedSession.snapshot?.hints ?? []}
           analysis={selectedSession.snapshot?.realtime_analysis ?? null}
+          postSessionAnalytics={selectedSession.snapshot?.post_session_analytics ?? null}
           chunksUploaded={selectedSession.snapshot?.latest_seq ?? selectedSession.latest_seq}
           uploadStatus="idle"
           isRecording={false}
@@ -412,7 +434,7 @@ export default function App() {
         uploadStatus={uploader.uploadStatus}
         isRecording={recorder.isRecording}
         canRecord={
-          (session.sessionStatus === 'created' || session.sessionStatus === 'active') &&
+          session.sessionStatus === 'active' &&
           session.recordingState !== 'stopped'
         }
         isBusy={isClosingSession}

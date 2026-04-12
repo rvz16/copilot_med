@@ -157,6 +157,88 @@ async def transcribe_chunk(
         audio_file_duration=result["audio_file_duration"], processing_time_sec=elapsed,
     )
 
+@router.post("/transcribe-full")
+async def transcribe_full(
+    session_id: str = Form(...),
+    file: UploadFile = File(...),
+):
+    """Transcribe a full recording file (not chunked) for highest accuracy."""
+    content = await file.read()
+    ext = validate_upload(file, content)
+    start = time.time()
+
+    try:
+        full_pcm = decode_audio_to_pcm(content, ext)
+        if len(full_pcm) == 0:
+            return {
+                "session_id": session_id, "full_text": "", "source": "groq" if USE_GROQ_API else "whisper_ct2_ru",
+                "language": "ru", "audio_file_duration": 0.0, "processing_time_sec": 0.0,
+            }
+    except Exception as exc:
+        logger.error("PCM decode failed for full transcription, session %s: %s", session_id, exc)
+        raise HTTPException(status_code=400, detail=f"Audio decode failed: {exc}")
+
+    total_duration = len(full_pcm) / SAMPLE_RATE
+    segment_seconds = 300  # 5-minute segments for long files
+    segment_samples = segment_seconds * SAMPLE_RATE
+
+    if len(full_pcm) <= segment_samples:
+        has_speech, masked_pcm = apply_vad_and_mask(full_pcm)
+        if not has_speech:
+            elapsed = round(time.time() - start, 2)
+            return {
+                "session_id": session_id, "full_text": "", "source": "groq" if USE_GROQ_API else "whisper_ct2_ru",
+                "language": "ru", "audio_file_duration": round(total_duration, 2), "processing_time_sec": elapsed,
+            }
+        result = transcribe_pcm(
+            masked_pcm,
+            use_prompt=True,
+            use_hallucination_filter=True,
+            previous_text=None,
+            is_first_chunk=True,
+        )
+        elapsed = round(time.time() - start, 2)
+        return {
+            "session_id": session_id,
+            "full_text": result.get("text", ""),
+            "source": "groq" if USE_GROQ_API else "whisper_ct2_ru",
+            "language": result.get("language", "ru"),
+            "audio_file_duration": round(total_duration, 2),
+            "processing_time_sec": elapsed,
+        }
+
+    # Long file: split into segments, transcribe sequentially, concatenate
+    transcripts = []
+    accumulated_text = ""
+    for seg_start in range(0, len(full_pcm), segment_samples):
+        seg_pcm = full_pcm[seg_start : seg_start + segment_samples]
+        has_speech, masked_seg = apply_vad_and_mask(seg_pcm)
+        if not has_speech:
+            continue
+        is_first = seg_start == 0
+        result = transcribe_pcm(
+            masked_seg,
+            use_prompt=True,
+            use_hallucination_filter=True,
+            previous_text=accumulated_text if not is_first else None,
+            is_first_chunk=is_first,
+        )
+        seg_text = result.get("text", "").strip()
+        if seg_text:
+            transcripts.append(seg_text)
+            accumulated_text = " ".join(transcripts)
+
+    elapsed = round(time.time() - start, 2)
+    return {
+        "session_id": session_id,
+        "full_text": " ".join(transcripts),
+        "source": "groq" if USE_GROQ_API else "whisper_ct2_ru",
+        "language": "ru",
+        "audio_file_duration": round(total_duration, 2),
+        "processing_time_sec": elapsed,
+    }
+
+
 @router.post("/finalize-session-transcript")
 async def finalize_session_transcript(payload: FinalizeTranscriptRequest):
     session_store.remove(payload.session_id)

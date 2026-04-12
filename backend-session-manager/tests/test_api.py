@@ -64,7 +64,7 @@ def test_create_session_success(client: TestClient):
     assert response.status_code == 200
     body = response.json()
     assert body["session_id"].startswith("sess_")
-    assert body["status"] == "created"
+    assert body["status"] == "active"
     assert body["recording_state"] == "idle"
     assert body["doctor_name"] == "Dr. Amelia Carter"
     assert body["patient_name"] == "Olivia Bennett"
@@ -190,7 +190,7 @@ def test_close_session_success(client: TestClient):
 
     assert response.status_code == 200
     body = response.json()
-    assert body["status"] == "closed"
+    assert body["status"] == "finished"
     assert body["recording_state"] == "stopped"
     assert body["processing_state"] == "completed"
     assert body["full_transcript_ready"] is True
@@ -212,7 +212,7 @@ def test_get_session_returns_profile_and_snapshot(client: TestClient):
     assert body["doctor_specialty"] == "Family Medicine"
     assert body["patient_name"] == "Olivia Bennett"
     assert body["chief_complaint"] == "Recurring headache"
-    assert body["snapshot"]["status"] == "closed"
+    assert body["snapshot"]["status"] == "finished"
     assert body["snapshot"]["latest_seq"] == 1
     assert body["snapshot"]["transcript"].startswith("Patient reports headache")
     assert body["snapshot"]["finalized_at"] is not None
@@ -290,7 +290,7 @@ def test_knowledge_extractor_failure_does_not_crash_close(app_factory):
         )
 
         assert response.status_code == 200
-        assert response.json()["status"] == "closed"
+        assert response.json()["status"] == "finished"
         assert response.json()["processing_state"] == "failed"
 
 
@@ -490,7 +490,7 @@ def test_repeated_close_is_idempotent(client: TestClient):
 
     assert first.status_code == 200
     assert second.status_code == 200
-    assert second.json()["status"] == "closed"
+    assert second.json()["status"] == "finished"
 
 
 def test_audio_webm_codecs_opus_is_accepted(client: TestClient):

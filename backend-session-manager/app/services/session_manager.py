@@ -42,10 +42,15 @@ from app.services.asr import AsrProvider
 from app.services.clinical_recommendations import ClinicalRecommendationsProvider
 from app.services.hints import HintService
 from app.services.knowledge_extractor import KnowledgeExtractorProvider
+from app.services.post_session_analytics import PostSessionAnalyticsProvider
 from app.services.realtime_analysis import RealtimeAnalysisProvider
 from app.services.storage import StorageService
 
 logger = logging.getLogger(__name__)
+
+PUBLIC_SESSION_STATUS_ACTIVE = "active"
+PUBLIC_SESSION_STATUS_ANALYZING = "analyzing"
+PUBLIC_SESSION_STATUS_FINISHED = "finished"
 
 
 def utcnow() -> datetime:
@@ -70,6 +75,7 @@ class SessionService:
         realtime_analysis: RealtimeAnalysisProvider,
         clinical_recommendations: ClinicalRecommendationsProvider,
         knowledge_extractor: KnowledgeExtractorProvider,
+        post_session_analytics: PostSessionAnalyticsProvider,
     ) -> None:
         self.db = db
         self.settings = settings
@@ -79,6 +85,7 @@ class SessionService:
         self.realtime_analysis = realtime_analysis
         self.clinical_recommendations = clinical_recommendations
         self.knowledge_extractor = knowledge_extractor
+        self.post_session_analytics = post_session_analytics
 
     def create_session(
         self,
@@ -116,7 +123,7 @@ class SessionService:
         self.db.refresh(session)
         return CreateSessionResponse(
             session_id=session.session_id,
-            status=session.status,
+            status=self._public_status(session),
             recording_state=session.recording_state,
             upload_config=self._upload_config(),
             doctor_name=profile.doctor_name,
@@ -321,7 +328,7 @@ class SessionService:
             session_id=session.session_id,
             accepted=True,
             seq=seq,
-            status=session.status,
+            status=self._public_status(session),
             recording_state=session.recording_state,
             ack=Ack(received_seq=seq),
             speech_detected=speech_detected,
@@ -346,7 +353,7 @@ class SessionService:
         self.db.refresh(session)
         return StopRecordingResponse(
             session_id=session.session_id,
-            status=session.status,
+            status=self._public_status(session),
             recording_state=session.recording_state,
             message="Запись остановлена.",
         )
@@ -387,6 +394,11 @@ class SessionService:
             session.processing_state = "processing"
             self.db.flush()
             self._run_post_session_analytics(session)
+
+        if trigger_post_session_analytics and self.settings.post_session_analytics_enabled:
+            session.processing_state = "processing"
+            self.db.flush()
+            self._run_full_transcript_analytics(session)
 
         session.updated_at = utcnow()
         self._upsert_session_snapshot(
@@ -524,7 +536,7 @@ class SessionService:
         if patient_id:
             filters.append(SessionRecord.patient_id == patient_id)
         if status:
-            filters.append(SessionRecord.status == status)
+            filters.extend(self._public_status_filters(status))
 
         query = self._base_session_query().order_by(SessionRecord.created_at.desc())
         count_query = select(func.count()).select_from(SessionRecord)
@@ -587,6 +599,10 @@ class SessionService:
             summary=artifact_map.get("summary"),
             fhir_resources=artifact_map.get("fhir_resources"),
             persistence=artifact_map.get("persistence_report"),
+            post_analytics_summary=artifact_map.get("post_analytics_summary"),
+            post_analytics_insights=artifact_map.get("post_analytics_insights"),
+            post_analytics_recommendations=artifact_map.get("post_analytics_recommendations"),
+            post_analytics_quality=artifact_map.get("post_analytics_quality"),
         )
 
     def _run_post_session_analytics(self, session: SessionRecord) -> None:
@@ -637,6 +653,147 @@ class SessionService:
             )
             session.processing_state = "failed"
             session.last_error = str(exc)
+
+    def _run_full_transcript_analytics(self, session: SessionRecord) -> None:
+        recording_path = self._find_recording_path(session.session_id)
+        if recording_path is None:
+            logger.warning("No recording file for session %s, skipping full-transcript analytics", session.session_id)
+            return
+
+        # Step 1: Full-file transcription
+        mime_type = "audio/webm" if recording_path.suffix == ".webm" else f"audio/{recording_path.suffix.lstrip('.')}"
+        try:
+            file_bytes = recording_path.read_bytes()
+            full_transcription = self.asr_provider.transcribe_full(
+                session_id=session.session_id,
+                file_bytes=file_bytes,
+                file_name=recording_path.name,
+                mime_type=mime_type,
+                timeout_seconds=self.settings.full_transcription_timeout_seconds,
+            )
+            self._log_external_call(
+                session=session,
+                service_name="asr_full_transcription",
+                endpoint="transcribe-full",
+                request_payload={"session_id": session.session_id, "file_name": recording_path.name},
+                response_payload={"full_text_length": len(full_transcription.full_text), "source": full_transcription.source},
+                status="success",
+                error_message=None,
+            )
+        except Exception as exc:
+            logger.warning("Full transcription failed for session %s: %s", session.session_id, exc)
+            self._log_external_call(
+                session=session,
+                service_name="asr_full_transcription",
+                endpoint="transcribe-full",
+                request_payload={"session_id": session.session_id, "file_name": recording_path.name},
+                response_payload=None,
+                status="failed",
+                error_message=str(exc),
+            )
+            return
+
+        if not full_transcription.full_text.strip():
+            logger.info("Full transcription empty for session %s, skipping analytics", session.session_id)
+            return
+
+        # Step 2: Build analytics payload
+        snapshot = session.workspace_snapshot
+        previous_payload = snapshot.payload_json if snapshot and isinstance(snapshot.payload_json, dict) else {}
+        hints_data = previous_payload.get("hints", [])
+        realtime_analysis_data = previous_payload.get("realtime_analysis")
+        chief_complaint = session.profile.chief_complaint if session.profile else None
+
+        analytics_payload = {
+            "session_id": session.session_id,
+            "patient_id": session.patient_id,
+            "encounter_id": session.encounter_id,
+            "full_transcript": full_transcription.full_text,
+            "realtime_transcript": session.stable_transcript or "",
+            "realtime_hints": hints_data if isinstance(hints_data, list) else [],
+            "realtime_analysis": realtime_analysis_data,
+            "chief_complaint": chief_complaint,
+        }
+
+        # Step 3: Call analytics service
+        try:
+            response = self.post_session_analytics.analyze(analytics_payload)
+            self._log_external_call(
+                session=session,
+                service_name=self.post_session_analytics.service_name,
+                endpoint=self.post_session_analytics.endpoint,
+                request_payload={"session_id": session.session_id, "transcript_length": len(full_transcription.full_text)},
+                response_payload=response,
+                status="success",
+                error_message=None,
+            )
+
+            # Step 4: Store results as ExtractedArtifact rows
+            for artifact_type, key in (
+                ("post_analytics_summary", "medical_summary"),
+                ("post_analytics_insights", "critical_insights"),
+                ("post_analytics_recommendations", "follow_up_recommendations"),
+                ("post_analytics_quality", "quality_assessment"),
+            ):
+                if key in response:
+                    self.db.add(
+                        ExtractedArtifact(
+                            session_db_id=session.id,
+                            artifact_type=artifact_type,
+                            payload_json=response[key],
+                        )
+                    )
+
+            # Also store the full transcript
+            self.db.add(
+                ExtractedArtifact(
+                    session_db_id=session.id,
+                    artifact_type="post_analytics_full_transcript",
+                    payload_json={
+                        "full_text": full_transcription.full_text,
+                        "source": full_transcription.source,
+                        "audio_duration": full_transcription.audio_duration,
+                    },
+                )
+            )
+
+            session.processing_state = "completed"
+        except Exception as exc:
+            logger.warning("Post-session analytics failed for session %s: %s", session.session_id, exc)
+            self._log_external_call(
+                session=session,
+                service_name=self.post_session_analytics.service_name,
+                endpoint=self.post_session_analytics.endpoint,
+                request_payload={"session_id": session.session_id},
+                response_payload=None,
+                status="failed",
+                error_message=str(exc),
+            )
+            session.processing_state = "failed"
+            session.last_error = str(exc)
+
+    def _find_recording_path(self, session_id: str):
+        from pathlib import Path
+        session_dir = Path(self.settings.storage_dir) / "sessions" / session_id
+        if not session_dir.exists():
+            return None
+        for recording in session_dir.glob("recording.*"):
+            return recording
+        return None
+
+    def _build_post_analytics_snapshot(self, session: SessionRecord) -> dict | None:
+        artifacts = self.db.scalars(
+            select(ExtractedArtifact)
+            .where(ExtractedArtifact.session_db_id == session.id)
+            .where(ExtractedArtifact.artifact_type.like("post_analytics_%"))
+        ).all()
+        if not artifacts:
+            return None
+        result = {}
+        for artifact in artifacts:
+            key = artifact.artifact_type.replace("post_analytics_", "")
+            result[key] = artifact.payload_json
+        return result
 
     def _log_external_call(
         self,
@@ -703,7 +860,7 @@ class SessionService:
             patient_name=profile.patient_name if profile else None,
             chief_complaint=profile.chief_complaint if profile else None,
             encounter_id=session.encounter_id,
-            status=session.status,
+            status=self._public_status(session),
             recording_state=session.recording_state,
             processing_state=session.processing_state,
             latest_seq=session.latest_seq,
@@ -752,7 +909,7 @@ class SessionService:
         hints = self._build_hint_list_items(session.id)
         updated_at = session.updated_at or utcnow()
         payload = {
-            "status": session.status,
+            "status": self._public_status(session),
             "recording_state": session.recording_state,
             "processing_state": session.processing_state,
             "latest_seq": session.latest_seq,
@@ -762,6 +919,11 @@ class SessionService:
                 realtime_analysis.model_dump(mode="json")
                 if realtime_analysis is not None
                 else previous_payload.get("realtime_analysis")
+            ),
+            "post_session_analytics": (
+                self._build_post_analytics_snapshot(session)
+                if finalized
+                else previous_payload.get("post_session_analytics")
             ),
             "last_error": session.last_error,
             "updated_at": updated_at.isoformat(),
@@ -790,11 +952,29 @@ class SessionService:
     def _build_close_response(self, session: SessionRecord) -> CloseSessionResponse:
         return CloseSessionResponse(
             session_id=session.session_id,
-            status=session.status,
+            status=self._public_status(session),
             recording_state=session.recording_state,
             processing_state=session.processing_state,
             full_transcript_ready=True,
         )
+
+    @staticmethod
+    def _public_status(session: SessionRecord) -> str:
+        if session.status != "closed":
+            return PUBLIC_SESSION_STATUS_ACTIVE
+        if session.processing_state == "processing":
+            return PUBLIC_SESSION_STATUS_ANALYZING
+        return PUBLIC_SESSION_STATUS_FINISHED
+
+    @staticmethod
+    def _public_status_filters(status: str):
+        if status == PUBLIC_SESSION_STATUS_ACTIVE:
+            return [SessionRecord.status != "closed"]
+        if status == PUBLIC_SESSION_STATUS_ANALYZING:
+            return [SessionRecord.status == "closed", SessionRecord.processing_state == "processing"]
+        if status == PUBLIC_SESSION_STATUS_FINISHED:
+            return [SessionRecord.status == "closed", SessionRecord.processing_state != "processing"]
+        return [SessionRecord.status == status]
 
     def _upload_config(self) -> UploadConfig:
         return UploadConfig(

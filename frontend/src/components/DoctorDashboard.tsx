@@ -36,15 +36,15 @@ export function DoctorDashboard({
   const [patientName, setPatientName] = useState('');
   const [chiefComplaint, setChiefComplaint] = useState('');
   const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'created' | 'active' | 'closed'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'analyzing' | 'finished'>('all');
   const [openingSessionId, setOpeningSessionId] = useState<string | null>(null);
 
   const stats = useMemo(() => {
     const total = sessions.length;
     const active = sessions.filter((session) => session.status === 'active').length;
-    const closed = sessions.filter((session) => session.status === 'closed').length;
-    const newest = sessions[0]?.updated_at ?? null;
-    return { total, active, closed, newest };
+    const analyzing = sessions.filter((session) => session.status === 'analyzing').length;
+    const finished = sessions.filter((session) => session.status === 'finished').length;
+    return { total, active, analyzing, finished };
   }, [sessions]);
 
   const filteredSessions = useMemo(() => {
@@ -127,12 +127,12 @@ export function DoctorDashboard({
           <span className="metric-label">активных встреч</span>
         </article>
         <article className="metric-card">
-          <span className="metric-value">{stats.closed}</span>
-          <span className="metric-label">архивных записей</span>
+          <span className="metric-value">{stats.analyzing}</span>
+          <span className="metric-label">в глубоком разборе</span>
         </article>
         <article className="metric-card">
-          <span className="metric-value small">{formatDateTime(stats.newest)}</span>
-          <span className="metric-label">последнее обновление</span>
+          <span className="metric-value">{stats.finished}</span>
+          <span className="metric-label">завершённых сессий</span>
         </article>
       </section>
 
@@ -204,13 +204,13 @@ export function DoctorDashboard({
               <select
                 value={statusFilter}
                 onChange={(event) =>
-                  setStatusFilter(event.target.value as 'all' | 'created' | 'active' | 'closed')
+                  setStatusFilter(event.target.value as 'all' | 'active' | 'analyzing' | 'finished')
                 }
               >
                 <option value="all">Все статусы</option>
-                <option value="created">Подготовка</option>
                 <option value="active">Активные</option>
-                <option value="closed">Завершённые</option>
+                <option value="analyzing">Идёт разбор</option>
+                <option value="finished">Завершённые</option>
               </select>
             </div>
           </div>

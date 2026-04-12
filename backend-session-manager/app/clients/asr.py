@@ -36,6 +36,25 @@ class HttpAsrClient:
                 response.raise_for_status()
                 return response.json()
 
+    def transcribe_full(
+        self,
+        *,
+        session_id: str,
+        file_bytes: bytes,
+        file_name: str,
+        mime_type: str,
+        timeout_seconds: int | None = None,
+    ) -> dict:
+        effective_timeout = timeout_seconds or self.timeout_seconds
+        with httpx.Client(timeout=effective_timeout) as client:
+            response = client.post(
+                f"{self.base_url}/transcribe-full",
+                data={"session_id": session_id},
+                files={"file": (file_name, file_bytes, mime_type)},
+            )
+            response.raise_for_status()
+            return response.json()
+
     def finalize_session_transcript(self, *, session_id: str, transcript: str) -> dict:
         with httpx.Client(timeout=self.timeout_seconds) as client:
             response = client.post(

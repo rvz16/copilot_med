@@ -13,6 +13,7 @@ import type {
   Hint,
   ListSessionsResponse,
   RealtimeAnalysis,
+  PostSessionAnalytics,
   SessionApi,
   SessionDetail,
   SessionSnapshot,
@@ -22,6 +23,7 @@ import type {
 } from '../types/types';
 
 const MOCK_DELAY_MS = 300;
+const MOCK_ANALYTICS_DELAY_MS = 2800;
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -62,6 +64,7 @@ interface MockSessionRecord {
   request: CreateSessionRequest;
   summary: SessionSummary;
   snapshot: SessionSnapshot;
+  analyticsScheduled: boolean;
 }
 
 const sessions = new Map<string, MockSessionRecord>();
@@ -141,6 +144,87 @@ function buildEmptySnapshot(summary: SessionSummary): SessionSnapshot {
   };
 }
 
+function buildPostSessionAnalytics(transcript: string): PostSessionAnalytics {
+  return {
+    summary: {
+      clinical_narrative:
+        transcript || 'Полный пост-сессионный анализ будет собран после завершения консультации.',
+      key_findings: [
+        'Симптомы требуют уточнения динамики и факторов усиления.',
+        'Нужна формализация финального клинического впечатления.',
+      ],
+      primary_impressions: ['Головная боль напряжения'],
+      differential_diagnoses: ['Мигрень без ауры', 'Вторичная головная боль'],
+    },
+    insights: [
+      {
+        category: 'diagnostic_gap',
+        description: 'В финальной беседе не хватило уточнения триггеров и сопутствующих симптомов.',
+        severity: 'medium',
+        confidence: 0.78,
+        evidence: 'В записи нет подтверждения вопросов о сне, стрессе и фоточувствительности.',
+      },
+    ],
+    recommendations: [
+      {
+        action: 'Назначить короткий повторный опрос по красным флагам и триггерам боли.',
+        priority: 'routine',
+        timeframe: '24-48 часов',
+        rationale: 'Это снизит риск пропустить вторичную причину головной боли.',
+      },
+    ],
+    quality: {
+      overall_score: 0.84,
+      metrics: [
+        {
+          metric_name: 'Полнота анамнеза',
+          score: 0.8,
+          description: 'Ключевая жалоба отражена, но не все уточняющие вопросы заданы.',
+          improvement_suggestion: 'Добавить вопросы про стресс, сон и фотофобию.',
+        },
+        {
+          metric_name: 'Структура консультации',
+          score: 0.88,
+          description: 'Консультация выглядит последовательной и логичной.',
+          improvement_suggestion: null,
+        },
+      ],
+    },
+    full_transcript: {
+      full_text: transcript,
+      source: 'mock-post-session-analytics',
+      audio_duration: 18,
+    },
+  };
+}
+
+function scheduleAnalyticsCompletion(record: MockSessionRecord): void {
+  if (record.analyticsScheduled) return;
+  record.analyticsScheduled = true;
+
+  globalThis.setTimeout(() => {
+    const timestamp = isoNow();
+    const analytics = buildPostSessionAnalytics(record.snapshot.transcript);
+
+    record.summary = {
+      ...record.summary,
+      status: 'finished',
+      processing_state: 'completed',
+      updated_at: timestamp,
+      closed_at: record.summary.closed_at ?? timestamp,
+    };
+    record.snapshot = {
+      ...record.snapshot,
+      status: 'finished',
+      processing_state: 'completed',
+      post_session_analytics: analytics,
+      updated_at: timestamp,
+      finalized_at: timestamp,
+    };
+    record.analyticsScheduled = false;
+  }, MOCK_ANALYTICS_DELAY_MS);
+}
+
 function detailFromRecord(record: MockSessionRecord): SessionDetail {
   return {
     ...record.summary,
@@ -172,7 +256,7 @@ export const mockSessionApi: SessionApi = {
       patient_name: payload.patient_name ?? null,
       chief_complaint: payload.chief_complaint ?? null,
       encounter_id: null,
-      status: 'created',
+      status: 'active',
       recording_state: 'idle',
       processing_state: 'pending',
       latest_seq: 0,
@@ -191,11 +275,12 @@ export const mockSessionApi: SessionApi = {
       request: payload,
       summary,
       snapshot: buildEmptySnapshot(summary),
+      analyticsScheduled: false,
     });
 
     const response: CreateSessionResponse = {
       session_id: sessionId,
-      status: 'created',
+      status: 'active',
       recording_state: 'idle',
       upload_config: {
         recommended_chunk_ms: 4000,
@@ -311,27 +396,28 @@ export const mockSessionApi: SessionApi = {
 
     record.summary = {
       ...record.summary,
-      status: 'closed',
+      status: 'analyzing',
       recording_state: 'stopped',
-      processing_state: 'completed',
+      processing_state: 'processing',
       updated_at: timestamp,
       closed_at: timestamp,
       stopped_at: record.summary.stopped_at ?? timestamp,
     };
     record.snapshot = {
       ...record.snapshot,
-      status: 'closed',
+      status: 'analyzing',
       recording_state: 'stopped',
-      processing_state: 'completed',
+      processing_state: 'processing',
       updated_at: timestamp,
-      finalized_at: timestamp,
+      finalized_at: null,
     };
+    scheduleAnalyticsCompletion(record);
 
     const response: CloseSessionResponse = {
       session_id: sessionId,
-      status: 'closed',
+      status: 'analyzing',
       recording_state: 'stopped',
-      processing_state: 'completed',
+      processing_state: 'processing',
       full_transcript_ready: true,
     };
     return response;

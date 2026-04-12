@@ -32,6 +32,15 @@ class FinalizeTranscriptionResult:
     event_type: str = "final"
 
 
+@dataclass(frozen=True)
+class FullTranscriptionResult:
+    full_text: str
+    source: str
+    language: str = "ru"
+    audio_duration: float = 0.0
+    processing_time_sec: float = 0.0
+
+
 class AsrProvider(Protocol):
     """Provider interface for speech-to-text operations."""
 
@@ -48,6 +57,17 @@ class AsrProvider(Protocol):
         ...
 
     def finalize_session_transcript(self, *, session_id: str, stable_text: str) -> FinalizeTranscriptionResult:
+        ...
+
+    def transcribe_full(
+        self,
+        *,
+        session_id: str,
+        file_bytes: bytes,
+        file_name: str,
+        mime_type: str,
+        timeout_seconds: int | None = None,
+    ) -> FullTranscriptionResult:
         ...
 
 
@@ -77,6 +97,24 @@ class MockAsrProvider:
 
     def finalize_session_transcript(self, *, session_id: str, stable_text: str) -> FinalizeTranscriptionResult:
         return FinalizeTranscriptionResult(stable_text=stable_text, source="mock_asr", event_type="final")
+
+    def transcribe_full(
+        self,
+        *,
+        session_id: str,
+        file_bytes: bytes,
+        file_name: str,
+        mime_type: str,
+        timeout_seconds: int | None = None,
+    ) -> FullTranscriptionResult:
+        full_text = "".join(TRANSCRIPT_FRAGMENTS)
+        return FullTranscriptionResult(
+            full_text=full_text,
+            source="mock_asr",
+            language="ru",
+            audio_duration=30.0,
+            processing_time_sec=0.1,
+        )
 
 
 class HttpAsrProvider:
@@ -120,6 +158,30 @@ class HttpAsrProvider:
             stable_text=response.get("stable_text", stable_text),
             source=response.get("source", "external_asr"),
             event_type=response.get("event_type", "final"),
+        )
+
+    def transcribe_full(
+        self,
+        *,
+        session_id: str,
+        file_bytes: bytes,
+        file_name: str,
+        mime_type: str,
+        timeout_seconds: int | None = None,
+    ) -> FullTranscriptionResult:
+        response = self.client.transcribe_full(
+            session_id=session_id,
+            file_bytes=file_bytes,
+            file_name=file_name,
+            mime_type=mime_type,
+            timeout_seconds=timeout_seconds,
+        )
+        return FullTranscriptionResult(
+            full_text=response.get("full_text", ""),
+            source=response.get("source", "external_asr"),
+            language=response.get("language", "ru"),
+            audio_duration=response.get("audio_file_duration", 0.0),
+            processing_time_sec=response.get("processing_time_sec", 0.0),
         )
 
 

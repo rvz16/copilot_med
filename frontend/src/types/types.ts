@@ -5,6 +5,8 @@
 
 // ── Session ─────────────────────────────────
 
+export type SessionLifecycleStatus = 'idle' | 'active' | 'analyzing' | 'finished';
+
 export interface UploadConfig {
   recommended_chunk_ms: number;
   accepted_mime_types: string[];
@@ -170,6 +172,54 @@ export interface CloseSessionResponse {
   full_transcript_ready: boolean;
 }
 
+// ── Post-Session Analytics ─────────────────
+
+export interface PostAnalyticsSummary {
+  clinical_narrative: string;
+  key_findings: string[];
+  primary_impressions: string[];
+  differential_diagnoses: string[];
+}
+
+export interface PostAnalyticsCriticalInsight {
+  category: string;
+  description: string;
+  severity: string;
+  confidence: number;
+  evidence: string;
+}
+
+export interface PostAnalyticsFollowUp {
+  action: string;
+  priority: string;
+  timeframe: string;
+  rationale: string;
+}
+
+export interface PostAnalyticsQualityMetric {
+  metric_name: string;
+  score: number;
+  description: string;
+  improvement_suggestion: string | null;
+}
+
+export interface PostAnalyticsQuality {
+  overall_score: number;
+  metrics: PostAnalyticsQualityMetric[];
+}
+
+export interface PostSessionAnalytics {
+  summary: PostAnalyticsSummary;
+  insights: PostAnalyticsCriticalInsight[];
+  recommendations: PostAnalyticsFollowUp[];
+  quality: PostAnalyticsQuality;
+  full_transcript?: {
+    full_text: string;
+    source: string;
+    audio_duration: number;
+  };
+}
+
 export interface SessionSnapshot {
   status: string;
   recording_state: string;
@@ -178,6 +228,7 @@ export interface SessionSnapshot {
   transcript: string;
   hints: StoredHint[];
   realtime_analysis: RealtimeAnalysis | null;
+  post_session_analytics?: PostSessionAnalytics | null;
   last_error: string | null;
   updated_at: string;
   finalized_at: string | null;

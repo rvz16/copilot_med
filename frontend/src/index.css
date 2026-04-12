@@ -572,6 +572,63 @@ button:disabled,
   margin-bottom: 20px;
 }
 
+.session-progress {
+  margin-bottom: 20px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(23, 49, 59, 0.08);
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.session-progress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.session-progress-head strong {
+  font-size: 0.96rem;
+}
+
+.session-progress-head span,
+.session-progress p {
+  color: var(--muted);
+}
+
+.session-progress p {
+  margin: 10px 0 0;
+  line-height: 1.5;
+}
+
+.session-progress-track {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(23, 49, 59, 0.08);
+}
+
+.session-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--teal) 0%, var(--accent) 100%);
+  transition: width 220ms ease;
+}
+
+.session-progress-analyzing .session-progress-fill {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(203, 106, 51, 0.95) 0%,
+      rgba(46, 122, 114, 0.95) 100%
+    );
+}
+
+.session-progress-finished .session-progress-fill {
+  background: linear-gradient(90deg, #2b8f66 0%, #43b07a 100%);
+}
+
 .session-facts {
   gap: 12px;
 }
@@ -628,6 +685,11 @@ button:disabled,
   color: var(--teal);
 }
 
+.badge-analyzing {
+  background: rgba(203, 106, 51, 0.16);
+  color: var(--accent-strong);
+}
+
 .badge-recording {
   background: rgba(203, 106, 51, 0.14);
   color: var(--accent-strong);
@@ -641,6 +703,11 @@ button:disabled,
 .badge-closed {
   background: rgba(51, 71, 128, 0.13);
   color: #344780;
+}
+
+.badge-finished {
+  background: rgba(43, 143, 102, 0.16);
+  color: #257a58;
 }
 
 .transcript-body {
@@ -887,6 +954,271 @@ button:disabled,
   color: var(--danger);
 }
 
+/* ── Post-Session Analytics Panel ────────── */
+
+.psa-panel {
+  border: 1px solid rgba(51, 71, 128, 0.18);
+  background: rgba(245, 247, 255, 0.92);
+}
+
+.psa-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.psa-header h2 {
+  margin: 0;
+  font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  letter-spacing: -0.02em;
+}
+
+.psa-pending {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.psa-pending-track {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(51, 71, 128, 0.12);
+}
+
+.psa-pending-fill {
+  width: 38%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #344780 0%, #cb6a33 100%);
+  animation: psa-loading 1.4s ease-in-out infinite alternate;
+}
+
+.psa-pending p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+@keyframes psa-loading {
+  from {
+    transform: translateX(-10%);
+  }
+  to {
+    transform: translateX(145%);
+  }
+}
+
+.psa-badge {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(51, 71, 128, 0.12);
+  color: #344780;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.psa-section {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(51, 71, 128, 0.1);
+}
+
+.psa-section:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.psa-section-title {
+  margin: 0 0 12px;
+  font-size: 0.94rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #344780;
+}
+
+.psa-narrative {
+  margin: 0 0 14px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.psa-subsection {
+  margin-bottom: 12px;
+}
+
+.psa-subsection-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.psa-pills-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.psa-pill-muted {
+  background: rgba(51, 71, 128, 0.08);
+  color: #344780;
+}
+
+.psa-bullet-list {
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.7;
+}
+
+.psa-bullet-list li {
+  margin-bottom: 4px;
+}
+
+.psa-insights-list,
+.psa-recommendations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.psa-insight-card {
+  border-left: 3px solid rgba(51, 71, 128, 0.25);
+}
+
+.psa-evidence {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(51, 71, 128, 0.06);
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-style: italic;
+  line-height: 1.6;
+}
+
+.psa-priority-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.psa-timeframe {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.psa-rationale {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.psa-quality-overview {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.psa-overall-score {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 16px 20px;
+  border-radius: 20px;
+  background: rgba(51, 71, 128, 0.08);
+}
+
+.psa-overall-value {
+  font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  font-size: 2.8rem;
+  font-weight: 700;
+  color: #344780;
+  line-height: 1;
+}
+
+.psa-overall-label {
+  color: var(--muted);
+  font-size: 1.1rem;
+}
+
+.psa-metrics-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.psa-metric-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.psa-score-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.psa-score-label {
+  min-width: 140px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.psa-score-track {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(51, 71, 128, 0.1);
+  overflow: hidden;
+}
+
+.psa-score-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 300ms ease;
+}
+
+.psa-score-value {
+  min-width: 36px;
+  text-align: right;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.psa-metric-desc {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.psa-metric-suggestion {
+  margin: 2px 0 0;
+  font-size: 0.82rem;
+  color: #344780;
+  font-style: italic;
+  line-height: 1.5;
+}
+
 @media (max-width: 1180px) {
   .hero-card,
   .dashboard-grid,
@@ -898,7 +1230,8 @@ button:disabled,
   .doctor-grid,
   .dashboard-stats,
   .suggestion-columns,
-  .analysis-main-grid {
+  .analysis-main-grid,
+  .psa-quality-overview {
     grid-template-columns: 1fr;
   }
 

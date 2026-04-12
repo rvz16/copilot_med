@@ -5,9 +5,9 @@
 
 import { useCallback, useState } from 'react';
 import { api } from '../api';
-import type { CreateSessionRequest, UploadConfig } from '../types/types';
+import type { CreateSessionRequest, SessionLifecycleStatus, UploadConfig } from '../types/types';
 
-export type SessionStatus = 'idle' | 'created' | 'active' | 'closed';
+export type SessionStatus = SessionLifecycleStatus;
 export type RecordingState = 'idle' | 'recording' | 'stopped';
 
 export function useSession() {

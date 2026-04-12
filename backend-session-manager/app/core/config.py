@@ -65,6 +65,20 @@ class Settings(BaseSettings):
         default="http://localhost:8000/extract",
         alias="KNOWLEDGE_EXTRACTOR_URL",
     )
+    post_session_analytics_enabled: bool = Field(default=True, alias="POST_SESSION_ANALYTICS_ENABLED")
+    post_session_analytics_mode: str = Field(default="mock", alias="POST_SESSION_ANALYTICS_MODE")
+    post_session_analytics_url: str = Field(
+        default="http://localhost:8003/analyze",
+        alias="POST_SESSION_ANALYTICS_URL",
+    )
+    post_session_analytics_timeout_seconds: int = Field(
+        default=180,
+        alias="POST_SESSION_ANALYTICS_TIMEOUT_SECONDS",
+    )
+    full_transcription_timeout_seconds: int = Field(
+        default=300,
+        alias="FULL_TRANSCRIPTION_TIMEOUT_SECONDS",
+    )
     http_timeout_seconds: int = Field(default=20, alias="HTTP_TIMEOUT_SECONDS")
 
     @field_validator("cors_origins", "accepted_mime_types", mode="before")

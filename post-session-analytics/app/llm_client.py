@@ -1,0 +1,152 @@
+"""OpenAI-compatible LLM client for post-session clinical analysis."""
+from __future__ import annotations
+
+import json
+import logging
+import re
+import time
+from typing import Any
+
+import httpx
+
+from app.config import (
+    LLM_API_KEY,
+    LLM_BASE_URL,
+    LLM_EXTRA_HEADERS_JSON,
+    LLM_HTTP_REFERER,
+    LLM_TIMEOUT,
+    LLM_X_TITLE,
+    MAX_TOKENS,
+    MODEL_NAME,
+    TEMPERATURE,
+)
+
+logger = logging.getLogger("medcopilot.post_analytics.llm")
+
+
+class PostAnalyticsLLMClient:
+    """Synchronous OpenAI-compatible client targeting gpt-oss-120b."""
+
+    def __init__(self) -> None:
+        self.base_url = LLM_BASE_URL.rstrip("/")
+        self.model_name = MODEL_NAME
+        self.api_key = LLM_API_KEY
+        self.max_tokens = MAX_TOKENS
+        self.temperature = TEMPERATURE
+        self.timeout = LLM_TIMEOUT
+        self.extra_headers = self._load_extra_headers(LLM_EXTRA_HEADERS_JSON)
+        logger.info(
+            "PostAnalyticsLLMClient: base_url=%s model=%s max_tokens=%d temperature=%.2f timeout=%.1fs",
+            self.base_url, self.model_name, self.max_tokens, self.temperature, self.timeout,
+        )
+
+    def generate(self, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+        body = {
+            "model": self.model_name,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "stream": False,
+        }
+
+        endpoint = self._chat_endpoint()
+        headers = self._build_headers()
+
+        start = time.perf_counter()
+        with httpx.Client(timeout=self.timeout) as client:
+            response = client.post(endpoint, json=body, headers=headers)
+            response.raise_for_status()
+
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        data = response.json()
+        content = self._extract_content(data)
+        logger.info("LLM responded in %dms, content length=%d", elapsed_ms, len(content))
+
+        parsed = self._extract_json(content)
+        if parsed is None:
+            logger.error("Failed to parse JSON from LLM output: %.500s", content)
+            raise ValueError("LLM output is not valid JSON")
+
+        return parsed
+
+    def _chat_endpoint(self) -> str:
+        if self.base_url.endswith("/chat/completions"):
+            return self.base_url
+        return f"{self.base_url}/chat/completions"
+
+    def _build_headers(self) -> dict[str, str]:
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        if LLM_HTTP_REFERER:
+            headers["HTTP-Referer"] = LLM_HTTP_REFERER
+        if LLM_X_TITLE:
+            headers["X-Title"] = LLM_X_TITLE
+        headers.update(self.extra_headers)
+        return headers
+
+    @staticmethod
+    def _extract_content(data: dict[str, Any]) -> str:
+        choices = data.get("choices", [])
+        if not choices:
+            return ""
+        message = choices[0].get("message", {})
+        content = message.get("content", "")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts = []
+            for item in content:
+                if isinstance(item, str):
+                    parts.append(item)
+                elif isinstance(item, dict) and isinstance(item.get("text"), str):
+                    parts.append(item["text"])
+            return "".join(parts)
+        return ""
+
+    @staticmethod
+    def _extract_json(raw_text: str) -> dict[str, Any] | None:
+        text = re.sub(r"<think>.*?</think>", "", raw_text, flags=re.DOTALL).strip()
+        if text.startswith("```"):
+            text = text.strip("`")
+            if text.startswith("json"):
+                text = text[4:].strip()
+
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+
+        start = text.find("{")
+        if start < 0:
+            return None
+        depth = 0
+        for idx in range(start, len(text)):
+            if text[idx] == "{":
+                depth += 1
+            elif text[idx] == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        parsed = json.loads(text[start : idx + 1])
+                        return parsed if isinstance(parsed, dict) else None
+                    except json.JSONDecodeError:
+                        return None
+        return None
+
+    @staticmethod
+    def _load_extra_headers(raw: str) -> dict[str, str]:
+        if not raw.strip():
+            return {}
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+        if not isinstance(parsed, dict):
+            return {}
+        return {k: v for k, v in parsed.items() if isinstance(k, str) and isinstance(v, str)}

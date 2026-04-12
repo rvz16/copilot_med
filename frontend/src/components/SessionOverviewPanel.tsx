@@ -39,6 +39,31 @@ export function SessionOverviewPanel({
   onCloseSession,
   onBackToDashboard,
 }: Props) {
+  const sessionProgress = (() => {
+    if (status === 'finished') {
+      return {
+        value: 100,
+        tone: 'finished',
+        title: 'Пост-сессионный разбор завершён',
+        description: 'Итоговые материалы сохранены и доступны в архиве консультации.',
+      };
+    }
+    if (status === 'analyzing' || processingState === 'processing') {
+      return {
+        value: 76,
+        tone: 'analyzing',
+        title: 'Идёт пост-сессионный разбор',
+        description: 'Сервис собирает полный транскрипт и формирует углублённую аналитику.',
+      };
+    }
+    return {
+      value: latestSeq > 0 ? 38 : 16,
+      tone: 'active',
+      title: 'Сессия активна',
+      description: 'Консультация ещё не завершена. Углублённый разбор начнётся после закрытия сессии.',
+    };
+  })();
+
   return (
     <section className="panel session-overview-panel">
       <div className="section-heading compact">
@@ -49,6 +74,17 @@ export function SessionOverviewPanel({
       <p className="session-overview-subtitle">
         {doctorName} · {doctorSpecialty}
       </p>
+
+      <div className={`session-progress session-progress-${sessionProgress.tone}`}>
+        <div className="session-progress-head">
+          <strong>{sessionProgress.title}</strong>
+          <span>{sessionProgress.value}%</span>
+        </div>
+        <div className="session-progress-track" aria-hidden="true">
+          <div className="session-progress-fill" style={{ width: `${sessionProgress.value}%` }} />
+        </div>
+        <p>{sessionProgress.description}</p>
+      </div>
 
       <dl className="session-facts">
         <div>

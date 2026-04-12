@@ -1,10 +1,11 @@
 import { HintsPanel } from './HintsPanel';
 import { PatientContextPanel } from './PatientContextPanel';
+import { PostSessionAnalyticsPanel } from './PostSessionAnalyticsPanel';
 import { RecordingControls } from './RecordingControls';
 import { SessionOverviewPanel } from './SessionOverviewPanel';
 import { StatusPanel } from './StatusPanel';
 import { TranscriptPanel } from './TranscriptPanel';
-import type { Hint, RealtimeAnalysis } from '../types/types';
+import type { Hint, PostSessionAnalytics, RealtimeAnalysis } from '../types/types';
 import type { UploadStatus } from '../hooks/useUploader';
 
 interface Props {
@@ -25,6 +26,7 @@ interface Props {
   transcript: string;
   hints: Hint[];
   analysis: RealtimeAnalysis | null;
+  postSessionAnalytics?: PostSessionAnalytics | null;
   chunksUploaded: number;
   uploadStatus: UploadStatus;
   isRecording: boolean;
@@ -55,6 +57,7 @@ export function ConsultationWorkspace({
   transcript,
   hints,
   analysis,
+  postSessionAnalytics,
   chunksUploaded,
   uploadStatus,
   isRecording,
@@ -142,6 +145,9 @@ export function ConsultationWorkspace({
             analysis={analysis}
             recommendedDocuments={recommendedDocuments}
           />
+          {mode === 'archive' && (
+            <PostSessionAnalyticsPanel analytics={postSessionAnalytics ?? null} status={status} />
+          )}
         </div>
       </div>
 

@@ -18,6 +18,10 @@ export function formatStatusLabel(status: string): string {
       return 'подготовка';
     case 'active':
       return 'активна';
+    case 'analyzing':
+      return 'идёт разбор';
+    case 'finished':
+      return 'завершена';
     case 'closed':
       return 'завершена';
     case 'recording':
@@ -27,7 +31,7 @@ export function formatStatusLabel(status: string): string {
     case 'pending':
       return 'ожидает';
     case 'processing':
-      return 'обработка';
+      return 'глубокий разбор';
     case 'completed':
       return 'готово';
     case 'failed':

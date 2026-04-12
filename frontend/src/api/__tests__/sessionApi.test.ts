@@ -45,7 +45,7 @@ describe('sessionApi', () => {
   it('createSession sends POST with doctor and patient metadata', async () => {
     const response: CreateSessionResponse = {
       session_id: 'sess_1',
-      status: 'created',
+      status: 'active',
       recording_state: 'idle',
       upload_config: {
         recommended_chunk_ms: 4000,
@@ -133,9 +133,9 @@ describe('sessionApi', () => {
   it('closeSession signals post-session analytics', async () => {
     const response: CloseSessionResponse = {
       session_id: 'sess_1',
-      status: 'closed',
+      status: 'analyzing',
       recording_state: 'stopped',
-      processing_state: 'completed',
+      processing_state: 'processing',
       full_transcript_ready: true,
     };
     globalThis.fetch = mockFetchOk(response);
@@ -144,7 +144,7 @@ describe('sessionApi', () => {
 
     const [, opts] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(JSON.parse(opts.body)).toEqual({ trigger_post_session_analytics: true });
-    expect(result.status).toBe('closed');
+    expect(result.status).toBe('analyzing');
   });
 
   it('getSession calls the detail endpoint', async () => {
@@ -157,7 +157,7 @@ describe('sessionApi', () => {
       patient_name: 'Olivia Bennett',
       chief_complaint: 'Recurring headache',
       encounter_id: null,
-      status: 'closed',
+      status: 'finished',
       recording_state: 'stopped',
       processing_state: 'completed',
       latest_seq: 3,
@@ -171,7 +171,7 @@ describe('sessionApi', () => {
       closed_at: '2026-04-12T10:15:00.000Z',
       snapshot_available: true,
       snapshot: {
-        status: 'closed',
+        status: 'finished',
         recording_state: 'stopped',
         processing_state: 'completed',
         latest_seq: 3,
@@ -189,7 +189,7 @@ describe('sessionApi', () => {
 
     const [url] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(url).toContain('/api/v1/sessions/sess_1');
-    expect(result.snapshot?.status).toBe('closed');
+    expect(result.snapshot?.status).toBe('finished');
   });
 
   it('listSessions serializes filters into query params', async () => {
@@ -203,7 +203,7 @@ describe('sessionApi', () => {
 
     const result = await sessionApi.listSessions({
       doctorId: 'doc_1',
-      status: 'closed',
+      status: 'finished',
       limit: 20,
       offset: 0,
     });
@@ -211,7 +211,7 @@ describe('sessionApi', () => {
     const [url] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(url).toContain('/api/v1/sessions?');
     expect(url).toContain('doctor_id=doc_1');
-    expect(url).toContain('status=closed');
+    expect(url).toContain('status=finished');
     expect(result.total).toBe(0);
   });
 
