@@ -5,6 +5,19 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class LLMConfigOverride(BaseModel):
+    provider: str = Field(min_length=1)
+    model_name: str = Field(min_length=1)
+    base_url: str | None = None
+    api_key: str | None = None
+    api_version: str | None = None
+    http_referer: str | None = None
+    x_title: str | None = None
+    extra_headers_json: str | None = None
+
+    model_config = ConfigDict(extra="forbid", protected_namespaces=())
+
+
 class AssistContext(BaseModel):
     language: Literal["ru", "en"] = "en"
     speaker_labels: bool = False
@@ -20,6 +33,7 @@ class AssistRequest(BaseModel):
     patient_id: str | None = None
     transcript_chunk: str = Field(min_length=1)
     context: AssistContext = Field(default_factory=AssistContext)
+    llm_config: LLMConfigOverride | None = None
 
     model_config = ConfigDict(extra="forbid")
 

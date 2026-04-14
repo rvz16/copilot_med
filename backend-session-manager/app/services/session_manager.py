@@ -32,6 +32,7 @@ from app.schemas.session import (
     ListSessionsResponse,
     RecommendedDocumentResponse,
     RealtimeAnalysisResponse,
+    SessionLLMConfigResponse,
     SessionDetailResponse,
     SessionSummaryResponse,
     StopRecordingResponse,
@@ -98,6 +99,7 @@ class SessionService:
         doctor_specialty: str | None = None,
         patient_name: str | None = None,
         chief_complaint: str | None = None,
+        llm_config: dict | None = None,
     ) -> CreateSessionResponse:
         session = SessionRecord(
             session_id=self._new_public_id("sess"),
@@ -116,6 +118,7 @@ class SessionService:
             doctor_specialty=doctor_specialty,
             patient_name=patient_name,
             chief_complaint=chief_complaint,
+            llm_config_json=self._normalize_session_llm_config(llm_config),
         )
         self.db.add(profile)
         session.profile = profile
@@ -132,6 +135,7 @@ class SessionService:
             doctor_specialty=profile.doctor_specialty,
             patient_name=profile.patient_name,
             chief_complaint=profile.chief_complaint,
+            llm_config=self._public_session_llm_config(session),
         )
 
     def upload_audio_chunk(
@@ -239,6 +243,7 @@ class SessionService:
                             "language": self.settings.realtime_analysis_language,
                             "session_id": session.session_id,
                         },
+                        "llm_config": self._session_llm_config(session),
                     }
                     try:
                         analysis_raw = self.realtime_analysis.analyze(analysis_payload)
@@ -639,6 +644,7 @@ class SessionService:
             "transcript": session.stable_transcript or "",
             "persist": self.settings.knowledge_extractor_persist_fhir,
             "sync_ehr": self.settings.knowledge_extractor_sync_ehr,
+            "llm_config": self._session_llm_config(session),
         }
         try:
             response = self.knowledge_extractor.extract(payload)
@@ -767,6 +773,7 @@ class SessionService:
             "realtime_analysis": realtime_analysis_data,
             "clinical_recommendations": recommended_documents,
             "chief_complaint": chief_complaint,
+            "llm_config": self._session_llm_config(session),
         }
 
         # Step 3: Call analytics service
@@ -1038,12 +1045,26 @@ class SessionService:
                 session_db_id=session.id,
                 service_name=service_name,
                 endpoint=endpoint,
-                request_payload_json=request_payload,
-                response_payload_json=response_payload,
+                request_payload_json=self._redact_sensitive_payload(request_payload),
+                response_payload_json=self._redact_sensitive_payload(response_payload),
                 status=status,
                 error_message=error_message,
             )
         )
+
+    @classmethod
+    def _redact_sensitive_payload(cls, payload: dict | list | None):
+        if isinstance(payload, dict):
+            result = {}
+            for key, value in payload.items():
+                if key in {"api_key", "extra_headers_json"} and value is not None:
+                    result[key] = "***redacted***"
+                else:
+                    result[key] = cls._redact_sensitive_payload(value)
+            return result
+        if isinstance(payload, list):
+            return [cls._redact_sensitive_payload(item) for item in payload]
+        return payload
 
     @staticmethod
     def _base_session_query():
@@ -1100,6 +1121,7 @@ class SessionService:
             stopped_at=session.stopped_at,
             closed_at=session.closed_at,
             snapshot_available=session.workspace_snapshot is not None,
+            llm_config=self._public_session_llm_config(session),
         )
 
     def _build_snapshot_response(
@@ -1115,6 +1137,47 @@ class SessionService:
         return SessionDetailResponse(
             **summary.model_dump(),
             snapshot=self._build_snapshot_response(session.workspace_snapshot),
+        )
+
+    @staticmethod
+    def _normalize_session_llm_config(llm_config: dict | None) -> dict | None:
+        if not isinstance(llm_config, dict):
+            return None
+        normalized = {
+            key: value.strip()
+            for key, value in llm_config.items()
+            if isinstance(key, str) and isinstance(value, str) and value.strip()
+        }
+        provider = llm_config.get("provider")
+        model_name = llm_config.get("model_name")
+        if not isinstance(provider, str) or not provider.strip():
+            return None
+        if not isinstance(model_name, str) or not model_name.strip():
+            return None
+        normalized["provider"] = provider.strip()
+        normalized["model_name"] = model_name.strip()
+        return normalized
+
+    @staticmethod
+    def _session_llm_config(session: SessionRecord) -> dict | None:
+        profile = session.profile
+        if profile is None or not isinstance(profile.llm_config_json, dict):
+            return None
+        return dict(profile.llm_config_json)
+
+    def _public_session_llm_config(self, session: SessionRecord) -> SessionLLMConfigResponse | None:
+        llm_config = self._session_llm_config(session)
+        if llm_config is None:
+            return None
+        return SessionLLMConfigResponse(
+            provider=str(llm_config.get("provider", "")).strip(),
+            model_name=str(llm_config.get("model_name", "")).strip(),
+            base_url=llm_config.get("base_url"),
+            api_version=llm_config.get("api_version"),
+            http_referer=llm_config.get("http_referer"),
+            x_title=llm_config.get("x_title"),
+            has_api_key=bool(llm_config.get("api_key")),
+            has_extra_headers=bool(llm_config.get("extra_headers_json")),
         )
 
     def _upsert_session_snapshot(
@@ -1145,6 +1208,7 @@ class SessionService:
             if finalized
             else previous_payload.get("post_session_analytics")
         )
+        public_llm_config = self._public_session_llm_config(session)
         transcript_text = session.stable_transcript or session.current_transcript or ""
         archived_full_text = self._extract_full_transcript_text(post_session_analytics)
         if finalized and archived_full_text:
@@ -1163,6 +1227,8 @@ class SessionService:
             ),
             "knowledge_extraction": knowledge_extraction,
             "post_session_analytics": post_session_analytics,
+            "llm_config": previous_payload.get("llm_config")
+            or (public_llm_config.model_dump(mode="json") if public_llm_config is not None else None),
             "last_error": session.last_error,
             "updated_at": updated_at.isoformat(),
             "finalized_at": (

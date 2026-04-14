@@ -11,6 +11,7 @@ class DummyResponse:
     def __init__(self, payload: dict, status_code: int = 200) -> None:
         self.payload = payload
         self.status_code = status_code
+        self.headers: dict[str, str] = {}
 
     def raise_for_status(self) -> None:
         return None
@@ -91,3 +92,42 @@ def test_openai_compatible_provider_posts_bearer_request(monkeypatch) -> None:
     assert captured["kwargs"]["json"]["stream"] is False
     assert "format" not in captured["kwargs"]["json"]
     assert result["suggestions"][0]["text"] == "рак легких"
+
+def test_azure_openai_provider_uses_api_key_and_v1_path(monkeypatch) -> None:
+    captured: dict = {}
+
+    async def fake_post(self, url: str, **kwargs):
+        del self
+        captured["url"] = url
+        captured["kwargs"] = kwargs
+        return DummyResponse(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": '{"suggestions":[],"drug_interactions":[],"extracted_facts":{"symptoms":[],"conditions":[],"medications":[],"allergies":[],"vitals":{"age":null,"weight_kg":null,"height_cm":null,"bp":null,"hr":null,"temp_c":null}},"knowledge_refs":[]}'
+                        }
+                    }
+                ]
+            }
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    client = LLMClient(
+        provider="azure_openai",
+        base_url="https://aoai.example.com",
+        model_name="gpt-4.1-mini",
+        api_key="azure-key",
+        api_version="2024-10-21",
+        timeout=5.0,
+    )
+    try:
+        result = asyncio.run(client.generate_structured("Patient reports cough.", language="en"))
+    finally:
+        asyncio.run(client.close())
+
+    assert captured["url"] == "https://aoai.example.com/openai/v1/chat/completions?api-version=2024-10-21"
+    assert captured["kwargs"]["headers"]["api-key"] == "azure-key"
+    assert "Authorization" not in captured["kwargs"]["headers"]
+    assert result["errors"] == []

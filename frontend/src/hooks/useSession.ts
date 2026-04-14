@@ -5,7 +5,7 @@
 
 import { useCallback, useState } from 'react';
 import { api } from '../api';
-import type { CreateSessionRequest, SessionLifecycleStatus, UploadConfig } from '../types/types';
+import type { CreateSessionRequest, SessionLifecycleStatus, SessionLLMConfig, UploadConfig } from '../types/types';
 
 export type SessionStatus = SessionLifecycleStatus;
 export type RecordingState = 'idle' | 'recording' | 'stopped';
@@ -15,6 +15,7 @@ export function useSession() {
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>('idle');
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [uploadConfig, setUploadConfig] = useState<UploadConfig | null>(null);
+  const [llmConfig, setLlmConfig] = useState<SessionLLMConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const createSession = useCallback(async (payload: CreateSessionRequest) => {
@@ -25,6 +26,7 @@ export function useSession() {
       setSessionStatus(res.status as SessionStatus);
       setRecordingState(res.recording_state as RecordingState);
       setUploadConfig(res.upload_config);
+      setLlmConfig(res.llm_config ?? null);
       return res;
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Не удалось создать сессию');
@@ -68,6 +70,7 @@ export function useSession() {
     setSessionStatus('idle');
     setRecordingState('idle');
     setUploadConfig(null);
+    setLlmConfig(null);
     setError(null);
   }, []);
 
@@ -76,6 +79,7 @@ export function useSession() {
     sessionStatus,
     recordingState,
     uploadConfig,
+    llmConfig,
     error,
     setRecordingState,
     setSessionStatus,

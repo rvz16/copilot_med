@@ -32,6 +32,7 @@ def create_session(
         doctor_specialty=payload.doctor_specialty,
         patient_name=payload.patient_name,
         chief_complaint=payload.chief_complaint,
+        llm_config=payload.llm_config.model_dump(mode="json") if payload.llm_config is not None else None,
     )
 
 

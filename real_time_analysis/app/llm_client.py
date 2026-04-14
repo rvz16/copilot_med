@@ -7,6 +7,7 @@ import os
 import re
 import time
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx
 
@@ -22,6 +23,13 @@ _OPENAI_COMPATIBLE_PROVIDERS = {
     "google-ai",
     "google_ai_openai",
     "google-openai",
+    "gemini",
+    "yandexgpt",
+}
+
+_AZURE_OPENAI_PROVIDERS = {
+    "azure_openai",
+    "azure-openai",
 }
 
 SYSTEM_PROMPT = """\
@@ -44,6 +52,10 @@ class LLMClient:
         model_name: str | None = None,
         provider: str | None = None,
         api_key: str | None = None,
+        api_version: str | None = None,
+        http_referer: str | None = None,
+        x_title: str | None = None,
+        extra_headers_json: str | None = None,
         max_tokens: int = 512,
         temperature: float = 0.0,
         timeout: float = 30.0,
@@ -52,12 +64,19 @@ class LLMClient:
         self.base_url = (base_url or os.getenv("LLM_BASE_URL", "http://localhost:11434")).rstrip("/")
         self.model_name = model_name or os.getenv("MODEL_NAME", "qwen3:4b")
         self.api_key = api_key if api_key is not None else os.getenv("LLM_API_KEY")
+        self.api_version = (
+            api_version if api_version is not None else os.getenv("LLM_API_VERSION", "")
+        ).strip()
         self.max_tokens = int(os.getenv("MAX_TOKENS", "1024"))
         self.temperature = float(os.getenv("TEMPERATURE", str(temperature)))
         self.timeout = float(os.getenv("LLM_TIMEOUT", str(timeout)))
-        self.http_referer = os.getenv("LLM_HTTP_REFERER", "").strip()
-        self.x_title = os.getenv("LLM_X_TITLE", "").strip()
-        self.extra_headers = self._load_extra_headers(os.getenv("LLM_EXTRA_HEADERS_JSON", ""))
+        self.http_referer = (
+            http_referer if http_referer is not None else os.getenv("LLM_HTTP_REFERER", "")
+        ).strip()
+        self.x_title = (x_title if x_title is not None else os.getenv("LLM_X_TITLE", "")).strip()
+        self.extra_headers = self._load_extra_headers(
+            extra_headers_json if extra_headers_json is not None else os.getenv("LLM_EXTRA_HEADERS_JSON", "")
+        )
         self._client = httpx.AsyncClient(timeout=self.timeout)
         logger.info(
             "LLMClient initialized: provider=%s, base_url=%s, model=%s, "
@@ -156,10 +175,35 @@ class LLMClient:
     async def close(self) -> None:
         await self._client.aclose()
 
+    def with_override(self, override: dict[str, Any] | Any | None) -> "LLMClient":
+        if override is None:
+            return self
+
+        if hasattr(override, "model_dump"):
+            override_payload = override.model_dump(mode="json")
+        elif isinstance(override, dict):
+            override_payload = dict(override)
+        else:
+            raise TypeError("unsupported_llm_override")
+
+        return LLMClient(
+            provider=override_payload.get("provider", self.provider),
+            base_url=override_payload.get("base_url", self.base_url),
+            model_name=override_payload.get("model_name", self.model_name),
+            api_key=override_payload.get("api_key", self.api_key),
+            api_version=override_payload.get("api_version") or self.api_version,
+            http_referer=override_payload.get("http_referer", self.http_referer),
+            x_title=override_payload.get("x_title", self.x_title),
+            extra_headers_json=override_payload.get("extra_headers_json", json.dumps(self.extra_headers)),
+            max_tokens=self.max_tokens,
+            temperature=self.temperature,
+            timeout=self.timeout,
+        )
+
     async def _generate_raw_text(self, body: dict[str, Any]) -> tuple[str, int]:
         if self.provider == "ollama":
             return await self._generate_ollama_raw_text(body)
-        if self.provider in _OPENAI_COMPATIBLE_PROVIDERS:
+        if self.provider in _OPENAI_COMPATIBLE_PROVIDERS or self.provider in _AZURE_OPENAI_PROVIDERS:
             return await self._generate_openai_compatible_raw_text(body)
         raise RuntimeError(f"unsupported_llm_provider: {self.provider}")
 
@@ -239,12 +283,21 @@ class LLMClient:
 
     def _openai_chat_endpoint(self) -> str:
         if self.base_url.endswith("/chat/completions"):
-            return self.base_url
-        return f"{self.base_url}/chat/completions"
+            endpoint = self.base_url
+        elif self.provider in _AZURE_OPENAI_PROVIDERS:
+            endpoint = f"{self.base_url}/openai/v1/chat/completions"
+        else:
+            endpoint = f"{self.base_url}/chat/completions"
+        if self.provider in _AZURE_OPENAI_PROVIDERS and self.api_version:
+            return self._append_query_param(endpoint, "api-version", self.api_version)
+        return endpoint
 
     def _openai_headers(self) -> dict[str, str]:
         headers: dict[str, str] = {}
-        if self.api_key:
+        if self.provider in _AZURE_OPENAI_PROVIDERS:
+            if self.api_key:
+                headers["api-key"] = self.api_key
+        elif self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         if self.http_referer:
             headers["HTTP-Referer"] = self.http_referer
@@ -252,6 +305,15 @@ class LLMClient:
             headers["X-Title"] = self.x_title
         headers.update(self.extra_headers)
         return headers
+
+    @staticmethod
+    def _append_query_param(url: str, key: str, value: str) -> str:
+        parts = urlsplit(url)
+        query = dict(parse_qsl(parts.query, keep_blank_values=True))
+        if key in query:
+            return url
+        query[key] = value
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
     @staticmethod
     def _extract_openai_message_content(payload: dict[str, Any]) -> str:

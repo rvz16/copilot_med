@@ -4,6 +4,7 @@ import { ConsultationWorkspace } from './components/ConsultationWorkspace';
 import { DoctorDashboard } from './components/DoctorDashboard';
 import { LandingPage } from './components/LandingPage';
 import { LoginPage } from './components/LoginPage';
+import { DEFAULT_LLM_CONFIG, cloneLlmConfig, publicConfigFromInput } from './data/llmProfiles';
 import {
   SAMPLE_DOCTORS,
   authenticateDoctor,
@@ -13,10 +14,11 @@ import {
 import { useRecorder } from './hooks/useRecorder';
 import { useSession } from './hooks/useSession';
 import { useUploader } from './hooks/useUploader';
-import type { CreateSessionRequest, SessionDetail, SessionSummary } from './types/types';
+import type { CreateSessionRequest, SessionDetail, SessionLLMConfigInput, SessionSummary } from './types/types';
 
 const IS_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
 const AUTH_STORAGE_KEY = 'medcopilot.activeDoctorId';
+const LLM_CONFIG_STORAGE_KEY = 'medcopilot.defaultLlmConfig';
 
 type Screen = 'landing' | 'login' | 'dashboard' | 'workspace';
 
@@ -34,6 +36,29 @@ function readStoredDoctor(): DoctorAccount | null {
   return findDoctorById(window.localStorage.getItem(AUTH_STORAGE_KEY));
 }
 
+function readStoredLlmConfig(): SessionLLMConfigInput {
+  if (typeof window === 'undefined') {
+    return cloneLlmConfig(DEFAULT_LLM_CONFIG);
+  }
+
+  const raw = window.localStorage.getItem(LLM_CONFIG_STORAGE_KEY);
+  if (!raw) {
+    return cloneLlmConfig(DEFAULT_LLM_CONFIG);
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<SessionLLMConfigInput>;
+    return cloneLlmConfig({
+      ...DEFAULT_LLM_CONFIG,
+      ...parsed,
+      provider: parsed.provider ?? DEFAULT_LLM_CONFIG.provider,
+      model_name: parsed.model_name ?? DEFAULT_LLM_CONFIG.model_name,
+    });
+  } catch {
+    return cloneLlmConfig(DEFAULT_LLM_CONFIG);
+  }
+}
+
 export default function App() {
   const [activeDoctor, setActiveDoctor] = useState<DoctorAccount | null>(() => readStoredDoctor());
   const [screen, setScreen] = useState<Screen>(() => (readStoredDoctor() ? 'dashboard' : 'landing'));
@@ -46,6 +71,7 @@ export default function App() {
   const [selectedSession, setSelectedSession] = useState<SessionDetail | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<'live' | 'archive'>('live');
   const [liveSessionProfile, setLiveSessionProfile] = useState<LiveSessionProfile | null>(null);
+  const [llmConfig, setLlmConfig] = useState<SessionLLMConfigInput>(() => readStoredLlmConfig());
   const pendingStopRequestRef = useRef<Promise<unknown> | null>(null);
 
   const session = useSession();
@@ -59,6 +85,18 @@ export default function App() {
     chunkMs: session.uploadConfig?.recommended_chunk_ms ?? 4000,
     onChunk,
   });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(
+      LLM_CONFIG_STORAGE_KEY,
+      JSON.stringify({
+        ...llmConfig,
+        api_key: '',
+        extra_headers_json: '',
+      }),
+    );
+  }, [llmConfig]);
 
   const refreshSessions = useCallback(async (doctor: DoctorAccount | null = activeDoctor) => {
     if (!doctor) {
@@ -154,6 +192,16 @@ export default function App() {
       patient_id: payload.patientId.trim(),
       patient_name: payload.patientName.trim(),
       chief_complaint: payload.chiefComplaint.trim() || undefined,
+      llm_config: {
+        provider: llmConfig.provider,
+        model_name: llmConfig.model_name.trim(),
+        base_url: llmConfig.base_url?.trim() || undefined,
+        api_key: llmConfig.api_key?.trim() || undefined,
+        api_version: llmConfig.api_version?.trim() || undefined,
+        http_referer: llmConfig.http_referer?.trim() || undefined,
+        x_title: llmConfig.x_title?.trim() || undefined,
+        extra_headers_json: llmConfig.extra_headers_json?.trim() || undefined,
+      },
     };
 
     try {
@@ -179,7 +227,7 @@ export default function App() {
     } finally {
       setIsStartingSession(false);
     }
-  }, [activeDoctor, recorder, refreshSessions, session, uploader]);
+  }, [activeDoctor, llmConfig, recorder, refreshSessions, session, uploader]);
 
   const handleOpenSession = useCallback(async (sessionId: string) => {
     try {
@@ -354,11 +402,13 @@ export default function App() {
           loading={sessionsLoading}
           error={sessionsError ?? session.error}
           isStartingSession={isStartingSession}
+          llmConfig={llmConfig}
           onRefresh={() => void refreshSessions()}
           onLogout={handleLogout}
           onOpenSession={handleOpenSession}
           onDeleteSession={handleDeleteSession}
           onStartSession={handleStartSession}
+          onLlmConfigChange={setLlmConfig}
         />
       </div>
     );
@@ -393,6 +443,7 @@ export default function App() {
           createdAt={selectedSession.created_at}
           updatedAt={selectedSession.snapshot?.updated_at ?? selectedSession.updated_at}
           closedAt={selectedSession.closed_at}
+          llmConfig={selectedSession.snapshot?.llm_config ?? selectedSession.llm_config ?? null}
           transcript={selectedSession.snapshot?.transcript ?? selectedSession.stable_transcript ?? ''}
           hints={selectedSession.snapshot?.hints ?? []}
           analysis={selectedSession.snapshot?.realtime_analysis ?? null}
@@ -445,6 +496,7 @@ export default function App() {
         createdAt={liveSessionProfile?.createdAt ?? null}
         updatedAt={liveSessionProfile?.createdAt ?? null}
         closedAt={null}
+        llmConfig={session.llmConfig ?? publicConfigFromInput(llmConfig)}
         transcript={uploader.transcript}
         hints={uploader.hints}
         analysis={uploader.latestAnalysis}

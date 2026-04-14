@@ -23,6 +23,68 @@ class UploadConfig(ApiBaseModel):
     max_in_flight_requests: int
 
 
+LLM_PROVIDER_ALIASES = {
+    "ollama": "ollama",
+    "openai_compatible": "openai_compatible",
+    "openai-compatible": "openai_compatible",
+    "azure_openai": "azure_openai",
+    "azure-openai": "azure_openai",
+    "gemini": "gemini",
+    "yandexgpt": "yandexgpt",
+    "yandex_gpt": "yandexgpt",
+}
+
+
+class SessionLLMConfigRequest(ApiBaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    provider: str
+    model_name: str
+    base_url: str | None = None
+    api_key: str | None = None
+    api_version: str | None = None
+    http_referer: str | None = None
+    x_title: str | None = None
+    extra_headers_json: str | None = None
+
+    @field_validator("provider")
+    @classmethod
+    def normalize_provider(cls, value: str) -> str:
+        normalized = LLM_PROVIDER_ALIASES.get(value.strip().lower())
+        if normalized is None:
+            raise ValueError("unsupported llm provider")
+        return normalized
+
+    @field_validator(
+        "model_name",
+        "base_url",
+        "api_key",
+        "api_version",
+        "http_referer",
+        "x_title",
+        "extra_headers_json",
+    )
+    @classmethod
+    def normalize_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
+
+class SessionLLMConfigResponse(ApiBaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    provider: str
+    model_name: str
+    base_url: str | None = None
+    api_version: str | None = None
+    http_referer: str | None = None
+    x_title: str | None = None
+    has_api_key: bool = False
+    has_extra_headers: bool = False
+
+
 class CreateSessionRequest(ApiBaseModel):
     doctor_id: str
     patient_id: str
@@ -30,6 +92,7 @@ class CreateSessionRequest(ApiBaseModel):
     doctor_specialty: str | None = None
     patient_name: str | None = None
     chief_complaint: str | None = None
+    llm_config: SessionLLMConfigRequest | None = None
 
     @field_validator("doctor_id", "patient_id")
     @classmethod
@@ -57,6 +120,7 @@ class CreateSessionResponse(ApiBaseModel):
     doctor_specialty: str | None = None
     patient_name: str | None = None
     chief_complaint: str | None = None
+    llm_config: SessionLLMConfigResponse | None = None
 
 
 class Ack(ApiBaseModel):
@@ -227,6 +291,7 @@ class SessionSummaryResponse(ApiBaseModel):
     stopped_at: datetime | None = None
     closed_at: datetime | None = None
     snapshot_available: bool = False
+    llm_config: SessionLLMConfigResponse | None = None
 
 
 class TranscriptEventResponse(ApiBaseModel):
@@ -268,6 +333,7 @@ class ConsultationSnapshotResponse(ApiBaseModel):
     realtime_analysis: RealtimeAnalysisResponse | None = None
     knowledge_extraction: dict | None = None
     post_session_analytics: dict | None = None
+    llm_config: SessionLLMConfigResponse | None = None
     last_error: str | None = None
     updated_at: datetime
     finalized_at: datetime | None = None

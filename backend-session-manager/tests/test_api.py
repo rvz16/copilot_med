@@ -21,6 +21,12 @@ def create_session(client: TestClient) -> str:
             "patient_id": "pat_001",
             "patient_name": "Olivia Bennett",
             "chief_complaint": "Recurring headache",
+            "llm_config": {
+                "provider": "ollama",
+                "model_name": "qwen3:4b",
+                "base_url": "http://host.docker.internal:11434",
+                "api_key": "secret-token",
+            },
         },
     )
     assert response.status_code == 200
@@ -76,6 +82,9 @@ def test_create_session_success(client: TestClient):
     assert body["patient_name"] == "Olivia Bennett"
     assert body["upload_config"]["recommended_chunk_ms"] == 4000
     assert "audio/webm" in body["upload_config"]["accepted_mime_types"]
+    assert body["llm_config"]["provider"] == "ollama"
+    assert body["llm_config"]["model_name"] == "qwen3:4b"
+    assert body["llm_config"]["has_api_key"] is True
 
 
 def test_create_session_validation_failure(client: TestClient):
@@ -218,7 +227,9 @@ def test_get_session_returns_profile_and_snapshot(client: TestClient):
     assert body["doctor_specialty"] == "Family Medicine"
     assert body["patient_name"] == "Olivia Bennett"
     assert body["chief_complaint"] == "Recurring headache"
+    assert body["llm_config"]["model_name"] == "qwen3:4b"
     assert body["snapshot"]["status"] == "finished"
+    assert body["snapshot"]["llm_config"]["provider"] == "ollama"
     assert body["snapshot"]["latest_seq"] == 1
     assert body["snapshot"]["transcript"] == FULL_TRANSCRIPT
     assert body["snapshot"]["knowledge_extraction"]["soap_note"] is not None
@@ -615,3 +626,116 @@ def test_extractor_results_endpoint_returns_processing_state(client: TestClient)
     assert body["summary"] is not None
     assert body["validation"]["all_sections_populated"] is True
     assert body["confidence_scores"]["overall"] > 0
+
+
+def test_selected_llm_config_is_forwarded_to_all_ai_services(app_factory, monkeypatch):
+    captured: dict[str, dict] = {}
+
+    def capture_realtime(self, payload: dict) -> dict:
+        captured["realtime"] = payload
+        return {
+            "request_id": payload.get("request_id", "req"),
+            "latency_ms": 15,
+            "model": {"name": payload["llm_config"]["model_name"], "quantization": "none"},
+            "suggestions": [],
+            "drug_interactions": [],
+            "extracted_facts": {
+                "symptoms": [],
+                "conditions": [],
+                "medications": [],
+                "allergies": [],
+                "vitals": {
+                    "age": None,
+                    "weight_kg": None,
+                    "height_cm": None,
+                    "bp": None,
+                    "hr": None,
+                    "temp_c": None,
+                },
+            },
+            "knowledge_refs": [],
+            "patient_context": None,
+            "errors": [],
+        }
+
+    def capture_extractor(self, payload: dict) -> dict:
+        captured["extractor"] = payload
+        return {
+            "status": "ok",
+            "session_id": payload["session_id"],
+            "soap_note": {
+                "subjective": {"reported_symptoms": ["headache"], "reported_concerns": []},
+                "objective": {"observations": [], "measurements": []},
+                "assessment": {"diagnoses": [], "evaluation": []},
+                "plan": {"treatment": [], "follow_up_instructions": []},
+            },
+            "extracted_facts": {},
+            "summary": {"counts": {}, "total_items": 0},
+            "fhir_resources": [],
+            "persistence": {
+                "enabled": False,
+                "target_base_url": None,
+                "prepared": [],
+                "sent_successfully": 0,
+                "sent_failed": 0,
+                "created": [],
+                "errors": [],
+            },
+            "validation": {
+                "all_sections_populated": True,
+                "missing_sections": [],
+                "sections": {},
+            },
+            "confidence_scores": {"overall": 0.8, "soap_sections": {}, "extracted_fields": {}},
+            "ehr_sync": {
+                "enabled": False,
+                "mode": "fhir",
+                "system": "EHR (FHIR)",
+                "status": "skipped",
+                "record_id": None,
+                "synced_at": None,
+                "synced_fields": [],
+                "response": {},
+            },
+        }
+
+    def capture_post(self, payload: dict) -> dict:
+        captured["post"] = payload
+        return {
+            "status": "ok",
+            "session_id": payload["session_id"],
+            "model_used": payload["llm_config"]["model_name"],
+            "processing_time_ms": 10,
+            "medical_summary": {
+                "clinical_narrative": "summary",
+                "key_findings": [],
+                "primary_impressions": [],
+                "differential_diagnoses": [],
+            },
+            "critical_insights": [],
+            "follow_up_recommendations": [],
+            "quality_assessment": {"overall_score": 0.7, "metrics": []},
+        }
+
+    monkeypatch.setattr(MockRealtimeAnalysisProvider, "analyze", capture_realtime)
+    monkeypatch.setattr(MockPostSessionAnalyticsProvider, "analyze", capture_post)
+    from app.services.knowledge_extractor import MockKnowledgeExtractorProvider
+    monkeypatch.setattr(MockKnowledgeExtractorProvider, "extract", capture_extractor)
+
+    app = app_factory(
+        REALTIME_ANALYSIS_ENABLED=True,
+        REALTIME_ANALYSIS_MODE="mock",
+        KNOWLEDGE_EXTRACTOR_MODE="mock",
+        POST_SESSION_ANALYTICS_MODE="mock",
+    )
+    with TestClient(app) as client:
+        session_id = create_session(client)
+        upload_chunk(client, session_id, seq=1, is_final=True)
+        client.post(
+            f"/api/v1/sessions/{session_id}/close",
+            json={"trigger_post_session_analytics": True},
+        )
+
+    assert captured["realtime"]["llm_config"]["model_name"] == "qwen3:4b"
+    assert captured["extractor"]["llm_config"]["api_key"] == "secret-token"
+    assert captured["post"]["llm_config"]["provider"] == "ollama"

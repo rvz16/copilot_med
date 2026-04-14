@@ -14,11 +14,17 @@ from app.main import create_app
 def _make_stub_llm() -> LLMClient:
     """LLMClient stub that returns a canned response without hitting vLLM."""
     llm = LLMClient.__new__(LLMClient)
+    llm.provider = "ollama"
     llm.base_url = "http://stub"
     llm.model_name = "qwen3:4b"
     llm.max_tokens = 512
     llm.temperature = 0.0
     llm.timeout = 5.0
+    llm.extra_headers = {}
+    llm.http_referer = ""
+    llm.x_title = ""
+    llm.api_key = None
+    llm.api_version = ""
 
     async def _generate(transcript_chunk: str, language: str = "en", patient_context: str | None = None) -> dict[str, Any]:
         return {
@@ -130,11 +136,17 @@ def test_assist_with_fhir_context() -> None:
 
 def test_assist_passes_formatted_fhir_context_to_llm() -> None:
     llm = LLMClient.__new__(LLMClient)
+    llm.provider = "ollama"
     llm.base_url = "http://stub"
     llm.model_name = "qwen3:4b"
     llm.max_tokens = 512
     llm.temperature = 0.0
     llm.timeout = 5.0
+    llm.extra_headers = {}
+    llm.http_referer = ""
+    llm.x_title = ""
+    llm.api_key = None
+    llm.api_version = ""
     llm.generate_structured = AsyncMock(return_value={  # type: ignore[assignment]
         "suggestions": [],
         "drug_interactions": [],

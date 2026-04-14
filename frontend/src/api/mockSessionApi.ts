@@ -4,6 +4,7 @@
    dashboard/history flows work without the backend.
    ────────────────────────────────────────────── */
 
+import { publicConfigFromInput } from '../data/llmProfiles';
 import type {
   AudioChunkResponse,
   CloseSessionResponse,
@@ -150,6 +151,7 @@ function buildEmptySnapshot(summary: SessionSummary): SessionSnapshot {
     hints: [],
     realtime_analysis: null,
     knowledge_extraction: null,
+    llm_config: summary.llm_config ?? null,
     last_error: summary.last_error,
     updated_at: summary.updated_at,
     finalized_at: null,
@@ -395,6 +397,7 @@ export const mockSessionApi: SessionApi = {
       stopped_at: null,
       closed_at: null,
       snapshot_available: true,
+      llm_config: payload.llm_config ? publicConfigFromInput(payload.llm_config) : null,
     };
 
     sessions.set(sessionId, {
@@ -417,6 +420,7 @@ export const mockSessionApi: SessionApi = {
       doctor_specialty: payload.doctor_specialty ?? null,
       patient_name: payload.patient_name ?? null,
       chief_complaint: payload.chief_complaint ?? null,
+      llm_config: payload.llm_config ? publicConfigFromInput(payload.llm_config) : null,
     };
     return response;
   },

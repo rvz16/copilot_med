@@ -6,7 +6,7 @@ import { RecordingControls } from './RecordingControls';
 import { SessionOverviewPanel } from './SessionOverviewPanel';
 import { StatusPanel } from './StatusPanel';
 import { TranscriptPanel } from './TranscriptPanel';
-import type { Hint, KnowledgeExtraction, PostSessionAnalytics, RealtimeAnalysis } from '../types/types';
+import type { Hint, KnowledgeExtraction, PostSessionAnalytics, RealtimeAnalysis, SessionLLMConfig } from '../types/types';
 import type { UploadStatus } from '../hooks/useUploader';
 
 interface Props {
@@ -24,6 +24,7 @@ interface Props {
   createdAt: string | null;
   updatedAt: string | null;
   closedAt: string | null;
+  llmConfig?: SessionLLMConfig | null;
   transcript: string;
   hints: Hint[];
   analysis: RealtimeAnalysis | null;
@@ -56,6 +57,7 @@ export function ConsultationWorkspace({
   createdAt,
   updatedAt,
   closedAt,
+  llmConfig,
   transcript,
   hints,
   analysis,
@@ -107,6 +109,7 @@ export function ConsultationWorkspace({
             createdAt={createdAt}
             updatedAt={updatedAt}
             closedAt={closedAt}
+            llmConfig={llmConfig}
             disableActions={isBusy}
             onCloseSession={onCloseSession}
             onBackToDashboard={onBackToDashboard}

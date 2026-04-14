@@ -4,7 +4,6 @@ import time
 from fastapi import APIRouter, HTTPException
 
 from app.llm_client import PostAnalyticsLLMClient
-from app.config import MODEL_NAME
 from app.prompts import SYSTEM_PROMPT, build_user_prompt
 from app.schemas import (
     AnalyticsRequest,
@@ -19,15 +18,6 @@ from app.schemas import (
 logger = logging.getLogger("medcopilot.post_analytics")
 
 router = APIRouter()
-
-_llm_client: PostAnalyticsLLMClient | None = None
-
-
-def get_llm_client() -> PostAnalyticsLLMClient:
-    global _llm_client
-    if _llm_client is None:
-        _llm_client = PostAnalyticsLLMClient()
-    return _llm_client
 
 
 def _safe_str(val, default: str = "") -> str:
@@ -45,7 +35,7 @@ def _clamp(val: float, lo: float = 0.0, hi: float = 1.0) -> float:
     return max(lo, min(hi, val))
 
 
-def _parse_response(raw: dict, session_id: str, elapsed_ms: int) -> AnalyticsResponse:
+def _parse_response(raw: dict, session_id: str, elapsed_ms: int, model_used: str) -> AnalyticsResponse:
     """Parse and validate the raw LLM JSON into the response schema."""
     raw_summary = raw.get("medical_summary", {})
     if not isinstance(raw_summary, dict):
@@ -119,7 +109,7 @@ def _parse_response(raw: dict, session_id: str, elapsed_ms: int) -> AnalyticsRes
 
     return AnalyticsResponse(
         session_id=session_id,
-        model_used=MODEL_NAME,
+        model_used=model_used,
         processing_time_ms=elapsed_ms,
         medical_summary=summary,
         critical_insights=insights[:5],
@@ -144,11 +134,11 @@ def analyze(request: AnalyticsRequest) -> AnalyticsResponse:
 
     start = time.perf_counter()
     try:
-        client = get_llm_client()
+        client = PostAnalyticsLLMClient(request.llm_config)
         raw = client.generate(SYSTEM_PROMPT, user_prompt)
     except Exception as exc:
         logger.error("LLM call failed for session %s: %s", request.session_id, exc)
         raise HTTPException(status_code=502, detail=f"LLM analysis failed: {exc}")
 
     elapsed_ms = int((time.perf_counter() - start) * 1000)
-    return _parse_response(raw, request.session_id, elapsed_ms)
+    return _parse_response(raw, request.session_id, elapsed_ms, client.model_name)

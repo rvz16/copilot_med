@@ -1,4 +1,4 @@
-"""OpenAI-compatible LLM client for post-session clinical analysis."""
+"""Structured LLM client for post-session clinical analysis."""
 from __future__ import annotations
 
 import json
@@ -6,6 +6,7 @@ import logging
 import re
 import time
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx
 
@@ -23,21 +24,46 @@ from app.config import (
 
 logger = logging.getLogger("medcopilot.post_analytics.llm")
 
+_OPENAI_COMPATIBLE_PROVIDERS = {
+    "openai_compatible",
+    "openai-compatible",
+    "openrouter",
+    "gemini",
+    "yandexgpt",
+}
+_AZURE_OPENAI_PROVIDERS = {"azure_openai", "azure-openai"}
+
 
 class PostAnalyticsLLMClient:
-    """Synchronous OpenAI-compatible client targeting gpt-oss-120b."""
+    def __init__(self, llm_config: dict[str, Any] | Any | None = None) -> None:
+        if hasattr(llm_config, "model_dump"):
+            llm_override = llm_config.model_dump(mode="json")
+        elif isinstance(llm_config, dict):
+            llm_override = dict(llm_config)
+        else:
+            llm_override = {}
 
-    def __init__(self) -> None:
-        self.base_url = LLM_BASE_URL.rstrip("/")
-        self.model_name = MODEL_NAME
-        self.api_key = LLM_API_KEY
+        self.provider = str(llm_override.get("provider", "openai_compatible")).strip().lower()
+        self.base_url = str(llm_override.get("base_url", LLM_BASE_URL)).strip().rstrip("/")
+        self.model_name = str(llm_override.get("model_name", MODEL_NAME)).strip()
+        self.api_key = str(llm_override.get("api_key", LLM_API_KEY)).strip()
+        self.api_version = str(llm_override.get("api_version", "")).strip()
         self.max_tokens = MAX_TOKENS
         self.temperature = TEMPERATURE
         self.timeout = LLM_TIMEOUT
-        self.extra_headers = self._load_extra_headers(LLM_EXTRA_HEADERS_JSON)
+        self.http_referer = str(llm_override.get("http_referer", LLM_HTTP_REFERER)).strip()
+        self.x_title = str(llm_override.get("x_title", LLM_X_TITLE)).strip()
+        self.extra_headers = self._load_extra_headers(
+            str(llm_override.get("extra_headers_json", LLM_EXTRA_HEADERS_JSON)).strip()
+        )
         logger.info(
-            "PostAnalyticsLLMClient: base_url=%s model=%s max_tokens=%d temperature=%.2f timeout=%.1fs",
-            self.base_url, self.model_name, self.max_tokens, self.temperature, self.timeout,
+            "PostAnalyticsLLMClient: provider=%s base_url=%s model=%s max_tokens=%d temperature=%.2f timeout=%.1fs",
+            self.provider,
+            self.base_url,
+            self.model_name,
+            self.max_tokens,
+            self.temperature,
+            self.timeout,
         )
 
     def generate(self, system_prompt: str, user_prompt: str) -> dict[str, Any]:
@@ -47,17 +73,15 @@ class PostAnalyticsLLMClient:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
-            "stream": False,
         }
-
-        endpoint = self._chat_endpoint()
-        headers = self._build_headers()
 
         start = time.perf_counter()
         with httpx.Client(timeout=self.timeout) as client:
-            response = client.post(endpoint, json=body, headers=headers)
+            response = client.post(
+                self._endpoint(),
+                json=self._request_body(body),
+                headers=self._headers(),
+            )
             response.raise_for_status()
 
         elapsed_ms = int((time.perf_counter() - start) * 1000)
@@ -72,24 +96,60 @@ class PostAnalyticsLLMClient:
 
         return parsed
 
-    def _chat_endpoint(self) -> str:
-        if self.base_url.endswith("/chat/completions"):
-            return self.base_url
-        return f"{self.base_url}/chat/completions"
+    def _request_body(self, body: dict[str, Any]) -> dict[str, Any]:
+        if self.provider == "ollama":
+            return {
+                **body,
+                "stream": False,
+                "think": False,
+                "format": "json",
+                "options": {
+                    "temperature": self.temperature,
+                    "num_predict": self.max_tokens,
+                    "num_ctx": 4096,
+                },
+            }
+        return {
+            **body,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "stream": False,
+        }
 
-    def _build_headers(self) -> dict[str, str]:
+    def _endpoint(self) -> str:
+        if self.provider == "ollama":
+            return f"{self.base_url}/api/chat"
+        if self.base_url.endswith("/chat/completions"):
+            endpoint = self.base_url
+        elif self.provider in _AZURE_OPENAI_PROVIDERS:
+            endpoint = f"{self.base_url}/openai/v1/chat/completions"
+        else:
+            endpoint = f"{self.base_url}/chat/completions"
+        if self.provider in _AZURE_OPENAI_PROVIDERS and self.api_version:
+            return self._append_query_param(endpoint, "api-version", self.api_version)
+        return endpoint
+
+    def _headers(self) -> dict[str, str]:
         headers: dict[str, str] = {}
-        if self.api_key:
+        if self.provider in _AZURE_OPENAI_PROVIDERS:
+            if self.api_key:
+                headers["api-key"] = self.api_key
+        elif self.provider != "ollama" and self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
-        if LLM_HTTP_REFERER:
-            headers["HTTP-Referer"] = LLM_HTTP_REFERER
-        if LLM_X_TITLE:
-            headers["X-Title"] = LLM_X_TITLE
+        if self.http_referer:
+            headers["HTTP-Referer"] = self.http_referer
+        if self.x_title:
+            headers["X-Title"] = self.x_title
         headers.update(self.extra_headers)
         return headers
 
     @staticmethod
     def _extract_content(data: dict[str, Any]) -> str:
+        if "message" in data:
+            message = data.get("message", {})
+            content = message.get("content", "")
+            return content if isinstance(content, str) else ""
+
         choices = data.get("choices", [])
         if not choices:
             return ""
@@ -98,7 +158,7 @@ class PostAnalyticsLLMClient:
         if isinstance(content, str):
             return content
         if isinstance(content, list):
-            parts = []
+            parts: list[str] = []
             for item in content:
                 if isinstance(item, str):
                     parts.append(item)
@@ -150,3 +210,12 @@ class PostAnalyticsLLMClient:
         if not isinstance(parsed, dict):
             return {}
         return {k: v for k, v in parsed.items() if isinstance(k, str) and isinstance(v, str)}
+
+    @staticmethod
+    def _append_query_param(url: str, key: str, value: str) -> str:
+        parts = urlsplit(url)
+        query = dict(parse_qsl(parts.query, keep_blank_values=True))
+        if key in query:
+            return url
+        query[key] = value
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))

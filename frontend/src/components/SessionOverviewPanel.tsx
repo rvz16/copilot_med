@@ -1,3 +1,5 @@
+import { llmProviderLabel } from '../data/llmProfiles';
+import type { SessionLLMConfig } from '../types/types';
 import { formatDateTime, formatStatusLabel } from '../utils/format';
 
 interface Props {
@@ -15,6 +17,7 @@ interface Props {
   createdAt: string | null;
   updatedAt: string | null;
   closedAt: string | null;
+  llmConfig?: SessionLLMConfig | null;
   disableActions?: boolean;
   onCloseSession?: () => Promise<void>;
   onBackToDashboard?: () => void;
@@ -35,6 +38,7 @@ export function SessionOverviewPanel({
   createdAt,
   updatedAt,
   closedAt,
+  llmConfig,
   disableActions = false,
   onCloseSession,
   onBackToDashboard,
@@ -124,6 +128,10 @@ export function SessionOverviewPanel({
         <div>
           <dt>Создана</dt>
           <dd>{formatDateTime(createdAt)}</dd>
+        </div>
+        <div>
+          <dt>LLM</dt>
+          <dd>{llmConfig ? `${llmProviderLabel(llmConfig.provider)} · ${llmConfig.model_name}` : 'default'}</dd>
         </div>
         <div>
           <dt>Обновлена</dt>

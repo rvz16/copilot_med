@@ -49,7 +49,8 @@ def test_soap_generation_from_canonical_extraction() -> None:
 
 
 def test_ollama_extractor_validates_canonical_schema(monkeypatch) -> None:
-    def fake_post(self, url, json):  # type: ignore[no-untyped-def]
+    def fake_post(self, url, json, **kwargs):  # type: ignore[no-untyped-def]
+        del kwargs
         request = httpx.Request("POST", url, json=json)
         return httpx.Response(
             200,
@@ -151,3 +152,53 @@ def test_documentation_service_populates_missing_soap_sections() -> None:
     assert response.validation.all_sections_populated is True
     assert response.validation.sections["objective"].used_fallback is True
     assert response.confidence_scores.soap_sections["objective"] == 0.35
+
+
+def test_documentation_service_uses_request_level_llm_override(monkeypatch) -> None:
+    captured: dict = {}
+
+    def fake_post(self, url, json, headers=None, **kwargs):  # type: ignore[no-untyped-def]
+        del self, kwargs
+        captured["url"] = url
+        captured["headers"] = headers or {}
+        request = httpx.Request("POST", url, json=json, headers=headers)
+        return httpx.Response(
+            200,
+            request=request,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                '{"symptoms":["fatigue"],"concerns":[],"observations":[],"measurements":[],'
+                                '"diagnoses":[],"evaluation":[],"treatment":[],"follow_up_instructions":[],"medications":[],"allergies":[]}'
+                            )
+                        }
+                    }
+                ]
+            },
+        )
+
+    monkeypatch.setattr(httpx.Client, "post", fake_post)
+
+    service = DocumentationService(extractor=RuleBasedMedicalExtractor())
+    response = service.build_documentation(
+        ExtractionRequest(
+            session_id="sess-override",
+            patient_id="pat-override",
+            transcript="Patient reports fatigue.",
+            persist=False,
+            sync_ehr=False,
+            llm_config={
+                "provider": "azure_openai",
+                "model_name": "gpt-4.1-mini",
+                "base_url": "https://aoai.example.com",
+                "api_key": "secret-key",
+                "api_version": "2024-10-21",
+            },
+        )
+    )
+
+    assert captured["url"] == "https://aoai.example.com/openai/v1/chat/completions?api-version=2024-10-21"
+    assert captured["headers"]["api-key"] == "secret-key"
+    assert response.soap_note.subjective.reported_symptoms == ["fatigue"]

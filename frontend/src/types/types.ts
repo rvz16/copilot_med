@@ -13,6 +13,30 @@ export interface UploadConfig {
   max_in_flight_requests: number;
 }
 
+export type LLMProvider = 'ollama' | 'gemini' | 'yandexgpt' | 'azure_openai' | 'openai_compatible';
+
+export interface SessionLLMConfigInput {
+  provider: LLMProvider;
+  model_name: string;
+  base_url?: string;
+  api_key?: string;
+  api_version?: string;
+  http_referer?: string;
+  x_title?: string;
+  extra_headers_json?: string;
+}
+
+export interface SessionLLMConfig {
+  provider: LLMProvider;
+  model_name: string;
+  base_url?: string | null;
+  api_version?: string | null;
+  http_referer?: string | null;
+  x_title?: string | null;
+  has_api_key: boolean;
+  has_extra_headers: boolean;
+}
+
 export interface CreateSessionRequest {
   doctor_id: string;
   patient_id: string;
@@ -20,6 +44,7 @@ export interface CreateSessionRequest {
   doctor_specialty?: string;
   patient_name?: string;
   chief_complaint?: string;
+  llm_config?: SessionLLMConfigInput;
 }
 
 export interface CreateSessionResponse {
@@ -31,6 +56,7 @@ export interface CreateSessionResponse {
   doctor_specialty?: string | null;
   patient_name?: string | null;
   chief_complaint?: string | null;
+  llm_config?: SessionLLMConfig | null;
 }
 
 // ── Audio chunk upload ──────────────────────
@@ -313,6 +339,7 @@ export interface SessionSnapshot {
   realtime_analysis: RealtimeAnalysis | null;
   knowledge_extraction?: KnowledgeExtraction | null;
   post_session_analytics?: PostSessionAnalytics | null;
+  llm_config?: SessionLLMConfig | null;
   last_error: string | null;
   updated_at: string;
   finalized_at: string | null;
@@ -340,6 +367,7 @@ export interface SessionSummary {
   stopped_at: string | null;
   closed_at: string | null;
   snapshot_available: boolean;
+  llm_config?: SessionLLMConfig | null;
 }
 
 export interface SessionDetail extends SessionSummary {

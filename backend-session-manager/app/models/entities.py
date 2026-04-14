@@ -66,6 +66,7 @@ class SessionProfile(Base):
     doctor_specialty: Mapped[str | None] = mapped_column(String(255), nullable=True)
     patient_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     chief_complaint: Mapped[str | None] = mapped_column(Text, nullable=True)
+    llm_config_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 

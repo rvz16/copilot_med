@@ -50,6 +50,7 @@ class AssistController:
         transcript = payload.transcript_chunk
         language = payload.context.language
         evidence_defaults = extract_evidence_quotes(transcript, max_quotes=2)
+        llm = self.llm.with_override(payload.llm_config)
 
         async def fetch_fhir() -> dict[str, Any] | None:
             if not payload.patient_id:
@@ -66,7 +67,7 @@ class AssistController:
                     await fhir.close()
 
         async def call_llm(patient_context_text: str | None = None) -> dict[str, Any]:
-            return await self.llm.generate_structured(
+            return await llm.generate_structured(
                 transcript_chunk=transcript,
                 language=language,
                 patient_context=patient_context_text,
@@ -97,30 +98,36 @@ class AssistController:
 
         latency_ms = int((time.perf_counter() - started) * 1000)
 
-        response = AssistResponse(
-            request_id=payload.request_id,
-            latency_ms=latency_ms,
-            model={"name": self.llm.model_name, "quantization": "none"},
-            suggestions=suggestions,
-            drug_interactions=interactions,
-            extracted_facts=merged_facts,
-            knowledge_refs=knowledge_refs,
-            patient_context=patient_ctx,
-            errors=errors,
-        )
+        try:
+            response = AssistResponse(
+                request_id=payload.request_id,
+                latency_ms=latency_ms,
+                model={"name": llm.model_name, "quantization": "none"},
+                suggestions=suggestions,
+                drug_interactions=interactions,
+                extracted_facts=merged_facts,
+                knowledge_refs=knowledge_refs,
+                patient_context=patient_ctx,
+                errors=errors,
+            )
 
-        self._logger.info(
-            json.dumps({
-                "event": "assist_completed",
-                "request_id": payload.request_id,
-                "latency_ms": latency_ms,
-                "suggestions_count": len(response.suggestions),
-                "drug_interactions_count": len(response.drug_interactions),
-                "has_patient_context": patient_ctx is not None,
-                "errors_count": len(response.errors),
-            })
-        )
-        return response
+            self._logger.info(
+                json.dumps({
+                    "event": "assist_completed",
+                    "request_id": payload.request_id,
+                    "latency_ms": latency_ms,
+                    "suggestions_count": len(response.suggestions),
+                    "drug_interactions_count": len(response.drug_interactions),
+                    "has_patient_context": patient_ctx is not None,
+                    "errors_count": len(response.errors),
+                    "provider": llm.provider,
+                    "model_name": llm.model_name,
+                })
+            )
+            return response
+        finally:
+            if llm is not self.llm:
+                await llm.close()
 
     # --- Merge helpers (unchanged logic) ---
 

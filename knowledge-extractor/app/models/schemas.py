@@ -5,6 +5,19 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+class LLMConfigOverride(BaseModel):
+    model_config = {"protected_namespaces": ()}
+
+    provider: str
+    model_name: str
+    base_url: str | None = None
+    api_key: str | None = None
+    api_version: str | None = None
+    http_referer: str | None = None
+    x_title: str | None = None
+    extra_headers_json: str | None = None
+
+
 class ExtractionRequest(BaseModel):
     session_id: str
     patient_id: str
@@ -17,6 +30,7 @@ class ExtractionRequest(BaseModel):
     transcript: str
     persist: bool = False
     sync_ehr: bool = True
+    llm_config: LLMConfigOverride | None = None
 
 
 class SubjectiveSection(BaseModel):

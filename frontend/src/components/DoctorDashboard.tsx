@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
+import { LLM_PRESETS, llmProviderLabel } from '../data/llmProfiles';
 import type { DoctorAccount } from '../data/doctors';
-import type { SessionSummary } from '../types/types';
+import type { SessionLLMConfigInput, SessionSummary } from '../types/types';
 import { formatDateTime, formatStatusLabel } from '../utils/format';
 
 interface NewSessionFormData {
@@ -15,11 +16,13 @@ interface Props {
   loading: boolean;
   error: string | null;
   isStartingSession: boolean;
+  llmConfig: SessionLLMConfigInput;
   onRefresh: () => void;
   onLogout: () => void;
   onOpenSession: (sessionId: string) => Promise<void>;
   onDeleteSession: (sessionId: string) => Promise<void>;
   onStartSession: (payload: NewSessionFormData) => Promise<void>;
+  onLlmConfigChange: (next: SessionLLMConfigInput) => void;
 }
 
 export function DoctorDashboard({
@@ -28,11 +31,13 @@ export function DoctorDashboard({
   loading,
   error,
   isStartingSession,
+  llmConfig,
   onRefresh,
   onLogout,
   onOpenSession,
   onDeleteSession,
   onStartSession,
+  onLlmConfigChange,
 }: Props) {
   const [patientId, setPatientId] = useState('');
   const [patientName, setPatientName] = useState('');
@@ -193,10 +198,131 @@ export function DoctorDashboard({
               />
             </div>
 
+            <section className="llm-config-card">
+              <div className="llm-config-head">
+                <div>
+                  <label className="llm-config-title">LLM selection</label>
+                  <p className="llm-config-subtitle">
+                    {llmProviderLabel(llmConfig.provider)} · {llmConfig.model_name}
+                  </p>
+                </div>
+                <span className="llm-config-badge">{llmProviderLabel(llmConfig.provider)}</span>
+              </div>
+
+              <div className="llm-selection-bar" role="tablist" aria-label="LLM presets">
+                {LLM_PRESETS.map((preset) => {
+                  const isActive =
+                    llmConfig.provider === preset.config.provider &&
+                    llmConfig.model_name === preset.config.model_name &&
+                    (llmConfig.base_url ?? '') === (preset.config.base_url ?? '');
+
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      className={`llm-pill ${isActive ? 'llm-pill-active' : ''}`}
+                      onClick={() => onLlmConfigChange({
+                        ...preset.config,
+                        api_key: llmConfig.api_key ?? '',
+                        api_version: preset.config.api_version ?? llmConfig.api_version ?? '',
+                        http_referer: llmConfig.http_referer ?? '',
+                        x_title: llmConfig.x_title ?? '',
+                        extra_headers_json: llmConfig.extra_headers_json ?? '',
+                      })}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <p className="llm-config-note">
+                {LLM_PRESETS.find((preset) => preset.provider === llmConfig.provider)?.note
+                  ?? 'This configuration is reused by realtime analysis, knowledge extraction, and post-session analytics.'}
+              </p>
+
+              <div className="llm-config-grid">
+                <div className="form-row">
+                  <label htmlFor="llm-provider">Provider</label>
+                  <select
+                    id="llm-provider"
+                    value={llmConfig.provider}
+                    onChange={(event) =>
+                      onLlmConfigChange({
+                        ...llmConfig,
+                        provider: event.target.value as SessionLLMConfigInput['provider'],
+                      })
+                    }
+                  >
+                    <option value="ollama">Ollama</option>
+                    <option value="gemini">Gemini</option>
+                    <option value="yandexgpt">YandexGPT</option>
+                    <option value="azure_openai">Azure OpenAI</option>
+                    <option value="openai_compatible">OpenAI Compatible</option>
+                  </select>
+                </div>
+
+                <div className="form-row">
+                  <label htmlFor="llm-model-name">Model</label>
+                  <input
+                    id="llm-model-name"
+                    type="text"
+                    value={llmConfig.model_name}
+                    onChange={(event) => onLlmConfigChange({ ...llmConfig, model_name: event.target.value })}
+                    placeholder="qwen3:4b"
+                  />
+                </div>
+
+                <div className="form-row">
+                  <label htmlFor="llm-base-url">Base URL</label>
+                  <input
+                    id="llm-base-url"
+                    type="text"
+                    value={llmConfig.base_url ?? ''}
+                    onChange={(event) => onLlmConfigChange({ ...llmConfig, base_url: event.target.value })}
+                    placeholder="https://your-endpoint"
+                  />
+                </div>
+
+                <div className="form-row">
+                  <label htmlFor="llm-api-key">API key</label>
+                  <input
+                    id="llm-api-key"
+                    type="password"
+                    value={llmConfig.api_key ?? ''}
+                    onChange={(event) => onLlmConfigChange({ ...llmConfig, api_key: event.target.value })}
+                    placeholder="optional"
+                  />
+                </div>
+
+                <div className="form-row">
+                  <label htmlFor="llm-api-version">API version</label>
+                  <input
+                    id="llm-api-version"
+                    type="text"
+                    value={llmConfig.api_version ?? ''}
+                    onChange={(event) => onLlmConfigChange({ ...llmConfig, api_version: event.target.value })}
+                    placeholder="2024-10-21"
+                  />
+                </div>
+
+                <div className="form-row">
+                  <label htmlFor="llm-extra-headers">Extra headers JSON</label>
+                  <input
+                    id="llm-extra-headers"
+                    type="text"
+                    value={llmConfig.extra_headers_json ?? ''}
+                    onChange={(event) => onLlmConfigChange({ ...llmConfig, extra_headers_json: event.target.value })}
+                    placeholder='{"X-Org":"demo"}'
+                  />
+                </div>
+              </div>
+            </section>
+
             <button
               type="submit"
               className="primary-cta"
-              disabled={isStartingSession || !patientId.trim() || !patientName.trim()}
+              disabled={isStartingSession || !patientId.trim() || !patientName.trim() || !llmConfig.model_name.trim()}
             >
               {isStartingSession ? 'Создание…' : 'Открыть рабочую сессию'}
             </button>
@@ -246,6 +372,11 @@ export function DoctorDashboard({
                     <div>
                       <h3>{session.patient_name || session.patient_id}</h3>
                       <p>{session.chief_complaint || 'Причина обращения не указана'}</p>
+                      {session.llm_config && (
+                        <p className="history-llm-label">
+                          {llmProviderLabel(session.llm_config.provider)} · {session.llm_config.model_name}
+                        </p>
+                      )}
                     </div>
                     <span className={`badge badge-${session.status}`}>
                       {formatStatusLabel(session.status)}

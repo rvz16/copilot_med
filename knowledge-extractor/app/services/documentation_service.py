@@ -47,7 +47,8 @@ class DocumentationService:
         )
 
     def build_documentation(self, request: ExtractionRequest) -> ExtractionResponse:
-        canonical = self.extractor.extract(request.transcript)
+        extractor = self._resolve_extractor(request)
+        canonical = extractor.extract(request.transcript)
         soap_note = self._build_complete_soap_note(canonical.to_soap_note())
         extracted_facts = canonical.to_extracted_facts()
         summary = canonical.to_summary()
@@ -83,6 +84,24 @@ class DocumentationService:
             validation=validation,
             confidence_scores=confidence_scores,
             ehr_sync=ehr_sync,
+        )
+
+    def _resolve_extractor(self, request: ExtractionRequest) -> BaseExtractor:
+        if request.llm_config is None:
+            return self.extractor
+        return OllamaMedicalExtractor(
+            client=OllamaClient(
+                provider=request.llm_config.provider,
+                base_url=request.llm_config.base_url or settings.ollama_base_url,
+                model=request.llm_config.model_name,
+                api_key=request.llm_config.api_key,
+                api_version=request.llm_config.api_version,
+                http_referer=request.llm_config.http_referer,
+                x_title=request.llm_config.x_title,
+                extra_headers_json=request.llm_config.extra_headers_json,
+                timeout_seconds=settings.ollama_timeout_seconds,
+                temperature=settings.ollama_temperature,
+            )
         )
 
     def _build_persistence_result(
