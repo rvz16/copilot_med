@@ -3,6 +3,7 @@ from pathlib import Path
 
 from app.clients.clinical_recommendations import HttpClinicalRecommendationsClient
 from app.services.asr import ChunkTranscriptionResult, FullTranscriptionResult, MockAsrProvider, TRANSCRIPT_FRAGMENTS
+from app.services.knowledge_extractor import MockKnowledgeExtractorProvider
 from app.services.post_session_analytics import MockPostSessionAnalyticsProvider
 from app.services.realtime_analysis import MockRealtimeAnalysisProvider
 
@@ -372,6 +373,28 @@ def test_close_session_falls_back_to_stable_transcript_when_full_transcription_i
     assert body["snapshot"]["transcript"] == stable_transcript
     assert body["snapshot"]["post_session_analytics"]["full_transcript"]["full_text"] == stable_transcript
     assert body["snapshot"]["post_session_analytics"]["full_transcript"]["source"].endswith("_stable_fallback")
+
+
+def test_close_session_prefers_full_transcript_for_knowledge_extraction(app_factory, monkeypatch):
+    captured: dict[str, str] = {}
+    original_extract = MockKnowledgeExtractorProvider.extract
+
+    def capture_extract(self, payload: dict) -> dict:
+        captured["transcript"] = payload["transcript"]
+        return original_extract(self, payload)
+
+    monkeypatch.setattr(MockKnowledgeExtractorProvider, "extract", capture_extract)
+
+    app = app_factory()
+    with TestClient(app) as client:
+        session_id = create_session(client)
+        upload_chunk(client, session_id, seq=1, is_final=True)
+        client.post(
+            f"/api/v1/sessions/{session_id}/close",
+            json={"trigger_post_session_analytics": True},
+        )
+
+    assert captured["transcript"] == FULL_TRANSCRIPT
 
 
 def test_close_session_keeps_full_transcript_when_post_session_analytics_fails(app_factory, monkeypatch):

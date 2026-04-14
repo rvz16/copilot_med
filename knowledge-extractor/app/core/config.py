@@ -21,6 +21,15 @@ class Settings(BaseSettings):
     )
     ollama_timeout_seconds: float = Field(default=60.0, alias="OLLAMA_TIMEOUT_SECONDS")
     ollama_temperature: float = Field(default=0.0, alias="OLLAMA_TEMPERATURE")
+    llm_base_url: str = Field(default="https://api.groq.com/openai/v1", alias="LLM_BASE_URL")
+    llm_model: str = Field(default="openai/gpt-oss-20b", alias="LLM_MODEL")
+    llm_api_key: str = Field(default="", alias="LLM_API_KEY")
+    llm_timeout_seconds: float = Field(default=45.0, alias="LLM_TIMEOUT_SECONDS")
+    llm_max_tokens: int = Field(default=2048, alias="LLM_MAX_TOKENS")
+    llm_temperature: float = Field(default=0.0, alias="LLM_TEMPERATURE")
+    llm_http_referer: str = Field(default="", alias="LLM_HTTP_REFERER")
+    llm_x_title: str = Field(default="MedCoPilot", alias="LLM_X_TITLE")
+    llm_extra_headers_json: str = Field(default="", alias="LLM_EXTRA_HEADERS_JSON")
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

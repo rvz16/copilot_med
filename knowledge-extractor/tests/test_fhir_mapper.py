@@ -2,7 +2,7 @@ from app.mappers import FhirMapper
 from app.models import CanonicalExtraction
 
 
-def test_condition_mapping_from_symptoms_and_diagnoses() -> None:
+def test_condition_mapping_uses_diagnoses_only() -> None:
     mapper = FhirMapper()
     canonical = CanonicalExtraction(
         symptoms=["Headache for 3 days"],
@@ -12,7 +12,8 @@ def test_condition_mapping_from_symptoms_and_diagnoses() -> None:
     resources = mapper.map_to_resources(canonical, patient_id="p1", encounter_id="e1")
     conditions = [r for r in resources if r["resourceType"] == "Condition"]
 
-    assert len(conditions) == 2
+    assert len(conditions) == 1
+    assert conditions[0]["code"]["text"] == "Likely viral syndrome"
     assert all(r["subject"]["reference"] == "Patient/p1" for r in conditions)
     assert all(r["encounter"]["reference"] == "Encounter/e1" for r in conditions)
 
@@ -34,6 +35,9 @@ def test_document_reference_mapping_for_soap_note() -> None:
     assert documents[0]["subject"]["reference"] == "Patient/p1"
     assert documents[0]["context"]["encounter"][0]["reference"] == "Encounter/e1"
     assert documents[0]["content"][0]["attachment"]["contentType"] == "application/json"
+    assert documents[0]["type"]["text"] == "SOAP-заметка консультации"
+    assert "Полная структурированная SOAP-заметка консультации в JSON" in documents[0]["description"]
+    assert documents[0]["content"][0]["attachment"]["title"] == "SOAP-заметка sess-1"
 
 
 def test_observation_mapping_from_observations_and_measurements() -> None:

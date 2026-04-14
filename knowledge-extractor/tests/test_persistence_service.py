@@ -46,7 +46,8 @@ def test_persistence_preview_mode_does_not_send() -> None:
     response = service.build_documentation(request)
 
     assert response.persistence.enabled is False
-    assert response.validation.all_sections_populated is True
+    assert response.validation.all_sections_populated is False
+    assert response.validation.missing_sections == ["objective", "assessment", "plan"]
     assert response.ehr_sync.status == "preview"
     assert response.persistence.sent_successfully == 0
     assert response.persistence.sent_failed == 0
@@ -79,8 +80,41 @@ def test_persistence_enabled_collects_successes_and_errors() -> None:
     assert response.persistence.enabled is True
     assert response.persistence.target_base_url == "http://example-fhir"
     assert response.persistence.prepared
+    assert any(
+        item.get("resource_type") == "DocumentReference"
+        and "Полная структурированная SOAP-заметка консультации в JSON" in item.get("description", "")
+        for item in response.persistence.prepared
+    )
     assert response.persistence.sent_successfully >= 1
     assert response.persistence.sent_failed >= 1
     assert response.persistence.created
+    assert any("description" in item for item in response.persistence.created)
     assert response.persistence.errors
     assert response.ehr_sync.status == "partial"
+
+
+def test_fallback_only_output_is_not_sent_to_fhir() -> None:
+    client = FakeFhirClient()
+    service = DocumentationService(
+        extractor=RuleBasedMedicalExtractor(),
+        fhir_mapper=FhirMapper(),
+        fhir_client=client,
+    )
+
+    request = ExtractionRequest(
+        session_id="s3",
+        patient_id="p3",
+        transcript="",
+        persist=True,
+        sync_ehr=True,
+    )
+
+    response = service.build_documentation(request)
+
+    assert response.fhir_resources == []
+    assert response.persistence.enabled is True
+    assert response.persistence.prepared == []
+    assert response.persistence.sent_successfully == 0
+    assert response.persistence.sent_failed == 0
+    assert response.ehr_sync.status == "skipped"
+    assert client.calls == []

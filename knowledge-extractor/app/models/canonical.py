@@ -17,6 +17,12 @@ class CanonicalExtraction(BaseModel):
     medications: list[str] = Field(default_factory=list)
     allergies: list[str] = Field(default_factory=list)
 
+    def fact_count(self) -> int:
+        return sum(len(value) for value in self.to_extracted_facts().values())
+
+    def has_meaningful_data(self) -> bool:
+        return self.fact_count() > 0
+
     def to_soap_note(self) -> SoapNote:
         return SoapNote(
             subjective={

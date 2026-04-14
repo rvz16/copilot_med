@@ -45,7 +45,7 @@ class FhirMapper:
     ) -> list[dict[str, Any]]:
         conditions: list[dict[str, Any]] = []
 
-        for text in [*extraction.symptoms, *extraction.diagnoses]:
+        for text in extraction.diagnoses:
             resource: dict[str, Any] = {
                 "resourceType": "Condition",
                 "subject": self._base_subject(patient_id),
@@ -71,7 +71,7 @@ class FhirMapper:
                 "resourceType": "Observation",
                 "status": "final",
                 "subject": self._base_subject(patient_id),
-                "code": {"text": "Clinical observation"},
+                "code": {"text": "Клиническое наблюдение"},
                 "valueString": text,
             }
             encounter_ref = self._encounter_ref(encounter_id)
@@ -137,17 +137,21 @@ class FhirMapper:
         attachment_data = base64.b64encode(
             json.dumps(soap_note.model_dump(mode="json"), ensure_ascii=False).encode("utf-8")
         ).decode("ascii")
+        soap_summary = self._build_soap_summary(soap_note)
         resource: dict[str, Any] = {
             "resourceType": "DocumentReference",
             "status": "current",
             "subject": self._base_subject(patient_id),
-            "type": {"text": "SOAP note"},
-            "description": "Structured SOAP note generated after consultation",
+            "type": {"text": "SOAP-заметка консультации"},
+            "description": (
+                "Полная структурированная SOAP-заметка консультации в JSON. "
+                f"{soap_summary}"
+            ),
             "content": [
                 {
                     "attachment": {
                         "contentType": "application/json",
-                        "title": f"SOAP note {session_id or patient_id}",
+                        "title": f"SOAP-заметка {session_id or patient_id}",
                         "data": attachment_data,
                     }
                 }
@@ -157,3 +161,13 @@ class FhirMapper:
         if encounter_ref:
             resource["context"] = {"encounter": [encounter_ref]}
         return [resource]
+
+    @staticmethod
+    def _build_soap_summary(soap_note: SoapNote) -> str:
+        return (
+            "Содержит разделы: "
+            f"субъективно {len(soap_note.subjective.reported_symptoms) + len(soap_note.subjective.reported_concerns)}, "
+            f"объективно {len(soap_note.objective.observations) + len(soap_note.objective.measurements)}, "
+            f"оценка {len(soap_note.assessment.diagnoses) + len(soap_note.assessment.evaluation)}, "
+            f"план {len(soap_note.plan.treatment) + len(soap_note.plan.follow_up_instructions)}."
+        )

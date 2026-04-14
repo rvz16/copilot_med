@@ -1,17 +1,13 @@
-from app.models import ExtractionRequest, ExtractionResponse, PersistenceResult, SoapNote
+from app.models import ExtractionRequest, ExtractionResponse
+
+from .documentation_service import DocumentationService
 
 
 class ExtractionService:
-    """Stub service for MVP skeleton.
+    """Compatibility wrapper around the active documentation pipeline."""
 
-    Extraction logic and FHIR persistence are intentionally not implemented at this stage.
-    """
+    def __init__(self, documentation_service: DocumentationService | None = None) -> None:
+        self.documentation_service = documentation_service or DocumentationService()
 
     def process(self, request: ExtractionRequest) -> ExtractionResponse:
-        return ExtractionResponse(
-            session_id=request.session_id,
-            soap_note=SoapNote(),
-            extracted_facts={},
-            fhir_resources=[],
-            persistence=PersistenceResult(enabled=request.persist, created=[], errors=[]),
-        )
+        return self.documentation_service.build_documentation(request)

@@ -1378,7 +1378,9 @@ button:disabled,
 
 .knowledge-overview-grid,
 .knowledge-validation-grid,
-.knowledge-score-grid {
+.knowledge-score-grid,
+.knowledge-soap-grid,
+.knowledge-ehr-list {
   display: grid;
   gap: 12px;
 }
@@ -1421,6 +1423,98 @@ button:disabled,
 .knowledge-section h3 {
   margin: 0;
   font-size: 1rem;
+}
+
+.knowledge-soap-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.knowledge-soap-card,
+.knowledge-ehr-item {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  background: rgba(39, 110, 81, 0.06);
+}
+
+.knowledge-soap-card-head,
+.knowledge-soap-item-meta,
+.knowledge-ehr-item-head {
+  display: flex;
+  gap: 10px;
+}
+
+.knowledge-soap-card-head,
+.knowledge-ehr-item-head {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.knowledge-soap-card h4 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.knowledge-soap-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.knowledge-soap-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(39, 110, 81, 0.08);
+}
+
+.knowledge-soap-item--fallback {
+  background: rgba(224, 214, 185, 0.22);
+  border-color: rgba(159, 127, 63, 0.18);
+}
+
+.knowledge-soap-item-meta {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.knowledge-soap-kind,
+.knowledge-soap-confidence,
+.knowledge-soap-flag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.knowledge-soap-kind {
+  background: rgba(39, 110, 81, 0.12);
+  color: #225742;
+}
+
+.knowledge-soap-confidence {
+  background: rgba(15, 37, 29, 0.08);
+  color: #234233;
+}
+
+.knowledge-soap-flag {
+  background: rgba(159, 127, 63, 0.14);
+  color: #7a5c20;
+}
+
+.knowledge-soap-text {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.6;
 }
 
 .knowledge-score-row {
@@ -1468,7 +1562,8 @@ button:disabled,
   .analysis-main-grid,
   .psa-quality-overview,
   .psa-context-grid,
-  .knowledge-overview-grid {
+  .knowledge-overview-grid,
+  .knowledge-soap-grid {
     grid-template-columns: 1fr;
   }
 

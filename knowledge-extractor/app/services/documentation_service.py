@@ -2,11 +2,17 @@ import logging
 from typing import Any
 
 from app.core.config import settings
-from app.extractors import BaseExtractor, OllamaMedicalExtractor, RuleBasedMedicalExtractor
+from app.extractors import (
+    BaseExtractor,
+    OllamaMedicalExtractor,
+    OpenAICompatibleMedicalExtractor,
+    RuleBasedMedicalExtractor,
+)
+from app.extractors.sanitizer import ClinicalExtractionSanitizer
 from app.fhir import FhirClient
-from app.llm import OllamaClient
+from app.llm import OllamaClient, OpenAICompatibleClient
 from app.mappers import FhirMapper
-from app.models import ExtractionRequest, ExtractionResponse, PersistenceResult, SoapNote
+from app.models import CanonicalExtraction, ExtractionRequest, ExtractionResponse, PersistenceResult, SoapNote
 from app.models.schemas import EhrSyncResult, ExtractionConfidence, SoapValidation, SoapSectionValidation
 
 logger = logging.getLogger(__name__)
@@ -28,17 +34,45 @@ def _build_default_extractor() -> BaseExtractor:
             )
         )
 
+    if backend in {"llm", "openai_compatible", "openai-compatible"}:
+        return OpenAICompatibleMedicalExtractor(
+            client=OpenAICompatibleClient(
+                base_url=settings.llm_base_url,
+                model=settings.llm_model,
+                api_key=settings.llm_api_key,
+                timeout_seconds=settings.llm_timeout_seconds,
+                max_tokens=settings.llm_max_tokens,
+                temperature=settings.llm_temperature,
+                http_referer=settings.llm_http_referer,
+                x_title=settings.llm_x_title,
+                extra_headers_json=settings.llm_extra_headers_json,
+            )
+        )
+
     raise ValueError(f"Unsupported extractor backend: {settings.extractor_backend}")
 
 
 class DocumentationService:
+    FALLBACK_SECTION_TEXT = {
+        "subjective": "В расшифровке не найдено явно зафиксированных жалоб или опасений пациента.",
+        "objective": "В расшифровке не найдено явно зафиксированных объективных наблюдений или измерений.",
+        "assessment": (
+            "В расшифровке не найдено явно зафиксированной оценки состояния или диагноза; "
+            "требуется врачебная проверка."
+        ),
+        "plan": "В расшифровке не найдено явно зафиксированного плана лечения или инструкций по наблюдению.",
+    }
+
     def __init__(
         self,
         extractor: BaseExtractor | None = None,
         fhir_mapper: FhirMapper | None = None,
         fhir_client: FhirClient | None = None,
+        sanitizer: ClinicalExtractionSanitizer | None = None,
     ) -> None:
         self.extractor = extractor or _build_default_extractor()
+        self.rule_based_fallback = RuleBasedMedicalExtractor()
+        self.sanitizer = sanitizer or ClinicalExtractionSanitizer()
         self.fhir_mapper = fhir_mapper or FhirMapper()
         self.fhir_client = fhir_client or FhirClient(
             base_url=settings.fhir_base_url,
@@ -47,7 +81,9 @@ class DocumentationService:
         )
 
     def build_documentation(self, request: ExtractionRequest) -> ExtractionResponse:
-        canonical = self.extractor.extract(request.transcript)
+        canonical = self._extract_canonical(request.transcript)
+        canonical = self.sanitizer.sanitize(canonical)
+        has_meaningful_data = canonical.has_meaningful_data()
         soap_note = self._build_complete_soap_note(canonical.to_soap_note())
         extracted_facts = canonical.to_extracted_facts()
         summary = canonical.to_summary()
@@ -56,12 +92,16 @@ class DocumentationService:
             extracted_facts=extracted_facts,
             validation=validation,
         )
-        fhir_resources = self.fhir_mapper.map_to_resources(
-            extraction=canonical,
-            patient_id=request.patient_id,
-            encounter_id=request.encounter_id,
-            soap_note=soap_note,
-            session_id=request.session_id,
+        fhir_resources = (
+            self.fhir_mapper.map_to_resources(
+                extraction=canonical,
+                patient_id=request.patient_id,
+                encounter_id=request.encounter_id,
+                soap_note=soap_note,
+                session_id=request.session_id,
+            )
+            if has_meaningful_data
+            else []
         )
 
         persistence = self._build_persistence_result(
@@ -71,6 +111,7 @@ class DocumentationService:
         ehr_sync = self._build_ehr_sync_result(
             request=request,
             persistence=persistence,
+            has_meaningful_data=has_meaningful_data,
         )
 
         return ExtractionResponse(
@@ -85,13 +126,34 @@ class DocumentationService:
             ehr_sync=ehr_sync,
         )
 
+    def _extract_canonical(self, transcript: str) -> CanonicalExtraction:
+        try:
+            return self.extractor.extract(transcript)
+        except Exception as exc:
+            if isinstance(self.extractor, RuleBasedMedicalExtractor):
+                raise
+
+            logger.warning(
+                "primary_extractor_failed_falling_back_to_rule_based",
+                extra={
+                    "extractor_type": type(self.extractor).__name__,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                },
+            )
+            return self.rule_based_fallback.extract(transcript)
+
     def _build_persistence_result(
         self,
         resources: list[dict[str, Any]],
         should_persist: bool,
     ) -> PersistenceResult:
         prepared = [
-            {"index": idx, "resource_type": resource.get("resourceType", "Unknown")}
+            {
+                "index": idx,
+                "resource_type": resource.get("resourceType", "Unknown"),
+                "description": self._describe_fhir_resource(resource),
+            }
             for idx, resource in enumerate(resources)
         ]
 
@@ -113,6 +175,7 @@ class DocumentationService:
                     {
                         "index": idx,
                         "resource_type": resource_type,
+                        "description": self._describe_fhir_resource(resource),
                         "id": create_result.get("id"),
                         "status_code": create_result.get("status_code"),
                         "location": create_result.get("location"),
@@ -132,6 +195,31 @@ class DocumentationService:
         return result
 
     @staticmethod
+    def _describe_fhir_resource(resource: dict[str, Any]) -> str:
+        resource_type = str(resource.get("resourceType", "FHIR resource"))
+        if resource_type == "Condition":
+            return str(resource.get("code", {}).get("text", "Состояние без текстового описания"))
+        if resource_type == "Observation":
+            return str(
+                resource.get("valueString")
+                or resource.get("code", {}).get("text")
+                or "Наблюдение без текстового описания"
+            )
+        if resource_type == "MedicationStatement":
+            return str(
+                resource.get("medicationCodeableConcept", {}).get("text", "Назначение без текстового описания")
+            )
+        if resource_type == "AllergyIntolerance":
+            return str(resource.get("code", {}).get("text", "Аллергия без текстового описания"))
+        if resource_type == "DocumentReference":
+            return str(
+                resource.get("description")
+                or resource.get("content", [{}])[0].get("attachment", {}).get("title")
+                or "Полная SOAP-заметка консультации в JSON"
+            )
+        return f"{resource_type} без текстового описания"
+
+    @staticmethod
     def _build_complete_soap_note(soap_note: SoapNote) -> SoapNote:
         subjective_count = len(soap_note.subjective.reported_symptoms) + len(soap_note.subjective.reported_concerns)
         objective_count = len(soap_note.objective.observations) + len(soap_note.objective.measurements)
@@ -139,39 +227,31 @@ class DocumentationService:
         plan_count = len(soap_note.plan.treatment) + len(soap_note.plan.follow_up_instructions)
 
         if subjective_count == 0:
-            soap_note.subjective.reported_concerns.append(
-                "В расшифровке не найдено явно зафиксированных жалоб или опасений пациента."
-            )
+            soap_note.subjective.reported_concerns.append(DocumentationService.FALLBACK_SECTION_TEXT["subjective"])
         if objective_count == 0:
-            soap_note.objective.observations.append(
-                "В расшифровке не найдено явно зафиксированных объективных наблюдений или измерений."
-            )
+            soap_note.objective.observations.append(DocumentationService.FALLBACK_SECTION_TEXT["objective"])
         if assessment_count == 0:
-            soap_note.assessment.evaluation.append(
-                "В расшифровке не найдено явно зафиксированной оценки состояния или диагноза; требуется врачебная проверка."
-            )
+            soap_note.assessment.evaluation.append(DocumentationService.FALLBACK_SECTION_TEXT["assessment"])
         if plan_count == 0:
-            soap_note.plan.follow_up_instructions.append(
-                "В расшифровке не найдено явно зафиксированного плана лечения или инструкций по наблюдению."
-            )
+            soap_note.plan.follow_up_instructions.append(DocumentationService.FALLBACK_SECTION_TEXT["plan"])
 
         return soap_note
 
     @staticmethod
     def _build_validation(soap_note: SoapNote) -> SoapValidation:
-        section_counts = {
-            "subjective": len(soap_note.subjective.reported_symptoms) + len(soap_note.subjective.reported_concerns),
-            "objective": len(soap_note.objective.observations) + len(soap_note.objective.measurements),
-            "assessment": len(soap_note.assessment.diagnoses) + len(soap_note.assessment.evaluation),
-            "plan": len(soap_note.plan.treatment) + len(soap_note.plan.follow_up_instructions),
+        section_values = {
+            "subjective": soap_note.subjective.reported_symptoms + soap_note.subjective.reported_concerns,
+            "objective": soap_note.objective.observations + soap_note.objective.measurements,
+            "assessment": soap_note.assessment.diagnoses + soap_note.assessment.evaluation,
+            "plan": soap_note.plan.treatment + soap_note.plan.follow_up_instructions,
         }
         sections = {
             name: SoapSectionValidation(
-                populated=count > 0,
-                item_count=count,
-                used_fallback=DocumentationService._section_uses_fallback(soap_note, name),
+                populated=DocumentationService._count_grounded_items(name, values) > 0,
+                item_count=DocumentationService._count_grounded_items(name, values),
+                used_fallback=DocumentationService._section_uses_fallback(name, values),
             )
-            for name, count in section_counts.items()
+            for name, values in section_values.items()
         }
         missing_sections = [name for name, section in sections.items() if not section.populated]
         return SoapValidation(
@@ -181,18 +261,17 @@ class DocumentationService:
         )
 
     @staticmethod
-    def _section_uses_fallback(soap_note: SoapNote, section_name: str) -> bool:
-        section_values = {
-            "subjective": soap_note.subjective.reported_symptoms + soap_note.subjective.reported_concerns,
-            "objective": soap_note.objective.observations + soap_note.objective.measurements,
-            "assessment": soap_note.assessment.diagnoses + soap_note.assessment.evaluation,
-            "plan": soap_note.plan.treatment + soap_note.plan.follow_up_instructions,
-        }
-        values = section_values.get(section_name, [])
-        return any(
-            "в расшифровке не найдено" in value.lower() or "требуется врачебная проверка" in value.lower()
-            for value in values
-        )
+    def _count_grounded_items(section_name: str, values: list[str]) -> int:
+        return sum(1 for value in values if not DocumentationService._is_fallback_value(section_name, value))
+
+    @classmethod
+    def _section_uses_fallback(cls, section_name: str, values: list[str]) -> bool:
+        return any(cls._is_fallback_value(section_name, value) for value in values)
+
+    @classmethod
+    def _is_fallback_value(cls, section_name: str, value: str) -> bool:
+        fallback = cls.FALLBACK_SECTION_TEXT.get(section_name, "")
+        return value.strip() == fallback
 
     @staticmethod
     def _build_confidence_scores(
@@ -203,7 +282,7 @@ class DocumentationService:
         soap_sections: dict[str, float] = {}
         for name, section in validation.sections.items():
             if section.item_count == 0:
-                soap_sections[name] = 0.0
+                soap_sections[name] = 0.15 if section.used_fallback else 0.0
             elif section.used_fallback:
                 soap_sections[name] = 0.35
             else:
@@ -226,6 +305,7 @@ class DocumentationService:
         *,
         request: ExtractionRequest,
         persistence: PersistenceResult,
+        has_meaningful_data: bool,
     ) -> EhrSyncResult:
         if not request.sync_ehr:
             return EhrSyncResult(
@@ -237,6 +317,28 @@ class DocumentationService:
                 response={
                     "reason": "Синхронизация с EHR отключена для этого запроса.",
                     "fhir_base_url": self.fhir_client.base_url,
+                },
+            )
+
+        if not has_meaningful_data:
+            return EhrSyncResult(
+                enabled=True,
+                mode="fhir",
+                system="EHR (FHIR)",
+                status="skipped",
+                record_id=request.patient_id,
+                synced_fields=[],
+                response={
+                    "reason": "Клинически обоснованные данные не извлечены; запись fallback-блоков в EHR заблокирована.",
+                    "fhir_base_url": self.fhir_client.base_url,
+                    "patient_id": request.patient_id,
+                    "patient_name": request.patient_name,
+                    "doctor_id": request.doctor_id,
+                    "doctor_name": request.doctor_name,
+                    "doctor_specialty": request.doctor_specialty,
+                    "chief_complaint": request.chief_complaint,
+                    "total_prepared": len(persistence.prepared),
+                    "total_written": persistence.sent_successfully,
                 },
             )
 

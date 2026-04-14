@@ -395,16 +395,16 @@ class SessionService:
         session.closed_at = session.closed_at or utcnow()
         session.processing_state = "completed"
 
-        if trigger_post_session_analytics and self.settings.knowledge_extractor_enabled:
-            session.processing_state = "processing"
-            self.db.flush()
-            self._run_post_session_analytics(session)
-
         if trigger_post_session_analytics and self.settings.post_session_analytics_enabled:
             if session.processing_state != "failed":
                 session.processing_state = "processing"
             self.db.flush()
             self._run_full_transcript_analytics(session)
+
+        if trigger_post_session_analytics and self.settings.knowledge_extractor_enabled:
+            session.processing_state = "processing"
+            self.db.flush()
+            self._run_post_session_analytics(session)
 
         # Pending analytics artifacts must be flushed before snapshot assembly,
         # otherwise the finalized snapshot will miss post-session results.
@@ -627,6 +627,8 @@ class SessionService:
 
     def _run_post_session_analytics(self, session: SessionRecord) -> None:
         profile = session.profile
+        archived_full_text = self._extract_full_transcript_text(self._build_post_analytics_snapshot(session))
+        transcript_text = archived_full_text or session.stable_transcript or ""
         payload = {
             "session_id": session.session_id,
             "patient_id": session.patient_id,
@@ -636,7 +638,7 @@ class SessionService:
             "doctor_name": profile.doctor_name if profile else None,
             "doctor_specialty": profile.doctor_specialty if profile else None,
             "chief_complaint": profile.chief_complaint if profile else None,
-            "transcript": session.stable_transcript or "",
+            "transcript": transcript_text,
             "persist": self.settings.knowledge_extractor_persist_fhir,
             "sync_ehr": self.settings.knowledge_extractor_sync_ehr,
         }

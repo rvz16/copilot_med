@@ -4,12 +4,12 @@ from pydantic import ValidationError
 
 from app.extractors.base import BaseExtractor
 from app.extractors.prompts import MEDICAL_EXTRACTION_SYSTEM_PROMPT, build_medical_extraction_user_prompt
-from app.llm import OllamaClient, OllamaGenerationError
+from app.llm import OpenAICompatibleClient, OpenAICompatibleGenerationError
 from app.models import CanonicalExtraction
 
 
-class OllamaMedicalExtractor(BaseExtractor):
-    def __init__(self, client: OllamaClient) -> None:
+class OpenAICompatibleMedicalExtractor(BaseExtractor):
+    def __init__(self, client: OpenAICompatibleClient) -> None:
         self.client = client
 
     def extract(self, transcript: str) -> CanonicalExtraction:
@@ -22,8 +22,6 @@ class OllamaMedicalExtractor(BaseExtractor):
         try:
             return CanonicalExtraction.model_validate(payload)
         except ValidationError as exc:
-            raise OllamaGenerationError("ollama_payload_failed_schema_validation") from exc
-
-    @staticmethod
-    def _build_user_prompt(transcript: str) -> str:
-        return build_medical_extraction_user_prompt(transcript)
+            raise OpenAICompatibleGenerationError(
+                "openai_compatible_payload_failed_schema_validation"
+            ) from exc
