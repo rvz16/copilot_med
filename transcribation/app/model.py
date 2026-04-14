@@ -55,11 +55,13 @@ _HALLUCINATION_PATTERNS: list[re.Pattern] = [
     re.compile(r"(однажды|жили-были|давным-давно)", re.IGNORECASE),
     re.compile(r"(познакомил(ся|ась)|представленные данные|предоставленные данные)", re.IGNORECASE),
 ]
+
 _EN_HALLUCINATION_PATTERNS = [
     re.compile(r"(thank you|watching|subtitles|amara\.org|translated|subscribe|channel)", re.IGNORECASE)
 ]
 
 class DummySegment:
+    """Унифицированный класс для Groq, совместимый по интерфейсу с faster_whisper.Segment"""
     def __init__(self, start, end, text, avg_logprob, no_speech_prob):
         self.start = start
         self.end = end
@@ -73,15 +75,13 @@ def get_groq_client():
     if _groq_client is None:
         from groq import Groq
         if not GROQ_API_KEY:
-            logger.warning("GROQ_API_KEY is missing! Groq API will fail.")
-        
+            logger.warning("GROQ_API_KEY is missing! Groq API requests will fail.")
         _groq_client = Groq(
             api_key=GROQ_API_KEY,
-            max_retries=2,       
-            timeout=45.0,        
+            max_retries=2,
+            timeout=45.0,
         )
     return _groq_client
-
 
 def load_model():
     global _model
@@ -93,7 +93,6 @@ def load_model():
             compute_type=COMPUTE_TYPE,
         )
     return _model
-
 
 def _build_prompt(previous_text: str | None, use_prompt: bool, is_first_chunk: bool) -> str | None:
     if not use_prompt:
@@ -109,7 +108,6 @@ def _build_prompt(previous_text: str | None, use_prompt: bool, is_first_chunk: b
         return f"{base_anchor} {tail}"
         
     return base_anchor
-
 
 def _base_kwargs(prompt: str | None) -> dict:
     kwargs: dict = {
@@ -128,6 +126,7 @@ def _base_kwargs(prompt: str | None) -> dict:
     if prompt:
         kwargs["initial_prompt"] = prompt
         kwargs["condition_on_previous_text"] = False
+    
     if VAD_FILTER:
         kwargs["vad_parameters"] = {
             "threshold": VAD_THRESHOLD,
@@ -154,40 +153,39 @@ def _has_excessive_repetition(text: str, max_repeat_ratio: float = 0.6) -> bool:
     most_common_count = counts.most_common(1)[0][1]
     return (most_common_count / len(words)) > max_repeat_ratio
 
-
 def _compute_vad_speech_duration(segments: list) -> float:
-    return sum(max(seg.end - seg.start, 0) for seg in segments)
-
+    return sum(max(getattr(seg, 'end', 0) - getattr(seg, 'start', 0), 0) for seg in segments)
 
 def _filter_hallucinations(segments: list, audio_duration: float = 0.0, is_first_chunk: bool = False) -> list:
     filtered = []
     for seg in segments:
-        text = seg.text.strip()
+        text = getattr(seg, 'text', '').strip()
         if not text:
             continue
             
+        avg_logprob = getattr(seg, "avg_logprob", 0.0)
+        no_speech_prob = getattr(seg, "no_speech_prob", 0.0)
+        seg_start = getattr(seg, "start", 0.0)
+        seg_end = getattr(seg, "end", 0.0)
+
         if USE_GROQ_API:
-            if getattr(seg, "no_speech_prob", 0) > 0.2:
+            if no_speech_prob > 0.2 or avg_logprob < -0.8:
                 continue
-                
-            if getattr(seg, "avg_logprob", 0) < -0.8:
-                continue
-                
             for pat in _EN_HALLUCINATION_PATTERNS:
                 if pat.search(text):
-                    text = ""
+                    text = "" 
                     break
             if not text:
                 continue
-            
+
         else:
-            if getattr(seg, "avg_logprob", 0) < HALLUCINATION_LOG_PROB and getattr(seg, "no_speech_prob", 0) > 0.35:
+            if avg_logprob < HALLUCINATION_LOG_PROB and no_speech_prob > 0.35:
                 continue
-            if is_first_chunk and getattr(seg, "avg_logprob", 0) < FIRST_CHUNK_LOGPROB_THRESHOLD:
+            if is_first_chunk and avg_logprob < FIRST_CHUNK_LOGPROB_THRESHOLD:
                 continue
                 
-        seg_duration = seg.end - seg.start
-        if seg_duration < 0.08:
+        seg_duration = seg_end - seg_start
+        if seg_end > 0 and seg_duration < 0.08:
             continue
             
         if _is_hallucination_text(text):
@@ -195,7 +193,7 @@ def _filter_hallucinations(segments: list, audio_duration: float = 0.0, is_first
             
         words = text.split()
         if len(words) >= 3:
-            unique_stems = set(w.lower().strip(".,!?;:«»\"'()—-") for w in words)
+            unique_stems = set(w.lower().strip(".,!?;:«»\"'()—-–") for w in words)
             if len(unique_stems) == 1:
                 continue
                 
@@ -205,27 +203,27 @@ def _filter_hallucinations(segments: list, audio_duration: float = 0.0, is_first
         filtered.append(seg)
 
     if audio_duration > 0.5 and filtered:
-        total_text = "".join(seg.text for seg in filtered)
+        total_text = "".join(getattr(seg, 'text', '') for seg in filtered)
         chars_per_sec = len(total_text) / audio_duration
         if chars_per_sec > MAX_CHARS_PER_SECOND:
             return []
 
     if filtered:
         speech_dur = _compute_vad_speech_duration(filtered)
-        total_chars = sum(len(seg.text.strip()) for seg in filtered)
+        total_chars = sum(len(getattr(seg, 'text', '').strip()) for seg in filtered)
         if speech_dur > 0.1 and total_chars / speech_dur > MAX_CHARS_PER_SECOND:
             return []
 
     return filtered
 
-
-# LOCAL FASTER-WHISPER
+# FASTER-WHISPER
 
 def _transcribe_file_local(audio_path: str, *, use_prompt: bool = True, use_hallucination_filter: bool = True, previous_text: str | None = None, is_first_chunk: bool = False) -> dict:
     model = load_model()
     prompt = _build_prompt(previous_text, use_prompt, is_first_chunk)
     kwargs = _base_kwargs(prompt)
-    kwargs["without_timestamps"] = True
+    
+    kwargs["without_timestamps"] = False 
 
     segments, info = model.transcribe(audio_path, **kwargs)
     segment_list = list(segments)
@@ -233,16 +231,19 @@ def _transcribe_file_local(audio_path: str, *, use_prompt: bool = True, use_hall
     if use_hallucination_filter:
         segment_list = _filter_hallucinations(segment_list, info.duration, is_first_chunk)
 
-    text = " ".join(seg.text.strip() for seg in segment_list if seg.text.strip())
+    text = " ".join(getattr(seg, 'text', '').strip() for seg in segment_list if getattr(seg, 'text', '').strip())
     return {
         "text": text.strip(),
-        "speech_detected": any((seg.end - seg.start) > 0 for seg in segment_list),
+        "speech_detected": any((getattr(seg, 'end', 0) - getattr(seg, 'start', 0)) > 0 for seg in segment_list),
         "language": info.language,
         "language_probability": round(info.language_probability, 4),
         "audio_file_duration": round(info.duration, 2),
     }
 
 def _transcribe_pcm_local(pcm: np.ndarray, *, use_prompt: bool = True, use_hallucination_filter: bool = True, previous_text: str | None = None, is_first_chunk: bool = False) -> dict:
+    if len(pcm) == 0:
+        return {"text": "", "segments": [], "speech_detected": False, "language": LANGUAGE, "language_probability": 1.0, "audio_file_duration": 0.0}
+
     model = load_model()
     prompt = _build_prompt(previous_text, use_prompt, is_first_chunk)
     kwargs = _base_kwargs(prompt)
@@ -255,15 +256,16 @@ def _transcribe_pcm_local(pcm: np.ndarray, *, use_prompt: bool = True, use_hallu
     if use_hallucination_filter:
         segment_list = _filter_hallucinations(segment_list, audio_duration, is_first_chunk)
 
-    text = " ".join(seg.text.strip() for seg in segment_list if seg.text.strip())
+    text = " ".join(getattr(seg, 'text', '').strip() for seg in segment_list if getattr(seg, 'text', '').strip())
     return {
         "text": text.strip(),
         "segments": segment_list,
-        "speech_detected": any((seg.end - seg.start) > 0 for seg in segment_list),
+        "speech_detected": any((getattr(seg, 'end', 0) - getattr(seg, 'start', 0)) > 0 for seg in segment_list),
         "language": info.language,
         "language_probability": round(info.language_probability, 4),
         "audio_file_duration": round(info.duration, 2),
     }
+
 
 # GROQ API MODEL
 
@@ -284,7 +286,6 @@ def _parse_groq_segments(raw_segments: list) -> list[DummySegment]:
             no_speech_prob = getattr(s, "no_speech_prob", 0.0)
         parsed.append(DummySegment(start, end, text, avg_logprob, no_speech_prob))
     return parsed
-
 
 def _transcribe_file_groq(audio_path: str, *, use_prompt: bool = True, use_hallucination_filter: bool = True, previous_text: str | None = None, is_first_chunk: bool = False) -> dict:
     client = get_groq_client()
@@ -322,7 +323,6 @@ def _transcribe_file_groq(audio_path: str, *, use_prompt: bool = True, use_hallu
     except Exception as exc:
         logger.error("Groq API transcription failed for file: %s", exc)
         return {"text": "", "speech_detected": False, "language": LANGUAGE, "language_probability": 1.0, "audio_file_duration": 0.0}
-
 
 def _transcribe_pcm_groq(pcm: np.ndarray, *, use_prompt: bool = True, use_hallucination_filter: bool = True, previous_text: str | None = None, is_first_chunk: bool = False) -> dict:
     if len(pcm) == 0:
@@ -383,8 +383,8 @@ def _transcribe_pcm_groq(pcm: np.ndarray, *, use_prompt: bool = True, use_halluc
     finally:
         os.unlink(tmp_path)
 
-
 # ENTRYPOINTS
+
 def transcribe(audio_path: str, **kwargs) -> dict:
     if USE_GROQ_API:
         return _transcribe_file_groq(audio_path, **kwargs)

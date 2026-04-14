@@ -593,6 +593,100 @@ class SessionService:
             ],
         )
 
+    def transcribe_full_recording(self, session_id: str) -> TranscriptResponse:
+        """
+        Explicitly triggers a high-quality transcription of the accumulated full recording
+        and updates the session's stable transcript.
+        """
+        session = self._get_session(session_id)
+        
+        recording_path = self._find_recording_path(session.session_id)
+        if recording_path is None:
+            raise ApiError("RECORDING_NOT_FOUND", "No accumulated recording file found for this session.", 404)
+
+        mime_type = "audio/webm" if recording_path.suffix == ".webm" else f"audio/{recording_path.suffix.lstrip('.')}"
+        
+        try:
+            file_bytes = recording_path.read_bytes()
+            # Send the entire recording to the ASR model (local or Groq API based on config)
+            full_transcription = self.asr_provider.transcribe_full(
+                session_id=session.session_id,
+                file_bytes=file_bytes,
+                file_name=recording_path.name,
+                mime_type=mime_type,
+                timeout_seconds=self.settings.full_transcription_timeout_seconds,
+            )
+            
+            self._log_external_call(
+                session=session,
+                service_name="asr_full_transcription_standalone",
+                endpoint="transcribe-full",
+                request_payload={"session_id": session.session_id, "file_name": recording_path.name},
+                response_payload={"full_text_length": len(full_transcription.full_text), "source": full_transcription.source},
+                status="success",
+                error_message=None,
+            )
+        except Exception as exc:
+            logger.warning("Standalone full transcription failed for session %s: %s", session.session_id, exc)
+            self._log_external_call(
+                session=session,
+                service_name="asr_full_transcription_standalone",
+                endpoint="transcribe-full",
+                request_payload={"session_id": session.session_id, "file_name": recording_path.name},
+                response_payload=None,
+                status="failed",
+                error_message=str(exc),
+            )
+            raise ApiError("TRANSCRIPTION_FAILED", f"High-quality full transcription failed: {exc}", 500)
+
+        # Ensure the new transcript is actually better/complete compared to the real-time one
+        full_transcription = self._prefer_complete_transcript(
+            stable_text=session.stable_transcript or "",
+            full_transcription=full_transcription,
+        )
+
+        if full_transcription.full_text.strip():
+            # Update the session's current and stable transcript
+            session.current_transcript = full_transcription.full_text
+            session.stable_transcript = full_transcription.full_text
+
+            # Log the event
+            self.db.add(
+                TranscriptEvent(
+                    session_db_id=session.id,
+                    seq=session.latest_seq or None,
+                    event_type="full_transcription",
+                    delta_text=None,
+                    full_text=full_transcription.full_text,
+                    source=full_transcription.source,
+                )
+            )
+            
+            # Save as an artifact for historical purposes
+            self.db.add(
+                ExtractedArtifact(
+                    session_db_id=session.id,
+                    artifact_type="post_analytics_full_transcript",
+                    payload_json={
+                        "full_text": full_transcription.full_text,
+                        "source": full_transcription.source,
+                        "audio_duration": full_transcription.audio_duration,
+                    },
+                )
+            )
+
+            # Update session timestamps and snapshot
+            session.updated_at = utcnow()
+            self._upsert_session_snapshot(
+                session=session,
+                realtime_analysis=None,
+            )
+            self.db.commit()
+            self.db.refresh(session)
+
+        # Return the updated transcript
+        return self.get_transcript(session_id)
+
     def get_hints(self, session_id: str) -> HintsResponse:
         session = self._get_session(session_id)
         return HintsResponse(

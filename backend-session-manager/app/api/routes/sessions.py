@@ -135,3 +135,19 @@ def get_extractions(
     service: SessionService = Depends(get_session_service),
 ) -> ExtractionsResponse:
     return service.get_extractions(session_id)
+
+
+@router.post(
+    "/sessions/{session_id}/transcribe-full",
+    response_model=TranscriptResponse,
+    summary="Trigger high-quality full recording transcription"
+)
+def trigger_full_transcription(
+    session_id: str,
+    service: SessionService = Depends(get_session_service),
+) -> TranscriptResponse:
+    """
+    Triggers an explicit full-file high-quality transcription for the accumulated session audio.
+    This bypasses real-time constraints and uses the full context to generate a highly accurate text.
+    """
+    return service.transcribe_full_recording(session_id)

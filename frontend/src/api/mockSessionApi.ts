@@ -21,6 +21,7 @@ import type {
   SessionSummary,
   StopRecordingResponse,
   StoredHint,
+  TranscriptResponse,
 } from '../types/types';
 
 const MOCK_DELAY_MS = 300;
@@ -589,5 +590,29 @@ export const mockSessionApi: SessionApi = {
     await delay(MOCK_DELAY_MS);
     const response: HealthResponse = { status: 'ok', service: 'менеджер сессий (тестовый режим)' };
     return response;
+  },
+
+  async transcribeFull(sessionId) {
+    // Simulate processing time for full high-quality transcription
+    await delay(MOCK_ANALYTICS_DELAY_MS);
+    const record = getRecord(sessionId);
+    const timestamp = isoNow();
+
+    const hqTranscript = record.snapshot.transcript
+      ? record.snapshot.transcript + '\n\n[Высокоточная транскрипция завершена]'
+      : 'Высокоточная транскрипция (тестовая запись).';
+
+    // Update the snapshot with the mock high-quality text
+    record.snapshot.transcript = hqTranscript;
+    if (record.snapshot.post_session_analytics && record.snapshot.post_session_analytics.full_transcript) {
+      record.snapshot.post_session_analytics.full_transcript.full_text = hqTranscript;
+    }
+    record.snapshot.updated_at = timestamp;
+
+    return {
+      session_id: sessionId,
+      text: hqTranscript,
+      full_text: hqTranscript,
+    } as unknown as TranscriptResponse;
   },
 };

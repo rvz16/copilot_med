@@ -46,6 +46,10 @@ export default function App() {
   const [selectedSession, setSelectedSession] = useState<SessionDetail | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<'live' | 'archive'>('live');
   const [liveSessionProfile, setLiveSessionProfile] = useState<LiveSessionProfile | null>(null);
+  
+  // Local state for tracking full transcription progress in the archive view
+  const [isArchiveTranscribingFull, setIsArchiveTranscribingFull] = useState(false);
+  
   const pendingStopRequestRef = useRef<Promise<unknown> | null>(null);
 
   const session = useSession();
@@ -137,6 +141,7 @@ export default function App() {
     setLiveSessionProfile(null);
     setSessions([]);
     setSessionsError(null);
+    setIsArchiveTranscribingFull(false);
     setScreen('landing');
   }, [recorder, session, uploader]);
 
@@ -159,6 +164,7 @@ export default function App() {
     try {
       setIsStartingSession(true);
       setSessionsError(null);
+      setIsArchiveTranscribingFull(false);
       recorder.resetRecorder();
       uploader.resetUploader();
       session.resetSession();
@@ -184,6 +190,7 @@ export default function App() {
   const handleOpenSession = useCallback(async (sessionId: string) => {
     try {
       setSessionsError(null);
+      setIsArchiveTranscribingFull(false);
       const detail = await api.getSession(sessionId);
       setSelectedSession(detail);
       setWorkspaceMode('archive');
@@ -256,6 +263,7 @@ export default function App() {
 
     try {
       setIsClosingSession(true);
+      setIsArchiveTranscribingFull(false);
       await ensureRecordingStopped();
       await uploader.waitForIdle();
       const closingSessionId = session.sessionId;
@@ -275,6 +283,37 @@ export default function App() {
       setIsClosingSession(false);
     }
   }, [activeDoctor, ensureRecordingStopped, recorder, refreshSessions, session, uploader]);
+
+  // Handler for triggering full transcription in a live (but stopped) workspace
+  const handleLiveTranscribeFull = useCallback(async () => {
+    if (!session.sessionId) return;
+    try {
+      await session.transcribeFull();
+      await refreshSessions(activeDoctor);
+    } catch {
+      // Errors are handled by the useSession hook and exposed via session.error
+    }
+  }, [activeDoctor, refreshSessions, session]);
+
+  // Handler for triggering full transcription from an archive view
+  const handleArchiveTranscribeFull = useCallback(async () => {
+    if (!selectedSession) return;
+    try {
+      setIsArchiveTranscribingFull(true);
+      setSessionsError(null);
+      await api.transcribeFull(selectedSession.session_id);
+      
+      // Refresh the session detail to display the newly generated high-quality transcript
+      const detail = await api.getSession(selectedSession.session_id);
+      setSelectedSession(detail);
+      await refreshSessions(activeDoctor);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось выполнить полную транскрибацию';
+      setSessionsError(message);
+    } finally {
+      setIsArchiveTranscribingFull(false);
+    }
+  }, [activeDoctor, refreshSessions, selectedSession]);
 
   const liveErrors = useMemo(() => {
     const list: string[] = [];
@@ -403,11 +442,13 @@ export default function App() {
           isRecording={false}
           canRecord={false}
           isBusy={false}
+          isTranscribingFull={isArchiveTranscribingFull}
           errors={
             selectedSession.snapshot?.last_error || selectedSession.last_error
               ? [selectedSession.snapshot?.last_error ?? selectedSession.last_error ?? '']
               : []
           }
+          onTranscribeFull={handleArchiveTranscribeFull}
           onBackToDashboard={() => {
             setScreen('dashboard');
             setSelectedSession(null);
@@ -457,10 +498,12 @@ export default function App() {
           session.recordingState !== 'stopped'
         }
         isBusy={isClosingSession}
+        isTranscribingFull={session.isTranscribingFull}
         errors={liveErrors}
         onStartRecording={handleStartRecording}
         onStopRecording={handleStopRecording}
         onCloseSession={handleCloseSession}
+        onTranscribeFull={handleLiveTranscribeFull}
       />
     </div>
   );

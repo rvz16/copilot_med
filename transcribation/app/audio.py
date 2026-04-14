@@ -38,24 +38,41 @@ def apply_vad_and_mask(
         return False, pcm
 
     try:
-        from faster_whisper.vad import get_vad_model, VadOptions
+        from faster_whisper.vad import get_vad_model
         vad_model = get_vad_model()
         
-        vad_options = VadOptions(
-            threshold=vad_threshold,
-            min_speech_duration_ms=min_speech_ms,
-            min_silence_duration_ms=min_silence_ms,
-            speech_pad_ms=pad_ms,
-        )
-        
-        if hasattr(vad_model, "get_speech_timestamps"):
-            timestamps = vad_model.get_speech_timestamps(pcm, vad_options)
+        use_options_object = False
+        try:
+            from faster_whisper.vad import VadOptions
+            vad_options = VadOptions(
+                threshold=vad_threshold,
+                min_speech_duration_ms=min_speech_ms,
+                min_silence_duration_ms=min_silence_ms,
+                speech_pad_ms=pad_ms,
+            )
+            use_options_object = True
+        except ImportError:
+            pass
+
+        if use_options_object:
+            if hasattr(vad_model, "get_speech_timestamps"):
+                timestamps = vad_model.get_speech_timestamps(pcm, vad_options)
+            else:
+                from faster_whisper.vad import get_speech_timestamps
+                timestamps = get_speech_timestamps(pcm, vad_options)
         else:
             from faster_whisper.vad import get_speech_timestamps
-            timestamps = get_speech_timestamps(pcm, vad_options)
+            timestamps = get_speech_timestamps(
+                pcm, 
+                vad_model,
+                threshold=vad_threshold,
+                min_speech_duration_ms=min_speech_ms,
+                min_silence_duration_ms=min_silence_ms,
+                speech_pad_ms=pad_ms
+            )
             
     except Exception as exc:
-        logger.error("VAD processing error: %s. Fallback to raw audio.", exc)
+        logger.error("VAD processing error (Graceful fallback activated): %s", exc)
         return True, pcm
 
     if not timestamps:

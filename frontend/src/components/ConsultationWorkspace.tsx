@@ -34,10 +34,12 @@ interface Props {
   isRecording: boolean;
   canRecord: boolean;
   isBusy: boolean;
+  isTranscribingFull?: boolean;
   errors: string[];
   onStartRecording?: () => Promise<void>;
   onStopRecording?: () => Promise<void>;
   onCloseSession?: () => Promise<void>;
+  onTranscribeFull?: () => Promise<void>;
   onBackToDashboard?: () => void;
 }
 
@@ -66,10 +68,12 @@ export function ConsultationWorkspace({
   isRecording,
   canRecord,
   isBusy,
+  isTranscribingFull = false,
   errors,
   onStartRecording,
   onStopRecording,
   onCloseSession,
+  onTranscribeFull,
   onBackToDashboard,
 }: Props) {
   const patientContext = analysis?.patient_context ?? null;
@@ -77,6 +81,9 @@ export function ConsultationWorkspace({
   const finalizedTranscript = postSessionAnalytics?.full_transcript?.full_text ?? '';
   const archiveTranscript =
     finalizedTranscript.trim().length >= transcript.trim().length ? finalizedTranscript : transcript;
+
+  // Разрешаем запускать высокоточную транскрибацию, когда запись остановлена или сессия уже завершена
+  const canTranscribeFull = recordingState === 'stopped' || status === 'closed';
 
   return (
     <main className="workspace-page">
@@ -107,7 +114,7 @@ export function ConsultationWorkspace({
             createdAt={createdAt}
             updatedAt={updatedAt}
             closedAt={closedAt}
-            disableActions={isBusy}
+            disableActions={isBusy || isTranscribingFull}
             onCloseSession={onCloseSession}
             onBackToDashboard={onBackToDashboard}
           />
@@ -119,7 +126,7 @@ export function ConsultationWorkspace({
               uploadStatus={uploadStatus}
               chunksUploaded={chunksUploaded}
               canRecord={canRecord}
-              disabled={isBusy}
+              disabled={isBusy || isTranscribingFull}
               onStartRecording={() => void onStartRecording?.()}
               onStopRecording={() => void onStopRecording?.()}
             />
@@ -158,6 +165,9 @@ export function ConsultationWorkspace({
                 : 'Для этой консультации не было сохранено текста.'
             }
             transcript={mode === 'archive' ? archiveTranscript : transcript}
+            canTranscribeFull={canTranscribeFull}
+            isTranscribingFull={isTranscribingFull}
+            onTranscribeFull={onTranscribeFull}
           />
           <HintsPanel
             hints={hints}

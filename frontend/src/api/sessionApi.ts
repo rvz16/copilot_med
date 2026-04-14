@@ -13,6 +13,7 @@ import type {
   SessionDetail,
   SessionApi,
   StopRecordingResponse,
+  TranscriptResponse,
 } from '../types/types';
 
 const configuredBaseUrl = import.meta.env.VITE_SESSION_MANAGER_URL?.trim() ?? '';
@@ -110,4 +111,12 @@ export const sessionApi: SessionApi = {
     const res = await fetch(withBaseUrl('/health'));
     return handleResponse<HealthResponse>(res);
   },
+
+  async transcribeFull(sessionId: string) {
+    const res = await fetch(withBaseUrl(`/api/v1/sessions/${sessionId}/transcribe-full`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    return handleResponse<TranscriptResponse>(res);
+  }
 };

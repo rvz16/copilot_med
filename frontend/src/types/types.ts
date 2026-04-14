@@ -149,6 +149,23 @@ export interface AudioChunkResponse {
   last_error: string | null;
 }
 
+// ── Transcripts ─────────────────────────────
+
+export interface TranscriptEventResponse {
+  seq: number | null;
+  event_type: string;
+  delta_text: string | null;
+  full_text: string;
+  source: string;
+  created_at: string;
+}
+
+export interface TranscriptResponse {
+  session_id: string;
+  stable_text: string;
+  events: TranscriptEventResponse[];
+}
+
 // ── Stop / Close ────────────────────────────
 
 export interface StopRecordingRequest {
@@ -394,4 +411,5 @@ export interface SessionApi {
     offset?: number;
   }): Promise<ListSessionsResponse>;
   healthCheck(): Promise<HealthResponse>;
+  transcribeFull(sessionId: string): Promise<TranscriptResponse>;
 }

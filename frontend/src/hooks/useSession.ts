@@ -5,7 +5,7 @@
 
 import { useCallback, useState } from 'react';
 import { api } from '../api';
-import type { CreateSessionRequest, SessionLifecycleStatus, UploadConfig } from '../types/types';
+import type { CreateSessionRequest, SessionLifecycleStatus, UploadConfig, TranscriptResponse } from '../types/types';
 
 export type SessionStatus = SessionLifecycleStatus;
 export type RecordingState = 'idle' | 'recording' | 'stopped';
@@ -16,6 +16,7 @@ export function useSession() {
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [uploadConfig, setUploadConfig] = useState<UploadConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isTranscribingFull, setIsTranscribingFull] = useState<boolean>(false);
 
   const createSession = useCallback(async (payload: CreateSessionRequest) => {
     try {
@@ -63,12 +64,29 @@ export function useSession() {
     }
   }, [sessionId]);
 
+  const transcribeFull = useCallback(async (): Promise<TranscriptResponse | undefined> => {
+    if (!sessionId) return;
+    try {
+      setError(null);
+      setIsTranscribingFull(true);
+      const res = await api.transcribeFull(sessionId);
+      return res;
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('Не удалось выполнить полную транскрибацию');
+      setError(error.message);
+      throw error;
+    } finally {
+      setIsTranscribingFull(false);
+    }
+  }, [sessionId]);
+
   const resetSession = useCallback(() => {
     setSessionId(null);
     setSessionStatus('idle');
     setRecordingState('idle');
     setUploadConfig(null);
     setError(null);
+    setIsTranscribingFull(false);
   }, []);
 
   return {
@@ -77,11 +95,13 @@ export function useSession() {
     recordingState,
     uploadConfig,
     error,
+    isTranscribingFull,
     setRecordingState,
     setSessionStatus,
     createSession,
     stopRecording,
     closeSession,
+    transcribeFull,
     resetSession,
   };
 }
