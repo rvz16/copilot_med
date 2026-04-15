@@ -602,6 +602,8 @@ button:disabled,
   justify-content: center;
   width: 44px;
   height: 44px;
+  min-height: 44px;
+  padding: 0;
   border-radius: 14px;
   border: 1px solid rgba(190, 57, 57, 0.18);
   background: rgba(190, 57, 57, 0.08);
@@ -614,8 +616,9 @@ button:disabled,
 }
 
 .danger-icon-button svg {
-  width: 18px;
-  height: 18px;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
 }
 
 .danger-icon-button:hover:not(:disabled) {
