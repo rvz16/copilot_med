@@ -56,12 +56,20 @@ class PostAnalyticsLLMClient:
         headers = self._build_headers()
 
         start = time.perf_counter()
-        with httpx.Client(timeout=self.timeout) as client:
-            response = client.post(endpoint, json=body, headers=headers)
-            response.raise_for_status()
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                response = client.post(endpoint, json=body, headers=headers)
+                response.raise_for_status()
+        except httpx.HTTPError as exc:
+            logger.error("LLM request failed for model %s via %s: %s", self.model_name, endpoint, exc)
+            raise
 
         elapsed_ms = int((time.perf_counter() - start) * 1000)
-        data = response.json()
+        try:
+            data = response.json()
+        except ValueError as exc:
+            logger.error("LLM returned a non-JSON HTTP response")
+            raise ValueError("LLM response body is not valid JSON") from exc
         content = self._extract_content(data)
         logger.info("LLM responded in %dms, content length=%d", elapsed_ms, len(content))
 

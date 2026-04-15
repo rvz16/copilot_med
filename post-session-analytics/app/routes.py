@@ -1,10 +1,12 @@
 import logging
 import time
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
+import httpx
 
 from app.llm_client import PostAnalyticsLLMClient
 from app.config import MODEL_NAME
+from app.errors import ApiError
 from app.prompts import SYSTEM_PROMPT, build_user_prompt
 from app.schemas import (
     AnalyticsRequest,
@@ -130,8 +132,12 @@ def _parse_response(raw: dict, session_id: str, elapsed_ms: int) -> AnalyticsRes
 
 @router.post("/analyze", response_model=AnalyticsResponse)
 def analyze(request: AnalyticsRequest) -> AnalyticsResponse:
-    if not request.full_transcript.strip():
-        raise HTTPException(status_code=400, detail="full_transcript is empty")
+    logger.info(
+        "analyze_request_received session_id=%s patient_id=%s transcript_chars=%d",
+        request.session_id,
+        request.patient_id,
+        len(request.full_transcript),
+    )
 
     user_prompt = build_user_prompt(
         full_transcript=request.full_transcript,
@@ -146,9 +152,24 @@ def analyze(request: AnalyticsRequest) -> AnalyticsResponse:
     try:
         client = get_llm_client()
         raw = client.generate(SYSTEM_PROMPT, user_prompt)
+    except ValueError as exc:
+        logger.error("LLM returned invalid JSON for session %s: %s", request.session_id, exc)
+        raise ApiError("INVALID_LLM_RESPONSE", "LLM returned invalid JSON.", 502) from exc
+    except httpx.HTTPError as exc:
+        logger.error("LLM upstream request failed for session %s: %s", request.session_id, exc)
+        raise ApiError("LLM_UPSTREAM_ERROR", "LLM upstream request failed.", 502) from exc
     except Exception as exc:
         logger.error("LLM call failed for session %s: %s", request.session_id, exc)
-        raise HTTPException(status_code=502, detail=f"LLM analysis failed: {exc}")
+        raise ApiError("LLM_ANALYSIS_FAILED", "LLM analysis failed.", 502) from exc
 
     elapsed_ms = int((time.perf_counter() - start) * 1000)
-    return _parse_response(raw, request.session_id, elapsed_ms)
+    response = _parse_response(raw, request.session_id, elapsed_ms)
+    logger.info(
+        "analyze_request_completed session_id=%s processing_time_ms=%d insights=%d recommendations=%d quality_metrics=%d",
+        request.session_id,
+        elapsed_ms,
+        len(response.critical_insights),
+        len(response.follow_up_recommendations),
+        len(response.quality_assessment.metrics),
+    )
+    return response

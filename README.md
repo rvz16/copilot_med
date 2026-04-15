@@ -10,6 +10,19 @@ MedCoPilot is a containerized MVP for live medical-consultation support. The roo
 
 The root `docker-compose.yml` is now the intended way to run the integrated system.
 
+## Documentation
+
+Project-level documentation is available in [`Docs/`](./Docs/README.md):
+
+- repository structure and top-level folder map
+- runtime architecture and end-to-end flows
+- setup and installation
+- integration and deployment
+- API specifications for every container
+- service internals for frontend, orchestration, ASR, analytics, extraction, recommendations, and FHIR
+- performance metrics and observability
+- privacy, security, and quality report
+
 ## Stack Overview
 
 ```text

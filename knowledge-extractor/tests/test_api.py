@@ -51,3 +51,34 @@ def test_extract_contract_preview_mode() -> None:
     assert "prepared" in data["persistence"]
     assert "sent_successfully" in data["persistence"]
     assert "sent_failed" in data["persistence"]
+
+
+def test_extract_rejects_blank_transcript() -> None:
+    response = client.post(
+        "/extract",
+        json={
+            "session_id": "session-blank",
+            "patient_id": "patient-blank",
+            "transcript": "   ",
+            "persist": False,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_extract_rejects_unknown_fields() -> None:
+    response = client.post(
+        "/extract",
+        json={
+            "session_id": "session-extra",
+            "patient_id": "patient-extra",
+            "transcript": "Пациент жалуется на кашель.",
+            "persist": False,
+            "unexpected": "value",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"

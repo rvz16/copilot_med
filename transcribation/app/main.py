@@ -2,16 +2,24 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
 
-from app.config import COMPUTE_TYPE, DEVICE, MODEL_KAGGLE_DATASET, MODEL_PATH, USE_GROQ_API
+from app.config import COMPUTE_TYPE, DEVICE, LOG_LEVEL, MODEL_KAGGLE_DATASET, MODEL_PATH, USE_GROQ_API
+from app.errors import (
+    ApiError,
+    api_error_handler,
+    http_exception_handler,
+    unhandled_exception_handler,
+    validation_error_handler,
+)
 from app.model import load_model
 from app.routes import router
 from app.session_audio_context import session_store
 
 # Configure logging for the whole app
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, LOG_LEVEL.upper(), logging.INFO),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
@@ -52,6 +60,10 @@ app = FastAPI(
     version="2.1.0",
     lifespan=lifespan,
 )
+app.add_exception_handler(ApiError, api_error_handler)
+app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_error_handler)
+app.add_exception_handler(Exception, unhandled_exception_handler)
 app.include_router(router)
 
 

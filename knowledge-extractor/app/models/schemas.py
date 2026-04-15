@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ExtractionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     session_id: str
     patient_id: str
     encounter_id: str | None = None
@@ -17,6 +19,29 @@ class ExtractionRequest(BaseModel):
     transcript: str
     persist: bool = False
     sync_ehr: bool = True
+
+    @field_validator("session_id", "patient_id", "transcript")
+    @classmethod
+    def normalize_required_text(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("must be a non-empty string")
+        return stripped
+
+    @field_validator(
+        "encounter_id",
+        "patient_name",
+        "doctor_id",
+        "doctor_name",
+        "doctor_specialty",
+        "chief_complaint",
+    )
+    @classmethod
+    def normalize_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
 
 
 class SubjectiveSection(BaseModel):
