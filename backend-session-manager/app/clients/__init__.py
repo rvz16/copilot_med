@@ -1,1 +1,1 @@
-"""HTTP client helpers for external integrations."""
+"""HTTP clients for external integrations."""

@@ -156,7 +156,7 @@ def _expand_query_tokens(tokens: set[str]) -> set[str]:
 
 
 class ClinicalRecommendationsService:
-    """Loads official recommendations from CSV and exposes lookup/search helpers."""
+    """Load official recommendations from CSV and expose lookup and search helpers."""
 
     def __init__(self, csv_path: Path, pdf_dir: Path) -> None:
         self._csv_path = csv_path

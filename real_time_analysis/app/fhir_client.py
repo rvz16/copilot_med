@@ -1,4 +1,4 @@
-"""FHIR R4 client – fetches patient context from a FHIR server."""
+"""FHIR R4 client for loading patient context from a FHIR server."""
 from __future__ import annotations
 
 import logging
@@ -13,7 +13,7 @@ DEFAULT_FHIR_BASE_URL = os.getenv("FHIR_BASE_URL", "http://158.160.84.63:8092/ha
 
 
 class FHIRClient:
-    """Async FHIR client that pulls patient demographics and prior context from EHR via FHIR."""
+    """Async client for patient demographics and prior clinical context over FHIR."""
 
     def __init__(self, base_url: str | None = None, timeout: float = 5.0) -> None:
         self.base_url = (base_url or DEFAULT_FHIR_BASE_URL).rstrip("/")
@@ -24,7 +24,7 @@ class FHIRClient:
         )
 
     async def get_patient_context(self, patient_id: str) -> dict[str, Any] | None:
-        """Fetch patient data and return structured context dict, or None on failure."""
+        """Fetch patient context and return a structured payload, or `None` on failure."""
         try:
             patient, conditions, medication_requests, medication_statements, allergies, observations = await self._fetch_all(patient_id)
             return self._build_context(
@@ -40,7 +40,7 @@ class FHIRClient:
             return None
 
     async def _fetch_all(self, patient_id: str) -> tuple[dict, list, list, list, list, list]:
-        """Fetch Patient resource + related clinical data in parallel."""
+        """Fetch the Patient resource and related clinical data in parallel."""
         import asyncio
 
         patient_task = self._get_resource(f"Patient/{patient_id}")
@@ -83,7 +83,7 @@ class FHIRClient:
     async def close(self) -> None:
         await self._client.aclose()
 
-    # --- Build structured context ---
+    # Build the structured patient context payload.
 
     @staticmethod
     def _build_context(
@@ -94,12 +94,12 @@ class FHIRClient:
         allergies: list[dict],
         observations: list[dict],
     ) -> dict[str, Any]:
-        # Patient demographics
+        # Patient demographics.
         name = FHIRClient._extract_name(patient)
         gender = patient.get("gender")
         birth_date = patient.get("birthDate")
 
-        # Conditions
+        # Conditions.
         condition_list: list[str] = []
         for c in conditions:
             code = c.get("code", {})
@@ -107,7 +107,7 @@ class FHIRClient:
             if text:
                 condition_list.append(text)
 
-        # Medications
+        # Medications.
         med_list: list[str] = []
         for m in [*medication_requests, *medication_statements]:
             med_code = m.get("medicationCodeableConcept", {})
@@ -115,7 +115,7 @@ class FHIRClient:
             if text:
                 med_list.append(text)
 
-        # Allergies
+        # Allergies.
         allergy_list: list[str] = []
         for a in allergies:
             code = a.get("code", {})
@@ -123,7 +123,7 @@ class FHIRClient:
             if text:
                 allergy_list.append(text)
 
-        # Observations
+        # Observations.
         observation_list: list[str] = []
         for o in observations:
             value = o.get("valueString")
@@ -156,7 +156,7 @@ class FHIRClient:
 
     @staticmethod
     def format_context_for_prompt(ctx: dict[str, Any]) -> str:
-        """Format FHIR context dict into a text block for the LLM prompt."""
+        """Format the FHIR context payload as prompt text for the LLM."""
         lines: list[str] = []
         if ctx.get("patient_name"):
             lines.append(f"Patient: {ctx['patient_name']}")

@@ -1,1 +1,1 @@
-"""API package."""
+"""Session Manager API package."""

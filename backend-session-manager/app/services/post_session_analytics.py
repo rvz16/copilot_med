@@ -5,7 +5,7 @@ from app.core.config import Settings
 
 
 class PostSessionAnalyticsProvider(Protocol):
-    """Provider interface for post-session deep analytics."""
+    """Provider interface for deeper post-session analytics."""
 
     service_name: str
     endpoint: str

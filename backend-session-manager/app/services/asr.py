@@ -72,7 +72,7 @@ class AsrProvider(Protocol):
 
 
 class MockAsrProvider:
-    """Deterministic mock ASR provider for local development."""
+    """Deterministic mock ASR provider for local development and tests."""
 
     def transcribe_chunk(
         self,

@@ -1,7 +1,4 @@
-/* ──────────────────────────────────────────────
-   HintsPanel – renders the list of realtime
-   hints from Session Manager.
-   ────────────────────────────────────────────── */
+/* Render realtime hints and analysis results from Session Manager. */
 
 import { useMemo } from 'react';
 import type { Hint, RealtimeAnalysis, RecommendedDocument } from '../types/types';
@@ -58,7 +55,7 @@ function groupHintsAndSort(hints: Hint[]) {
       other.push(hint);
     }
   }
-  // Sort each group by confidence descending
+  // Sort each group by descending confidence.
   for (const key of Object.keys(grouped)) {
     grouped[key].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
   }
@@ -106,7 +103,7 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
         <p className="placeholder-text">Клинический анализ и подсказки появятся здесь.</p>
       ) : (
         <div className="analysis-stack">
-          {/* ── Model info ────────────────────────── */}
+          {/* Model metadata. */}
           {analysis && (
             <div className="analysis-meta">
               <span className="analysis-chip">
@@ -118,7 +115,7 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
             </div>
           )}
 
-          {/* ── Clinical Recommendations (compact card) ── */}
+          {/* Clinical recommendations. */}
           {recommendedDocuments.length > 0 && (
             <div className="recommendations-card">
               <h3 className="recommendations-card-title">
@@ -151,11 +148,11 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
             </div>
           )}
 
-          {/* ── Main columns: suggestions + extracted facts ───── */}
+          {/* Main columns with suggestions and extracted facts. */}
           <div className="analysis-section">
             <h3 className="analysis-title">Результаты анализа</h3>
             <div className="analysis-main-grid">
-              {/* Left: suggestion columns */}
+              {/* Suggestion columns. */}
               <div className="analysis-suggestions-area">
                 {hasGroupedHints ? (
                   <div className="suggestion-columns">
@@ -200,7 +197,7 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
                   <p className="placeholder-text">Подсказки анализа пока отсутствуют.</p>
                 )}
 
-                {/* Other hint types */}
+                {/* Other hint types. */}
                 {otherHints.length > 0 && (
                   <div className="analysis-section" style={{ marginTop: '0.75rem' }}>
                     <h4 className="suggestion-column-title">📋 Другие подсказки</h4>
@@ -231,7 +228,7 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
                 )}
               </div>
 
-              {/* Right: extracted facts column */}
+              {/* Extracted facts column. */}
               {hasExtractedFacts && analysis && (
                 <div className="analysis-facts-area">
                   <h4 className="suggestion-column-title">📋 Извлечённые факты</h4>
@@ -271,7 +268,7 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
             </div>
           </div>
 
-          {/* ── Drug Interactions ─────────────────── */}
+          {/* Drug interactions. */}
           {analysis && analysis.drug_interactions.length > 0 && (
             <div className="analysis-section">
               <h3 className="analysis-title">Лекарственные взаимодействия</h3>
@@ -299,7 +296,7 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
             </div>
           )}
 
-          {/* ── Knowledge References ──────────────── */}
+          {/* Knowledge references. */}
           {analysis && visibleKnowledgeRefs.length > 0 && (
             <div className="analysis-section">
               <h3 className="analysis-title">Справочные материалы</h3>
@@ -319,7 +316,7 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
             </div>
           )}
 
-          {/* ── Errors ───────────────────────────── */}
+          {/* Model and processing errors. */}
           {analysis && analysis.errors.length > 0 && (
             <div className="analysis-section">
               <h3 className="analysis-title">Ошибки анализа</h3>

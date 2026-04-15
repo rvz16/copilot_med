@@ -15,7 +15,7 @@ class KnowledgeExtractorProvider(Protocol):
 
 
 class MockKnowledgeExtractorProvider:
-    """Deterministic local knowledge extractor for end-to-end development."""
+    """Deterministic mock knowledge extractor for end-to-end development."""
 
     service_name = "knowledge_extractor"
     endpoint = "mock://knowledge-extractor"

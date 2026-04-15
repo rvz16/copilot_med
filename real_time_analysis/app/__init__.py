@@ -1,1 +1,1 @@
-# MedCoPilot real-time assistant package.
+"""MedCoPilot real-time assistant package."""

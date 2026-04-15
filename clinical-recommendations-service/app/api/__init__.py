@@ -1,1 +1,1 @@
-"""API routes for the clinical recommendations service."""
+"""Clinical recommendations API package."""

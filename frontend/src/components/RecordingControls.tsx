@@ -1,7 +1,4 @@
-/* ──────────────────────────────────────────────
-   RecordingControls – start / stop recording
-   buttons and live status indicators.
-   ────────────────────────────────────────────── */
+/* Recording controls and live status indicators. */
 
 import type { RecordingState } from '../hooks/useSession';
 import type { UploadStatus } from '../hooks/useUploader';

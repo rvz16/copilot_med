@@ -1,7 +1,4 @@
-/* ──────────────────────────────────────────────
-   useSession – manages session lifecycle
-   (create / stop / close) and holds related state.
-   ────────────────────────────────────────────── */
+/* Manage session lifecycle state for create, stop, and close actions. */
 
 import { useCallback, useState } from 'react';
 import { api } from '../api';

@@ -259,7 +259,7 @@ def _build_fallback_response(
 
 
 def _parse_response(raw: dict, session_id: str, elapsed_ms: int, model_used: str) -> AnalyticsResponse:
-    """Parse and validate the raw LLM JSON into the response schema."""
+    """Parse raw LLM JSON and validate it against the response schema."""
     raw_summary = raw.get("medical_summary", {})
     if not isinstance(raw_summary, dict):
         raw_summary = {}

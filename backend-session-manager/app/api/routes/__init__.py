@@ -1,1 +1,1 @@
-"""API routes."""
+"""Session Manager API route definitions."""

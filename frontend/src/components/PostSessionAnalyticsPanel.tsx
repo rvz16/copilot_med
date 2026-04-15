@@ -113,7 +113,7 @@ export function PostSessionAnalyticsPanel({
         </div>
       </div>
 
-      {/* ── Medical Summary ────────────────── */}
+      {/* Medical summary. */}
       {summary && (
         <div className="psa-section">
           <h3 className="psa-section-title">Медицинское заключение</h3>
@@ -157,7 +157,7 @@ export function PostSessionAnalyticsPanel({
         </div>
       )}
 
-      {/* ── Critical Insights ─────────────── */}
+      {/* Critical insights. */}
       {insights && insights.length > 0 && (
         <div className="psa-section">
           <h3 className="psa-section-title">Критические замечания</h3>
@@ -188,7 +188,7 @@ export function PostSessionAnalyticsPanel({
         </div>
       )}
 
-      {/* ── Follow-up Recommendations ────── */}
+      {/* Follow-up recommendations. */}
       {recommendations && recommendations.length > 0 && (
         <div className="psa-section">
           <h3 className="psa-section-title">Рекомендации к наблюдению</h3>
@@ -215,7 +215,7 @@ export function PostSessionAnalyticsPanel({
         </div>
       )}
 
-      {/* ── Quality Assessment ────────────── */}
+      {/* Quality assessment. */}
       {quality && (
         <div className="psa-section">
           <h3 className="psa-section-title">Оценка качества консультации</h3>

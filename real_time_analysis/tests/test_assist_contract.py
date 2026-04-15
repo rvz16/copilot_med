@@ -12,7 +12,7 @@ from app.main import create_app
 
 
 def _make_stub_llm() -> LLMClient:
-    """LLMClient stub that returns a canned response without hitting vLLM."""
+    """LLM client stub that returns a fixed response without calling vLLM."""
     llm = LLMClient.__new__(LLMClient)
     llm.base_url = "http://stub"
     llm.model_name = "qwen3:4b"
@@ -48,7 +48,7 @@ def _make_stub_llm() -> LLMClient:
 
 
 def _make_stub_fhir() -> FHIRClient:
-    """FHIRClient stub that returns None (no FHIR context)."""
+    """FHIR client stub that returns no patient context."""
     fhir = FHIRClient.__new__(FHIRClient)
     fhir.base_url = "http://stub-fhir"
     fhir.timeout = 3.0
@@ -58,7 +58,7 @@ def _make_stub_fhir() -> FHIRClient:
 
 
 def _make_stub_fhir_with_context() -> FHIRClient:
-    """FHIRClient stub that returns patient context."""
+    """FHIR client stub that returns patient context."""
     fhir = FHIRClient.__new__(FHIRClient)
     fhir.base_url = "http://stub-fhir"
     fhir.timeout = 3.0

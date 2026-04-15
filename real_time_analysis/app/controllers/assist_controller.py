@@ -77,14 +77,14 @@ class AssistController:
                 llm_kwargs["model_name"] = analysis_model
             return await self.llm.generate_structured(**llm_kwargs)
 
-        # Fetch patient context first so the LLM can use it in the prompt when available.
+        # Fetch patient context first so it can be included in the LLM prompt.
         patient_ctx = await fetch_fhir()
         patient_context_text = FHIRClient.format_context_for_prompt(patient_ctx) if patient_ctx else None
         model_result = await call_llm(patient_context_text)
 
         errors = normalize_text_list(model_result.get("errors", []))
 
-        # --- Heuristics ---
+        # Apply local heuristics after the model response is available.
         heuristic_facts = extract_facts(transcript)
         merged_facts = merge_extracted_facts(heuristic_facts, model_result.get("extracted_facts", {}))
 
@@ -127,7 +127,7 @@ class AssistController:
         )
         return response
 
-    # --- Merge helpers (unchanged logic) ---
+    # Merge helpers.
 
     def _merge_suggestions(
         self,

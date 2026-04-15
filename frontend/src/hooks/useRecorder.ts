@@ -1,18 +1,12 @@
-/* ──────────────────────────────────────────────
-   useRecorder – thin wrapper around MediaRecorder.
-   Produces a standalone valid WebM Blob every
-   `chunkMs` milliseconds and forwards it via
-   the `onChunk` callback.
-
-   Each chunk interval gets its own MediaRecorder
-   instance so every Blob contains the full WebM
-   initialization segment (EBML header + Tracks)
-   and can be decoded independently by FFmpeg /
-   Whisper.  The previous `recorder.start(chunkMs)`
-   approach produced timeslice blobs that lacked
-   headers — binary concatenation on the server
-   resulted in garbled audio after the first chunk.
-   ────────────────────────────────────────────── */
+/*
+ * Thin wrapper around `MediaRecorder`.
+ * It emits a standalone WebM blob every `chunkMs` milliseconds through
+ * `onChunk`.
+ *
+ * Each interval uses a new recorder so every blob includes its own WebM
+ * header and can be decoded independently. The previous timeslice approach
+ * produced headerless chunks, which broke server-side concatenation.
+ */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 

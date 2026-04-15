@@ -16,7 +16,7 @@ class FhirClient:
         self.max_retries = max_retries
 
     def create_resource(self, resource_type: str, payload: dict[str, Any]) -> dict[str, Any]:
-        """Create a single FHIR resource via POST {base_url}/{resource_type}."""
+        """Create a single FHIR resource with `POST {base_url}/{resource_type}`."""
         url = f"{self.base_url}/{resource_type}"
         last_error: dict[str, Any] | None = None
 
@@ -37,7 +37,7 @@ class FhirClient:
                         "response": body,
                     }
 
-                # retry transient server-side responses
+                # Retry transient server-side errors.
                 if response.status_code >= 500 and attempt < self.max_retries:
                     time.sleep(0.2 * (attempt + 1))
                     continue

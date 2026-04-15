@@ -1,1 +1,1 @@
-# Controller package for MedCoPilot API routes.
+"""Controller package for MedCoPilot API routes."""

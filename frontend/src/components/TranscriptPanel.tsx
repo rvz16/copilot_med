@@ -1,7 +1,4 @@
-/* ──────────────────────────────────────────────
-   TranscriptPanel – displays the aggregated
-   stable transcript text.
-   ────────────────────────────────────────────── */
+/* Display the aggregated stable transcript. */
 
 interface Props {
   transcript: string;

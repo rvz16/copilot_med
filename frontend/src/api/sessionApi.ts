@@ -1,7 +1,4 @@
-/* ──────────────────────────────────────────────
-   Real Session Manager API client.
-   Uses fetch; reads base URL from env.
-   ────────────────────────────────────────────── */
+/* Real Session Manager API client built on top of `fetch`. */
 
 import type {
   AudioChunkResponse,

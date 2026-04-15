@@ -23,7 +23,7 @@ class ClinicalRecommendationsProvider(Protocol):
 
 
 class DisabledClinicalRecommendationsProvider:
-    """No-op provider when recommendation lookup is disabled."""
+    """Fallback provider used when recommendation lookup is disabled."""
 
     service_name = "clinical_recommendations"
     endpoint = "disabled://clinical-recommendations"

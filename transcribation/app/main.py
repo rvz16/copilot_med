@@ -17,7 +17,7 @@ from app.model import load_model
 from app.routes import router
 from app.session_audio_context import session_store
 
-# Configure logging for the whole app
+# Configure application-wide logging.
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL.upper(), logging.INFO),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",

@@ -1,4 +1,4 @@
-"""Lightweight LLM client that talks to Ollama or OpenAI-compatible endpoints."""
+"""Lightweight LLM client for Ollama and OpenAI-compatible endpoints."""
 from __future__ import annotations
 
 import json
@@ -36,7 +36,7 @@ If type is diagnosis_suggestion, text must contain only the most likely diagnosi
 
 
 class LLMClient:
-    """Calls Ollama or OpenAI-compatible APIs for structured clinical output."""
+    """Call Ollama or OpenAI-compatible APIs for structured clinical output."""
 
     def __init__(
         self,
@@ -74,7 +74,7 @@ class LLMClient:
         patient_context: str | None = None,
         model_name: str | None = None,
     ) -> dict[str, Any]:
-        """Send transcript to Ollama and parse structured JSON response."""
+        """Send transcript context to the model and parse the structured JSON response."""
         result: dict[str, Any] = {
             "suggestions": [],
             "drug_interactions": [],
@@ -194,8 +194,8 @@ class LLMClient:
             "stream": False,
         }
         model_name = str(openai_body.get("model") or self.model_name).strip()
-        # Only a subset of OpenAI-compatible models supports reasoning_effort.
-        # Groq Llama variants reject it with HTTP 400, so gate it by model family.
+        # Only some OpenAI-compatible models support `reasoning_effort`.
+        # Gate it by model family to avoid HTTP 400 errors on providers like Groq.
         reasoning_effort = os.getenv("LLM_REASONING_EFFORT", "low").strip().lower()
         if reasoning_effort in {"low", "medium", "high"} and self._supports_reasoning_effort(model_name):
             openai_body["reasoning_effort"] = reasoning_effort
@@ -314,7 +314,7 @@ class LLMClient:
                 headers[key] = value
         return headers
 
-    # --- JSON extraction ---
+    # JSON extraction helpers.
 
     @staticmethod
     def _extract_json(raw_text: str) -> dict[str, Any] | None:
@@ -366,7 +366,7 @@ class LLMClient:
         logger.debug("_extract_json: unbalanced braces, no match found")
         return None
 
-    # --- Sanitization ---
+    # Response sanitization helpers.
 
     def _sanitize_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
         return {

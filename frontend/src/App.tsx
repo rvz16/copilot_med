@@ -102,7 +102,7 @@ export default function App() {
           setSelectedSession(detail);
           await refreshSessions(activeDoctor);
         } catch {
-          // The current archive view can tolerate a failed refresh.
+          // Ignore refresh failures while polling the archive view.
         }
       })();
     }, 2500);
@@ -291,7 +291,7 @@ export default function App() {
     try {
       await ensureRecordingStopped();
     } catch {
-      // Recorder/uploader/session hooks already store displayable errors.
+      // The recorder, uploader, and session hooks already expose user-facing errors.
     }
   }, [ensureRecordingStopped]);
 
@@ -314,7 +314,7 @@ export default function App() {
       setLiveSessionProfile(null);
       await refreshSessions(activeDoctor);
     } catch {
-      // Hooks already expose errors.
+      // Hook-level errors are already exposed to the UI.
     } finally {
       setIsClosingSession(false);
     }

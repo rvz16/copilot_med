@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 _model = None
 _groq_client = None
 
-# Known hallucination patterns
+# Patterns commonly seen in hallucinated output.
 _HALLUCINATION_PATTERNS: list[re.Pattern] = [
     re.compile(r"^(субтитры|Субтитры|СУБТИТРЫ)"),
     re.compile(r"(подписывайтесь на канал|ставьте лайки)", re.IGNORECASE),
@@ -219,7 +219,7 @@ def _filter_hallucinations(segments: list, audio_duration: float = 0.0, is_first
     return filtered
 
 
-# LOCAL FASTER-WHISPER
+# Local Faster-Whisper implementation.
 
 def _transcribe_file_local(audio_path: str, *, use_prompt: bool = True, use_hallucination_filter: bool = True, previous_text: str | None = None, is_first_chunk: bool = False) -> dict:
     model = load_model()
@@ -265,7 +265,7 @@ def _transcribe_pcm_local(pcm: np.ndarray, *, use_prompt: bool = True, use_hallu
         "audio_file_duration": round(info.duration, 2),
     }
 
-# GROQ API MODEL
+# Groq API implementation.
 
 def _parse_groq_segments(raw_segments: list) -> list[DummySegment]:
     parsed = []
@@ -384,7 +384,7 @@ def _transcribe_pcm_groq(pcm: np.ndarray, *, use_prompt: bool = True, use_halluc
         os.unlink(tmp_path)
 
 
-# ENTRYPOINTS
+# Public transcription entry points.
 def transcribe(audio_path: str, **kwargs) -> dict:
     if USE_GROQ_API:
         return _transcribe_file_groq(audio_path, **kwargs)

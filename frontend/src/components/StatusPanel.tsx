@@ -1,6 +1,4 @@
-/* ──────────────────────────────────────────────
-   StatusPanel – shows errors and status messages.
-   ────────────────────────────────────────────── */
+/* Show status and error messages. */
 
 interface Props {
   errors: string[];

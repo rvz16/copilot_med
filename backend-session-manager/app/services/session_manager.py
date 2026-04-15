@@ -84,7 +84,7 @@ def normalize_transcript_text(text: str | None) -> str:
 
 
 class SessionService:
-    """Application service that owns session lifecycle orchestration."""
+    """Application service for consultation session lifecycle orchestration."""
 
     def __init__(
         self,
@@ -459,8 +459,8 @@ class SessionService:
             session.processing_state = "queued"
             session.last_error = None
 
-        # Pending analytics artifacts must be flushed before snapshot assembly,
-        # otherwise the finalized snapshot will miss post-session results.
+        # Flush pending analytics artifacts before building the final snapshot.
+        # Otherwise, the snapshot can miss post-session results.
         self.db.flush()
         session.updated_at = utcnow()
         self._upsert_session_snapshot(
@@ -825,7 +825,7 @@ class SessionService:
             logger.warning("No recording file for session %s, skipping full-transcript analytics", session.session_id)
             return
 
-        # Step 1: Full-file transcription
+        # Step 1: generate a full-file transcription.
         mime_type = "audio/webm" if recording_path.suffix == ".webm" else f"audio/{recording_path.suffix.lstrip('.')}"
         try:
             file_bytes = recording_path.read_bytes()
@@ -895,7 +895,7 @@ class SessionService:
             )
         )
 
-        # Step 2: Build analytics payload
+        # Step 2: build the analytics payload.
         snapshot = session.workspace_snapshot
         previous_payload = snapshot.payload_json if snapshot and isinstance(snapshot.payload_json, dict) else {}
         hints_data = previous_payload.get("hints", [])
@@ -919,7 +919,7 @@ class SessionService:
             "chief_complaint": chief_complaint,
         }
 
-        # Step 3: Call analytics service
+        # Step 3: call the analytics service.
         try:
             response = self.post_session_analytics.analyze(analytics_payload)
             self._log_external_call(
@@ -932,7 +932,7 @@ class SessionService:
                 error_message=None,
             )
 
-            # Step 4: Store results as ExtractedArtifact rows
+            # Step 4: store the returned artifacts.
             for artifact_type, key in (
                 ("post_analytics_summary", "medical_summary"),
                 ("post_analytics_insights", "critical_insights"),

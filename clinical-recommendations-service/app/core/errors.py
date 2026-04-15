@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class ApiError(Exception):
-    """Structured API exception with a stable code and HTTP status."""
+    """Structured API exception with a stable error code and HTTP status."""
 
     def __init__(self, code: str, message: str, status_code: int) -> None:
         super().__init__(message)

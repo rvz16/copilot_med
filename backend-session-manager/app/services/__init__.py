@@ -1,1 +1,1 @@
-"""Application services."""
+"""Application service layer."""

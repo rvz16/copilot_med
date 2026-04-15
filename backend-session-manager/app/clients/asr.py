@@ -4,7 +4,7 @@ import httpx
 
 
 class HttpAsrClient:
-    """Minimal HTTP client for an external ASR service."""
+    """HTTP client for the external ASR service."""
 
     def __init__(self, base_url: str, timeout_seconds: int) -> None:
         self.base_url = base_url.rstrip("/")

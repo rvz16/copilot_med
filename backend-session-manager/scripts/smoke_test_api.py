@@ -6,9 +6,10 @@ from pathlib import Path
 
 import httpx
 
-# ..\ .venv\Scripts\python.exe scripts\smoke_test_api.py --base-url http://localhost:8080 --chunk-count 2
-# ..\ .venv\Scripts\python.exe scripts\smoke_test_api.py --help
-# ..\ .venv\Scripts\python.exe scripts\smoke_test_api.py --audio-file path\to\sample.webm
+# Example usage on Windows:
+# ..\.venv\Scripts\python.exe scripts\smoke_test_api.py --base-url http://localhost:8080 --chunk-count 2
+# ..\.venv\Scripts\python.exe scripts\smoke_test_api.py --help
+# ..\.venv\Scripts\python.exe scripts\smoke_test_api.py --audio-file path\to\sample.webm
 
 
 def parse_args() -> argparse.Namespace:

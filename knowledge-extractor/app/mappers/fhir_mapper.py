@@ -9,7 +9,7 @@ from app.models.schemas import SoapNote
 
 
 class FhirMapper:
-    """Maps canonical extraction output to minimal FHIR R4 resource JSON."""
+    """Map canonical extraction output to minimal FHIR R4 resource JSON."""
 
     def map_to_resources(
         self,

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class PostSessionTaskQueue:
-    """Small in-process worker for post-session analytics jobs."""
+    """Small in-process worker for post-session jobs."""
 
     def __init__(
         self,
@@ -115,4 +115,3 @@ class PostSessionTaskQueue:
         with self.database.session() as db:
             service = self.service_factory(db, self.settings, self)
             service.process_post_session_queue_item(session_id)
-

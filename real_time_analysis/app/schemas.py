@@ -94,7 +94,7 @@ class KnowledgeRef(BaseModel):
 
 
 class PatientContext(BaseModel):
-    """FHIR-derived patient context included in the response."""
+    """FHIR-derived patient context returned in the response."""
     patient_name: str | None = None
     gender: str | None = None
     birth_date: str | None = None

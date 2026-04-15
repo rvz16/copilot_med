@@ -49,7 +49,7 @@ class HintService:
         message: str,
         existing_pairs: set[tuple[str, str]],
     ) -> bool:
-        """Check if a message is a near-duplicate of any existing hint of the same type."""
+        """Return `True` when a similar hint of the same type already exists."""
         normalized = " ".join(message.lower().split())
         for existing_type, existing_message in existing_pairs:
             if existing_type != hint_type:

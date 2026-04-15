@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 class StorageService:
-    """Stores uploaded audio chunks on local disk."""
+    """Store uploaded audio chunks and session recordings on local disk."""
 
     def __init__(self, base_dir: str) -> None:
         self.base_dir = Path(base_dir)

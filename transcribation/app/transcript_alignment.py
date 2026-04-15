@@ -5,7 +5,7 @@ import re
 import unicodedata
 
 def normalize_text(text: str) -> str:
-    """Normalize whitespace and unicode."""
+    """Normalize Unicode and collapse repeated whitespace."""
     text = unicodedata.normalize("NFC", text)
     return " ".join(text.split())
 
@@ -14,11 +14,11 @@ def tokenize(text: str) -> list[str]:
     return n.split() if n else []
 
 def token_sig(t: str) -> str:
-    """Signature for fuzzy token comparison with strip punctuation and casefold."""
+    """Build a normalized token signature for fuzzy comparison."""
     return re.sub(r"[^\w]", "", t).casefold()
 
 def longest_suffix_prefix_overlap(left: list[str], right: list[str]) -> int:
-    """Fallback function for strict exact overlap."""
+    """Return the longest exact overlap between the left suffix and right prefix."""
     max_search = min(len(left), len(right), 50)
     for ol in range(max_search, 0, -1):
         if all(token_sig(a) == token_sig(b) for a, b in zip(left[-ol:], right[:ol])):
@@ -26,7 +26,7 @@ def longest_suffix_prefix_overlap(left: list[str], right: list[str]) -> int:
     return 0
 
 def _smart_join(existing: str, delta: str) -> str:
-    """Joins text taking punctuation into account."""
+    """Join text fragments while preserving punctuation spacing."""
     existing = existing.rstrip()
     delta = delta.lstrip()
     if not existing: return delta
@@ -37,12 +37,11 @@ def _smart_join(existing: str, delta: str) -> str:
 
 def compute_transcript_update(existing_stable_text: str, current_full_text: str) -> tuple[str, str]:
     """
-    Returns (delta_text, stable_text).
-    
-    Uses fuzzy sequence matching to align the new text window with the 
-    existing stable text. It finds the exact point of overlap, drops any 
-    hallucinations that whisper might have added at the start of the window, 
-    and extracts only the truly new words (delta).
+    Return `(delta_text, stable_text)` for the latest transcription window.
+
+    The function aligns the new window against the stable transcript, removes
+    overlapping text, filters out repeated leading text, and keeps only the
+    newly confirmed delta.
     """
     existing_tokens = tokenize(existing_stable_text)
     window_tokens = tokenize(current_full_text)

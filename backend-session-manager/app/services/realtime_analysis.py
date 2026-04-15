@@ -15,7 +15,7 @@ class RealtimeAnalysisProvider(Protocol):
 
 
 class MockRealtimeAnalysisProvider:
-    """Deterministic local realtime analysis for tests and offline development."""
+    """Deterministic mock realtime analysis for tests and offline development."""
 
     service_name = "realtime_analysis"
     endpoint = "mock://realtime-analysis"

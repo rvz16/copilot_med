@@ -1,9 +1,6 @@
-/* ──────────────────────────────────────────────
-   Shared TypeScript types – mirrors the
-   Session Manager API contract.
-   ────────────────────────────────────────────── */
+/* Shared TypeScript types that mirror the Session Manager API contract. */
 
-// ── Session ─────────────────────────────────
+// Session types.
 
 export type SessionLifecycleStatus = 'idle' | 'active' | 'analyzing' | 'finished';
 
@@ -35,7 +32,7 @@ export interface CreateSessionResponse {
   chief_complaint?: string | null;
 }
 
-// ── Audio chunk upload ──────────────────────
+// Audio chunk upload types.
 
 export interface Ack {
   received_seq: number;
@@ -151,7 +148,7 @@ export interface AudioChunkResponse {
   last_error: string | null;
 }
 
-// ── Stop / Close ────────────────────────────
+// Stop and close request types.
 
 export interface StopRecordingRequest {
   reason: string;
@@ -176,7 +173,7 @@ export interface CloseSessionResponse {
   full_transcript_ready: boolean;
 }
 
-// ── Post-Session Analytics ─────────────────
+// Post-session analytics types.
 
 export interface PostAnalyticsSummary {
   clinical_narrative: string;
@@ -371,14 +368,14 @@ export interface ListSessionsResponse {
   total: number;
 }
 
-// ── Health ──────────────────────────────────
+// Health response types.
 
 export interface HealthResponse {
   status: string;
   service: string;
 }
 
-// ── Error ───────────────────────────────────
+// Error types.
 
 export interface ApiErrorBody {
   error: {
@@ -387,7 +384,7 @@ export interface ApiErrorBody {
   };
 }
 
-// ── API interface ───────────────────────────
+// API interface.
 
 export interface SessionApi {
   createSession(payload: CreateSessionRequest): Promise<CreateSessionResponse>;

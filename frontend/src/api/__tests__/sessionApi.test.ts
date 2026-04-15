@@ -1,8 +1,7 @@
-/* ──────────────────────────────────────────────
-   Unit tests for the real Session Manager API
-   client.  We mock globalThis.fetch so no
-   network requests are made.
-   ────────────────────────────────────────────── */
+/*
+ * Unit tests for the real Session Manager API client.
+ * `globalThis.fetch` is mocked so no network requests are sent.
+ */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { sessionApi } from '../sessionApi';
@@ -16,7 +15,7 @@ import type {
   StopRecordingResponse,
 } from '../../types/types';
 
-// ── Helpers ─────────────────────────────────
+// Test helpers.
 
 function mockFetchOk<T>(body: T) {
   return vi.fn().mockResolvedValue({
@@ -33,14 +32,14 @@ function mockFetchErr(status: number, body: { error: { code: string; message: st
   } as unknown as Response);
 }
 
-// ── Tests ───────────────────────────────────
+// Test cases.
 
 describe('sessionApi', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
 
-  /* ── createSession ─────────────────────── */
+  /* createSession */
 
   it('createSession sends POST with doctor and patient metadata', async () => {
     const response: CreateSessionResponse = {
@@ -138,7 +137,7 @@ describe('sessionApi', () => {
     expect(result.status).toBe('finished');
   });
 
-  /* ── uploadAudioChunk ──────────────────── */
+  /* uploadAudioChunk */
 
   it('uploadAudioChunk sends multipart/form-data with correct fields', async () => {
     const response: AudioChunkResponse = {
@@ -176,7 +175,7 @@ describe('sessionApi', () => {
     expect(result.seq).toBe(1);
   });
 
-  /* ── stopRecording ─────────────────────── */
+  /* stopRecording */
 
   it('stopRecording sends reason in body', async () => {
     const response: StopRecordingResponse = {
@@ -194,7 +193,7 @@ describe('sessionApi', () => {
     expect(result.recording_state).toBe('stopped');
   });
 
-  /* ── closeSession ──────────────────────── */
+  /* closeSession */
 
   it('closeSession signals post-session analytics', async () => {
     const response: CloseSessionResponse = {
@@ -295,7 +294,7 @@ describe('sessionApi', () => {
     expect(result.total).toBe(0);
   });
 
-  /* ── healthCheck ───────────────────────── */
+  /* healthCheck */
 
   it('healthCheck calls GET /health', async () => {
     const response: HealthResponse = { status: 'ok', service: 'session-manager' };
@@ -308,7 +307,7 @@ describe('sessionApi', () => {
     expect(result.status).toBe('ok');
   });
 
-  /* ── error handling ────────────────────── */
+  /* error handling */
 
   it('throws on non-ok response with error message', async () => {
     globalThis.fetch = mockFetchErr(400, {

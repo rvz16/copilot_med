@@ -101,7 +101,7 @@ export function DoctorDashboard({
       setPatientName('');
       setChiefComplaint('');
     } catch {
-      // Parent component exposes the error state.
+      // The parent component already exposes the error state.
     }
   };
 
@@ -121,7 +121,7 @@ export function DoctorDashboard({
       setImportChiefComplaint('');
       setImportFile(null);
     } catch {
-      // Parent component exposes the error state.
+      // The parent component already exposes the error state.
     }
   };
 

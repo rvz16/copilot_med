@@ -258,7 +258,7 @@ async def transcribe_full(
     session_id: Annotated[str, Form(...)],
     file: UploadFile = File(...),
 ):
-    """Transcribe a full recording file (not chunked) for highest accuracy."""
+    """Transcribe a complete recording file for the most accurate result."""
     normalized_session_id = _normalize_required_text(session_id, "session_id")
 
     try:
@@ -315,7 +315,7 @@ async def transcribe_full(
             "processing_time_sec": elapsed,
         }
 
-    # Long file: split into segments, transcribe sequentially, concatenate
+    # Split long recordings into fixed segments and transcribe them in order.
     transcripts = []
     accumulated_text = ""
     for seg_start in range(0, len(full_pcm), segment_samples):

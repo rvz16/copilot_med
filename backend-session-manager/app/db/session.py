@@ -7,7 +7,7 @@ from app.db.base import Base
 
 
 class Database:
-    """Small database wrapper that owns the SQLAlchemy engine and sessions."""
+    """Small database wrapper around the SQLAlchemy engine and sessions."""
 
     def __init__(self, database_url: str) -> None:
         connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}

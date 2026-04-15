@@ -1,7 +1,4 @@
-/* ──────────────────────────────────────────────
-   Unit tests for the mock Session Manager API.
-   Verifies shapes and deterministic behaviour.
-   ────────────────────────────────────────────── */
+/* Unit tests for the mock Session Manager API client. */
 
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { mockSessionApi } from '../mockSessionApi';

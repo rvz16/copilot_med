@@ -1,9 +1,4 @@
-/* ──────────────────────────────────────────────
-   useUploader – sequential audio chunk upload queue.
-   Accepts blobs, assigns incrementing seq numbers,
-   uploads one at a time, and accumulates transcript
-   + hint data from each response.
-   ────────────────────────────────────────────── */
+/* Sequential upload queue for audio chunks and their related response data. */
 
 import { useCallback, useRef, useState } from 'react';
 import { api } from '../api';
@@ -66,7 +61,7 @@ export function useUploader(sessionId: string | null, analysisModel: string | nu
           sessionId,
           blob,
           seq,
-          4000,                       // duration_ms – fixed chunk duration
+          4000, // Fixed chunk duration in milliseconds.
           blob.type || 'audio/webm',
           isFinal,
           analysisModel,
@@ -99,7 +94,7 @@ export function useUploader(sessionId: string | null, analysisModel: string | nu
         setUploadError(
           err instanceof Error ? err.message : 'Не удалось загрузить аудиофрагмент',
         );
-        // On error, stop processing. User can retry by adding more chunks.
+        // Stop processing on error. The user can retry by adding more chunks.
         break;
       } finally {
         if (abortControllerRef.current === abortController) {

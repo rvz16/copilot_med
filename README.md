@@ -1,384 +1,220 @@
 # MedCoPilot
 
-MedCoPilot is a containerized MVP for live medical-consultation support. The root stack combines:
+MedCoPilot is a Docker-based demo of a medical consultation assistant. It can:
 
-- a React/Vite frontend in [`frontend/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/frontend)
-- a FastAPI session backend in [`backend-session-manager/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/backend-session-manager)
-- a FastAPI clinical recommendations service in [`clinical-recommendations-service/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/clinical-recommendations-service)
-- a Whisper-based ASR service in [`transcribation/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/transcribation)
-- a FastAPI realtime clinical analysis service in [`real_time_analysis/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/real_time_analysis)
+- record a consultation in the browser
+- transcribe speech to text
+- show live clinical hints
+- generate extraction and post-session analysis
 
-The root `docker-compose.yml` is now the intended way to run the integrated system.
+## What Is In This Repository?
 
-## Documentation
+- `frontend/` - web app
+- `backend-session-manager/` - main API used by the frontend
+- `transcribation/` - speech-to-text service
+- `real_time_analysis/` - live AI suggestions during the session
+- `knowledge-extractor/` - structured extraction after the session
+- `post-session-analytics/` - deeper analysis after the session ends
+- `clinical-recommendations-service/` - recommendation lookup service
+- `fhir/` - local FHIR server used by the stack
 
-Project-level documentation is available in [`Docs/`](./Docs/README.md):
+## Fastest Way To Run
 
-- repository structure and top-level folder map
-- runtime architecture and end-to-end flows
-- setup and installation
-- integration and deployment
-- API specifications for every container
-- service internals for frontend, orchestration, ASR, analytics, extraction, recommendations, and FHIR
-- performance metrics and observability
-- privacy, security, and quality report
+### 1. Install Docker
 
-## Stack Overview
+Install Docker Desktop or another Docker setup with Compose support.
 
-```text
-Browser
-  -> frontend (:3000)
-  -> session-manager (:8080)
-      -> transcribation (:8000) for chunk transcription
-      -> realtime-analysis (:8000 internally) for live suggestions
-          -> Ollama on the host at :11434 by default
-          -> optional remote FHIR server for patient context
-      -> clinical-recommendations (:8002 internally) for official recommendation lookup
-      -> post-session queue for background offline analytics
-```
+### 2. Create your env file
 
-Runtime behavior:
-
-- the frontend uploads audio chunks sequentially
-- `session-manager` sends each accepted chunk to `transcribation`
-- once stable transcript text is available, `session-manager` calls `realtime-analysis`
-- `session-manager` returns both stored hints and structured realtime analysis to the frontend
-- when a session is closed, `session-manager` queues post-session analytics and knowledge extraction in the background
-- recommendation PDFs are downloaded through `session-manager`, so the clinical recommendations container stays internal-only
-- if realtime analysis is unavailable, the backend still returns transcript updates and local rule-based hints
-
-## Prerequisites
-
-You need:
-
-- Docker Desktop or a Docker daemon with Compose support
-- Kaggle credentials for the Whisper model bootstrap:
-  - `~/.kaggle/kaggle.json`, or
-  - `~/.kaggle/access_token`, or
-  - `KAGGLE_API_TOKEN`, or
-  - `KAGGLE_USERNAME` + `KAGGLE_KEY`
-- Recommended: Ollama running on the host at `http://localhost:11434`
-
-Ollama is recommended because the realtime-analysis container points to the host by default. If Ollama is not available, the realtime-analysis service still responds using heuristic fallbacks, but model-generated suggestions will be limited.
-
-## First-Time Setup
-
-### 1. Prepare Kaggle credentials
-
-Make sure one of the supported credential forms exists before the first `docker compose up`. The root Compose file mounts:
+From the repository root:
 
 ```bash
-${HOME}/.kaggle:/root/.kaggle:ro
+cp .env.example .env
 ```
 
-If that directory is missing, the ASR container can still start, but the model download will fail and transcription will not become healthy.
+Then open `.env` and edit the values you need.
 
-### 2. Start Ollama on the host
+### 3. Configure transcription
 
-If you want full realtime analysis quality:
+You need **one** of these options:
+
+- easiest option: put your Groq key into `TRANSCRIBATION_GROQ_API_KEY` in `.env`
+- local option: set `TRANSCRIBATION_USE_GROQ_API=false` in `.env` and provide Kaggle credentials so the Whisper model can be downloaded
+
+If you do not configure either option, the app may start, but transcription will not work.
+
+### 4. Optional but recommended
+
+For better live suggestions, run Ollama on your host:
 
 ```bash
 ollama pull qwen3:4b
 ollama serve
 ```
 
-Default host-side URL expected by the stack:
+If you want post-session AI analysis, also set `POST_ANALYTICS_LLM_API_KEY` in `.env`.
 
-```text
-http://localhost:11434
-```
-
-The realtime-analysis container reaches it through `host.docker.internal`.
-
-## Quick Start
-
-From the repository root:
+### 5. Start the full stack
 
 ```bash
 docker compose up --build
 ```
 
-This starts:
+Open:
 
-- frontend at `http://localhost:3000`
-- session-manager API at `http://localhost:8080`
+- frontend: `http://localhost:3000`
+- backend health check: `http://localhost:8080/health`
 
-Notes:
+## How To Use
 
-- on first startup, `transcribation` may take several minutes because it downloads `danchik575/whisper-ct2-ru`
-- `session-manager` waits for both `transcribation` and `realtime-analysis` healthchecks before becoming healthy
-- frontend waits for `session-manager`
-- all other containers stay on the internal Docker network and are not published to the host
+1. Open `http://localhost:3000`
+2. Enter any doctor ID and patient ID
+3. Click `Start Session`
+4. Allow microphone access
+5. Click `Start Recording`
+6. Speak for a few seconds
+7. Click `Stop Recording`
+8. Click `Close Session`
 
-## Common Commands
+## Useful Commands
 
-Run in background:
+Start in background:
 
 ```bash
 docker compose up --build -d
 ```
 
-Stop containers:
-
-```bash
-docker compose down
-```
-
-Stop and remove named volumes:
-
-```bash
-docker compose down -v
-```
-
-Follow all logs:
+View logs:
 
 ```bash
 docker compose logs -f
 ```
 
-Follow a single service:
+Stop everything:
 
 ```bash
-docker compose logs -f session-manager
-docker compose logs -f transcribation
-docker compose logs -f realtime-analysis
-docker compose logs -f frontend
+docker compose down
 ```
 
-Rebuild only changed services:
+Stop and remove volumes:
 
 ```bash
-docker compose build clinical-recommendations session-manager realtime-analysis frontend
+docker compose down -v
 ```
 
-## Health Checks
+## Parameters You Can Change
 
-After startup, verify the services explicitly.
-
-Frontend:
+Most common settings can be changed in `.env`. After changing them, restart the stack.
 
 ```bash
-curl http://localhost:3000/health
+docker compose up --build -d
 ```
 
-Session manager:
-
-```bash
-curl http://localhost:8080/health
-```
-
-Expected backend-style responses:
-
-- `session-manager`: `{"status":"ok","service":"session-manager"}`
-
-Internal services are not published to the host anymore. Inspect them with:
-
-```bash
-docker compose ps
-docker compose logs -f clinical-recommendations
-docker compose logs -f transcribation
-docker compose logs -f realtime-analysis
-docker compose logs -f post-session-analytics
-docker compose logs -f knowledge-extractor
-```
-
-## End-to-End Smoke Flow
-
-Once all health checks are green:
-
-1. Open `http://localhost:3000`.
-2. Enter any non-empty doctor ID and patient ID.
-3. Click `Start Session`.
-4. Click `Start Recording` and allow microphone access.
-5. Speak for at least one chunk interval.
-6. Watch the UI update:
-   - transcript text should appear
-   - stored hints should populate
-   - realtime analysis should show suggestions, facts, interactions, and optional patient context
-7. Click `Stop Recording`.
-8. Click `Close Session`.
-9. The session will move to `analyzing` while the background post-session queue completes offline analytics.
-
-If you want to inspect the backend directly after a session:
-
-```bash
-curl http://localhost:8080/api/v1/sessions
-curl http://localhost:8080/api/v1/sessions/<session_id>/transcript
-curl http://localhost:8080/api/v1/sessions/<session_id>/hints
-curl http://localhost:8080/api/v1/sessions/<session_id>/extractions
-curl -OJ http://localhost:8080/api/v1/clinical-recommendations/30_5/pdf
-```
-
-## Service Details
-
-### Frontend
-
-- Source: [`frontend/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/frontend)
-- Published port: `3000`
-- Nginx proxies `/api` and `/health` to `session-manager`
-- Displays transcript, stored hints, and the latest structured realtime analysis payload
-
-### Session Manager
-
-- Source: [`backend-session-manager/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/backend-session-manager)
-- Published port: `8080`
-- Stores SQLite data and uploaded chunks in `session-manager-data`
-- Calls:
-  - `transcribation` for chunk ASR
-  - `realtime-analysis` for live structured clinical analysis
-- Queues post-session analytics and knowledge extraction in the background
-- Proxies recommendation PDF downloads through `/api/v1/clinical-recommendations/{recommendation_id}/pdf`
-- Returns `realtime_analysis` and `new_hints` in chunk-upload responses
-
-### Clinical Recommendations
-
-- Source: [`clinical-recommendations-service/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/clinical-recommendations-service)
-- Internal-only container in the root Compose stack
-- Loads official entries from [`clinical_recommendations/clinical_recommendations.csv`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/clinical_recommendations/clinical_recommendations.csv)
-- Maps entry ids like `286_3` to PDFs like `КР286.pdf` in [`clinical_recommendations/pdf_files/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/clinical_recommendations/pdf_files)
-- Exposes list, search, detail, and PDF download endpoints to other containers on the Docker network
+If a variable is not already present in `.env.example`, you can still add it manually to `.env`. Some advanced settings are hardcoded in the root [`docker-compose.yml`](./docker-compose.yml), so for those you should edit the service `environment:` block there.
 
 ### Transcribation
 
-- Source: [`transcribation/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/transcribation)
-- Internal-only container in the root Compose stack
-- Uses the CPU Dockerfile in the root stack
-- Persists the Whisper model in `transcribation-model`
-- Accepts backend chunk uploads and returns transcript deltas plus stable text
+Change in `.env`:
+
+- `TRANSCRIBATION_MODEL_PATH` - path to the local model inside the container
+- `TRANSCRIBATION_MODEL_KAGGLE_DATASET` - Kaggle dataset used for local model download
+- `TRANSCRIBATION_USE_GROQ_API` - use Groq API or local Whisper model
+- `TRANSCRIBATION_GROQ_API_KEY` - Groq API key
+- `TRANSCRIBATION_GROQ_MODEL` - Groq Whisper model name
+- `TRANSCRIBATION_AUDIO_CONTEXT_SECONDS` - overlap with previous audio chunk
+- `TRANSCRIBATION_LANGUAGE` - transcription language
+- `TRANSCRIBATION_BEAM_SIZE`, `TRANSCRIBATION_BEST_OF`, `TRANSCRIBATION_PATIENCE` - decoding behavior
+- `TRANSCRIBATION_VAD_THRESHOLD`, `TRANSCRIBATION_VAD_MIN_SPEECH_MS`, `TRANSCRIBATION_VAD_MIN_SILENCE_MS`, `TRANSCRIBATION_VAD_PAD_MS` - speech detection tuning
+- `TRANSCRIBATION_MAX_FILE_SIZE_MB` - max accepted audio file size
+- `TRANSCRIBATION_LOG_LEVEL` - service log level
+- `KAGGLE_API_TOKEN`, `KAGGLE_USERNAME`, `KAGGLE_KEY` - needed for local model download
+
+More service-level options are defined in [`transcribation/app/config.py`](./transcribation/app/config.py).
 
 ### Realtime Analysis
 
-- Source: [`real_time_analysis/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/real_time_analysis)
-- Internal-only container in the root Compose stack
-- Receives stable transcript updates from `session-manager`
-- Returns:
-  - suggestions
-  - drug interactions
-  - extracted facts
-  - knowledge references
-  - optional patient context
-  - error list
-- Uses Ollama on the host by default through `host.docker.internal`
-- Can also target OpenAI-compatible hosted APIs such as OpenRouter or Google AI Developer
+Change in `.env`:
 
-## Compose Environment Overrides
+- `REALTIME_ANALYSIS_LLM_PROVIDER` - `ollama` or `openai_compatible`
+- `REALTIME_ANALYSIS_MODEL_NAME` - model name
+- `REALTIME_ANALYSIS_LLM_BASE_URL` - LLM endpoint
+- `REALTIME_ANALYSIS_LLM_API_KEY` - API key for OpenAI-compatible providers
+- `REALTIME_ANALYSIS_LANGUAGE` - language passed by session-manager
+- `REALTIME_ANALYSIS_TIMEOUT_SECONDS` - timeout from session-manager to realtime-analysis
+- `REALTIME_ANALYSIS_MAX_TOKENS` - response token limit
+- `REALTIME_ANALYSIS_TEMPERATURE` - generation temperature
+- `REALTIME_ANALYSIS_LLM_TIMEOUT` - LLM request timeout inside the service
+- `REALTIME_ANALYSIS_LLM_REASONING_EFFORT` - `low`, `medium`, or `high`
+- `REALTIME_ANALYSIS_FHIR_BASE_URL` - FHIR source for patient context
+- `REALTIME_ANALYSIS_LOG_LEVEL` - service log level
 
-Important root-level environment overrides:
+### Knowledge Extractor
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `KAGGLE_API_TOKEN` | empty | Optional Kaggle auth for model bootstrap |
-| `KAGGLE_USERNAME` | empty | Optional Kaggle auth for model bootstrap |
-| `KAGGLE_KEY` | empty | Optional Kaggle auth for model bootstrap |
-| `REALTIME_ANALYSIS_LLM_PROVIDER` | `ollama` | `ollama` or `openai_compatible` |
-| `REALTIME_ANALYSIS_MODEL_NAME` | `qwen3:4b` | Model name passed to realtime-analysis |
-| `REALTIME_ANALYSIS_LLM_BASE_URL` | `http://host.docker.internal:11434` | Ollama base URL or OpenAI-compatible base URL |
-| `REALTIME_ANALYSIS_LLM_API_KEY` | empty | API key for hosted OpenAI-compatible providers |
-| `REALTIME_ANALYSIS_LLM_HTTP_REFERER` | empty | Optional `HTTP-Referer` header, useful for OpenRouter |
-| `REALTIME_ANALYSIS_LLM_X_TITLE` | `MedCoPilot` | Optional `X-Title` header, useful for OpenRouter |
-| `REALTIME_ANALYSIS_LLM_EXTRA_HEADERS_JSON` | empty | Optional JSON object with extra outbound LLM headers |
-| `REALTIME_ANALYSIS_FHIR_BASE_URL` | `http://158.160.84.63:8092/hapi-fhir-jpaserver/fhir` | Default FHIR endpoint |
-| `REALTIME_ANALYSIS_MAX_TOKENS` | `256` | Max generation tokens |
-| `REALTIME_ANALYSIS_TEMPERATURE` | `0.0` | Generation temperature |
-| `REALTIME_ANALYSIS_LLM_TIMEOUT` | `8.0` | LLM timeout inside realtime-analysis |
-| `REALTIME_ANALYSIS_LOG_LEVEL` | `INFO` | Logging level for realtime-analysis |
-| `REALTIME_ANALYSIS_LANGUAGE` | `ru` | Language sent by session-manager in realtime analysis requests |
-| `REALTIME_ANALYSIS_TIMEOUT_SECONDS` | `8` | Timeout from session-manager to realtime-analysis |
+Change in `.env`:
 
-Example override:
+- `KNOWLEDGE_EXTRACTOR_BACKEND` - extractor backend
+- `KNOWLEDGE_EXTRACTOR_FHIR_BASE_URL` - FHIR server URL
+- `KNOWLEDGE_EXTRACTOR_HTTP_TIMEOUT_SECONDS` - HTTP timeout
+- `KNOWLEDGE_EXTRACTOR_FHIR_MAX_RETRIES` - retry count for FHIR calls
+- `KNOWLEDGE_EXTRACTOR_OLLAMA_BASE_URL` - Ollama URL
+- `KNOWLEDGE_EXTRACTOR_OLLAMA_MODEL` - Ollama model name
+- `KNOWLEDGE_EXTRACTOR_OLLAMA_TIMEOUT_SECONDS` - Ollama timeout
+- `KNOWLEDGE_EXTRACTOR_OLLAMA_TEMPERATURE` - Ollama temperature
+- `KNOWLEDGE_EXTRACTOR_LLM_TIMEOUT_SECONDS` - LLM timeout
+- `KNOWLEDGE_EXTRACTOR_LLM_MAX_TOKENS` - max tokens
+- `KNOWLEDGE_EXTRACTOR_LLM_TEMPERATURE` - LLM temperature
+- `KNOWLEDGE_EXTRACTOR_LOG_LEVEL` - service log level
 
-```bash
-REALTIME_ANALYSIS_LLM_PROVIDER=openai_compatible \
-REALTIME_ANALYSIS_MODEL_NAME=google/gemini-2.0-flash-exp:free \
-REALTIME_ANALYSIS_LLM_BASE_URL=https://openrouter.ai/api/v1 \
-REALTIME_ANALYSIS_LLM_API_KEY=your_openrouter_key \
-REALTIME_ANALYSIS_LLM_HTTP_REFERER=http://localhost:3000 \
-REALTIME_ANALYSIS_LANGUAGE=en \
-docker compose up --build
-```
+The knowledge extractor also reuses these variables from the realtime-analysis config:
 
-## Troubleshooting
+- `REALTIME_ANALYSIS_LLM_BASE_URL`
+- `REALTIME_ANALYSIS_MODEL_NAME`
+- `REALTIME_ANALYSIS_LLM_API_KEY`
+- `REALTIME_ANALYSIS_LLM_HTTP_REFERER`
+- `REALTIME_ANALYSIS_LLM_X_TITLE`
+- `REALTIME_ANALYSIS_LLM_EXTRA_HEADERS_JSON`
 
-### `transcribation` never becomes healthy
+### Post-Session Analytics
 
-Likely causes:
+Change in `.env`:
 
-- Kaggle credentials are missing or invalid
-- the first model download is still in progress
+- `POST_ANALYTICS_LLM_BASE_URL` - OpenAI-compatible endpoint
+- `POST_ANALYTICS_MODEL_NAME` - model name
+- `POST_ANALYTICS_LLM_API_KEY` - API key
+- `POST_ANALYTICS_MAX_TOKENS` - max response size
+- `POST_ANALYTICS_TEMPERATURE` - generation temperature
+- `POST_ANALYTICS_TIMEOUT` - request timeout
+- `POST_ANALYTICS_LLM_HTTP_REFERER` - optional header
+- `POST_ANALYTICS_LLM_X_TITLE` - optional header
+- `POST_ANALYTICS_LLM_EXTRA_HEADERS_JSON` - extra request headers
+- `POST_ANALYTICS_LOG_LEVEL` - service log level
 
-Check:
+### Session Manager And Clinical Recommendations
 
-```bash
-docker compose logs -f transcribation
-```
+Useful session-manager settings are defined in [`backend-session-manager/app/core/config.py`](./backend-session-manager/app/core/config.py). In the root stack, some of them come from `.env` and some are fixed in [`docker-compose.yml`](./docker-compose.yml).
 
-### `realtime-analysis` is healthy but suggestions are weak or missing
+- `REALTIME_ANALYSIS_LANGUAGE` - language sent with realtime requests
+- `REALTIME_ANALYSIS_TIMEOUT_SECONDS` - timeout when waiting for live analysis
+- `FULL_TRANSCRIPTION_TIMEOUT_SECONDS` - timeout for full transcript generation
+- `HTTP_TIMEOUT_SECONDS` - shared outbound timeout
+- `DEFAULT_CHUNK_MS` - suggested chunk size for uploads
+- `MAX_IN_FLIGHT_REQUESTS` - upload concurrency hint
+- `CLINICAL_RECOMMENDATIONS_MIN_CONFIDENCE` - confidence threshold for recommendations
 
-Likely causes:
+Useful clinical-recommendations settings in [`clinical-recommendations-service/app/core/config.py`](./clinical-recommendations-service/app/core/config.py):
 
-- Ollama is not running on the host
-- the configured model is not pulled
-- the model request timed out
+- `CLINICAL_RECOMMENDATIONS_CSV_PATH` - CSV file with recommendation metadata
+- `CLINICAL_RECOMMENDATIONS_PDF_DIR` - directory with PDFs
+- `CORS_ORIGINS` - allowed frontend origins
+- `PORT` - service port
 
-Check:
+## Notes
 
-```bash
-docker compose logs -f realtime-analysis
-```
+- The app is designed for a multi-service Docker setup. The root `docker-compose.yml` is the main entry point.
+- The first startup can take a few minutes, especially when models are being downloaded.
+- If Ollama is not running, the system still starts, but live AI suggestions are more limited.
+- If `POST_ANALYTICS_LLM_API_KEY` is missing, the live session can still work, but post-session analysis may fail.
 
-If Ollama is unavailable, the service still returns heuristic output. That is expected fallback behavior, not a stack failure.
+## Need More Detail?
 
-### `session-manager` is healthy but no realtime analysis appears in the UI
-
-Check:
-
-```bash
-docker compose logs -f session-manager
-```
-
-The backend logs both successful and failed outbound realtime-analysis calls. Even when those calls fail, transcript updates should continue and local hints should still appear.
-
-### Browser recording fails
-
-Check:
-
-- microphone permissions in the browser
-- HTTPS or localhost constraints in your browser
-- supported MIME type from the browser recorder
-
-The backend accepts:
-
-- `audio/webm`
-- `audio/wav`
-- `audio/webm;codecs=opus`
-
-### `host.docker.internal` cannot be reached
-
-The root Compose file already adds:
-
-```yaml
-extra_hosts:
-  - "host.docker.internal:host-gateway"
-```
-
-If your Docker installation does not support `host-gateway`, update Docker or override `REALTIME_ANALYSIS_LLM_BASE_URL` to a reachable endpoint.
-
-## Local Development Without Root Compose
-
-Each service can still be run independently:
-
-- frontend: [`frontend/README.md`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/frontend/README.md)
-- backend: [`backend-session-manager/README.md`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/backend-session-manager/README.md)
-- ASR: [`transcribation/README.md`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/transcribation/README.md)
-- realtime analysis: [`real_time_analysis/README.md`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/real_time_analysis/README.md)
-
-## Verification Performed
-
-The current integrated changes were verified with:
-
-- backend tests in isolated Docker Python environment
-- realtime-analysis tests in isolated Docker Python environment
-- frontend tests
-- frontend production build
-- `docker compose config`
-- `docker compose build session-manager realtime-analysis frontend`
+See [`Docs/`](./Docs/README.md) or the README inside each service folder.

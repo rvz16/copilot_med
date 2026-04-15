@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Create a ClearML task for serving Qwen3.5-9B via vLLM.
+Create a ClearML task that serves Qwen3.5-9B through vLLM.
 
 Usage:
     python scripts/create_clearml_qwen3_task.py --queue high_q
@@ -24,7 +24,7 @@ gpu_memory_utilization = {gpu_memory_utilization}
 max_model_len = {max_model_len}
 tensor_parallel_size = {tensor_parallel_size}
 
-# Enable verbose logging to see engine core errors
+# Enable verbose logging to make engine failures easier to inspect.
 os.environ["VLLM_LOGGING_LEVEL"] = "DEBUG"
 os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
@@ -57,7 +57,7 @@ else:
 print(f"Starting vLLM server: {{' '.join(cmd)}}")
 print(f"CUDA_VISIBLE_DEVICES: {{os.environ.get('CUDA_VISIBLE_DEVICES', 'not set')}}")
 
-# Upload output as artifact so we can inspect errors in ClearML UI
+# Upload the combined output log as a ClearML artifact for debugging.
 from clearml import Task as _Task
 _task = _Task.current_task()
 
@@ -73,7 +73,7 @@ if _task:
     _task.upload_artifact("vllm_output_log", artifact_object=log_path)
 
 if rc != 0:
-    # Also print last 100 lines for quick inspection
+    # Print the last 100 log lines for quick inspection.
     with open(log_path) as f:
         lines = f.readlines()
         print("\\n=== LAST 100 LINES OF VLLM OUTPUT ===")
@@ -104,7 +104,7 @@ def create_qwen3_task(
     tensor_parallel_size: int = 1,
     use_docker: bool = True,
 ):
-    # Write the inline serve script
+    # Write the generated serve script to a temporary file.
     script_content = VLLM_SERVE_SCRIPT.format(
         model_name=model_name,
         port=port,

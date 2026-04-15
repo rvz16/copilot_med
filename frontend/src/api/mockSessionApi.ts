@@ -1,8 +1,4 @@
-/* ──────────────────────────────────────────────
-   Mock Session Manager API client.
-   Keeps a small in-memory consultation store so
-   dashboard/history flows work without the backend.
-   ────────────────────────────────────────────── */
+/* Mock Session Manager API client backed by an in-memory consultation store. */
 
 import type {
   AudioChunkResponse,
