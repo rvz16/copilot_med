@@ -61,6 +61,28 @@ describe('mockSessionApi', () => {
     expect(typeof res.transcript_update!.stable_text).toBe('string');
   });
 
+  it('importHistoricalSession returns an archive-ready session detail', async () => {
+    const responsePromise = mockSessionApi.importHistoricalSession(
+      {
+        doctor_id: 'doc_1',
+        doctor_name: 'Dr. Amelia Carter',
+        doctor_specialty: 'Family Medicine',
+        patient_id: 'pat_import_1',
+        patient_name: 'Olivia Bennett',
+        chief_complaint: 'Recurring headache',
+      },
+      new File(['audio'], 'consultation.wav', { type: 'audio/wav' }),
+    );
+    await vi.runAllTimersAsync();
+    const res = await responsePromise;
+
+    expect(res.status).toBe('finished');
+    expect(res.recording_state).toBe('stopped');
+    expect(res.processing_state).toBe('completed');
+    expect(res.snapshot?.post_session_analytics).not.toBeNull();
+    expect(res.snapshot?.knowledge_extraction).not.toBeNull();
+  });
+
   it('uploadAudioChunk returns hints on odd seq numbers', async () => {
     const createdPromise = mockSessionApi.createSession({
       doctor_id: 'doc_1',
@@ -127,6 +149,8 @@ describe('mockSessionApi', () => {
     const detail = await detailPromise;
     expect(detail.status).toBe('finished');
     expect(detail.snapshot?.post_session_analytics).not.toBeNull();
+    expect(detail.snapshot?.performance_metrics?.post_session_analysis?.processing_time_ms).toBe(680);
+    expect(detail.snapshot?.performance_metrics?.documentation_service?.processing_time_ms).toBe(210);
   });
 
   it('listSessions exposes dashboard history', async () => {
@@ -197,6 +221,7 @@ describe('mockSessionApi', () => {
 
     expect(detail.patient_name).toBe('Mia Stone');
     expect(detail.snapshot?.status).toBe('finished');
+    expect(detail.snapshot?.performance_metrics?.realtime_analysis?.average_latency_ms).toBe(25);
     expect(detail.snapshot?.finalized_at).not.toBeNull();
   });
 

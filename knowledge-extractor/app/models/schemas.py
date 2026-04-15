@@ -93,6 +93,7 @@ class EhrSyncResult(BaseModel):
 class ExtractionResponse(BaseModel):
     status: str = "ok"
     session_id: str
+    processing_time_ms: int = 0
     soap_note: SoapNote
     extracted_facts: dict[str, Any] = Field(default_factory=dict)
     summary: ExtractionSummary = Field(default_factory=ExtractionSummary)

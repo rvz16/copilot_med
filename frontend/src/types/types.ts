@@ -22,6 +22,8 @@ export interface CreateSessionRequest {
   chief_complaint?: string;
 }
 
+export interface ImportRecordedSessionRequest extends CreateSessionRequest {}
+
 export interface CreateSessionResponse {
   session_id: string;
   status: string;
@@ -223,6 +225,21 @@ export interface PostSessionAnalytics {
   };
 }
 
+export interface RealtimePerformanceMetrics {
+  average_latency_ms: number;
+  sample_count: number;
+}
+
+export interface ServicePerformanceMetrics {
+  processing_time_ms: number;
+}
+
+export interface SessionPerformanceMetrics {
+  realtime_analysis?: RealtimePerformanceMetrics | null;
+  documentation_service?: ServicePerformanceMetrics | null;
+  post_session_analysis?: ServicePerformanceMetrics | null;
+}
+
 export interface KnowledgeSoapSubjective {
   reported_symptoms: string[];
   reported_concerns: string[];
@@ -311,6 +328,7 @@ export interface SessionSnapshot {
   transcript: string;
   hints: StoredHint[];
   realtime_analysis: RealtimeAnalysis | null;
+  performance_metrics?: SessionPerformanceMetrics | null;
   knowledge_extraction?: KnowledgeExtraction | null;
   post_session_analytics?: PostSessionAnalytics | null;
   last_error: string | null;
@@ -373,6 +391,10 @@ export interface ApiErrorBody {
 
 export interface SessionApi {
   createSession(payload: CreateSessionRequest): Promise<CreateSessionResponse>;
+  importHistoricalSession(
+    payload: ImportRecordedSessionRequest,
+    file: File,
+  ): Promise<SessionDetail>;
   uploadAudioChunk(
     sessionId: string,
     file: Blob,

@@ -28,10 +28,31 @@ class StorageService:
             file_obj.write(content)
         return file_path
 
+    def save_recording(
+        self,
+        session_id: str,
+        *,
+        content: bytes,
+        mime_type: str,
+        file_name: str | None = None,
+    ) -> Path:
+        session_dir = self.base_dir / "sessions" / session_id
+        session_dir.mkdir(parents=True, exist_ok=True)
+        extension = self._extension_for_upload(file_name=file_name, mime_type=mime_type)
+        file_path = session_dir / f"recording{extension}"
+        file_path.write_bytes(content)
+        return file_path
+
     def _recording_extension(self, session_dir: Path, mime_type: str) -> str:
         existing_recording = next(session_dir.glob("recording.*"), None)
         if existing_recording is not None:
             return existing_recording.suffix
+        return self._extension_for_mime_type(mime_type)
+
+    def _extension_for_upload(self, *, file_name: str | None, mime_type: str) -> str:
+        suffix = Path(file_name or "").suffix.lower()
+        if suffix in {".mp3", ".wav", ".webm"}:
+            return suffix
         return self._extension_for_mime_type(mime_type)
 
     @staticmethod
@@ -39,6 +60,8 @@ class StorageService:
         normalized = mime_type.lower()
         if normalized.startswith("audio/webm"):
             return ".webm"
+        if normalized in {"audio/mpeg", "audio/mp3", "audio/x-mp3"}:
+            return ".mp3"
         if normalized == "audio/wav" or normalized == "audio/wave":
             return ".wav"
         safe = re.sub(r"[^a-z0-9]+", "_", normalized)

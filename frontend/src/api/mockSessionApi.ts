@@ -11,12 +11,14 @@ import type {
   CreateSessionResponse,
   HealthResponse,
   Hint,
+  ImportRecordedSessionRequest,
   KnowledgeExtraction,
   ListSessionsResponse,
   RealtimeAnalysis,
   PostSessionAnalytics,
   SessionApi,
   SessionDetail,
+  SessionPerformanceMetrics,
   SessionSnapshot,
   SessionSummary,
   StopRecordingResponse,
@@ -149,10 +151,40 @@ function buildEmptySnapshot(summary: SessionSummary): SessionSnapshot {
     transcript: '',
     hints: [],
     realtime_analysis: null,
+    performance_metrics: null,
     knowledge_extraction: null,
     last_error: summary.last_error,
     updated_at: summary.updated_at,
     finalized_at: null,
+  };
+}
+
+function buildPerformanceMetrics(
+  realtimeSampleCount = 0,
+  realtimeAverageLatencyMs: number | null = null,
+  documentationServiceMs: number | null = null,
+  postSessionAnalysisMs: number | null = null,
+): SessionPerformanceMetrics | null {
+  if (
+    realtimeAverageLatencyMs === null &&
+    documentationServiceMs === null &&
+    postSessionAnalysisMs === null
+  ) {
+    return null;
+  }
+
+  return {
+    realtime_analysis:
+      realtimeAverageLatencyMs === null
+        ? null
+        : {
+            average_latency_ms: realtimeAverageLatencyMs,
+            sample_count: realtimeSampleCount,
+          },
+    documentation_service:
+      documentationServiceMs === null ? null : { processing_time_ms: documentationServiceMs },
+    post_session_analysis:
+      postSessionAnalysisMs === null ? null : { processing_time_ms: postSessionAnalysisMs },
   };
 }
 
@@ -342,6 +374,12 @@ function scheduleAnalyticsCompletion(record: MockSessionRecord): void {
       status: 'finished',
       processing_state: 'completed',
       transcript: finalizedTranscript,
+      performance_metrics: buildPerformanceMetrics(
+        record.snapshot.performance_metrics?.realtime_analysis?.sample_count ?? 0,
+        record.snapshot.performance_metrics?.realtime_analysis?.average_latency_ms ?? null,
+        210,
+        680,
+      ),
       knowledge_extraction: knowledgeExtraction,
       post_session_analytics: analytics,
       updated_at: timestamp,
@@ -421,6 +459,64 @@ export const mockSessionApi: SessionApi = {
     return response;
   },
 
+  async importHistoricalSession(payload: ImportRecordedSessionRequest, file: File) {
+    void file;
+    await delay(MOCK_DELAY_MS * 2);
+    mockSessionCounter += 1;
+    const timestamp = isoNow();
+    const sessionId = `mock_sess_${mockSessionCounter}`;
+    const transcript = TRANSCRIPT_FRAGMENTS.join('');
+    const analytics = buildPostSessionAnalytics(transcript);
+    const knowledgeExtraction = buildKnowledgeExtraction(transcript);
+
+    const summary: SessionSummary = {
+      session_id: sessionId,
+      doctor_id: payload.doctor_id,
+      doctor_name: payload.doctor_name ?? null,
+      doctor_specialty: payload.doctor_specialty ?? null,
+      patient_id: payload.patient_id,
+      patient_name: payload.patient_name ?? null,
+      chief_complaint: payload.chief_complaint ?? null,
+      encounter_id: null,
+      status: 'finished',
+      recording_state: 'stopped',
+      processing_state: 'completed',
+      latest_seq: 1,
+      transcript_preview: transcript.slice(0, 180),
+      stable_transcript: transcript,
+      last_error: null,
+      created_at: timestamp,
+      updated_at: timestamp,
+      started_at: timestamp,
+      stopped_at: timestamp,
+      closed_at: timestamp,
+      snapshot_available: true,
+    };
+
+    const record: MockSessionRecord = {
+      request: payload,
+      summary,
+      snapshot: {
+        status: 'finished',
+        recording_state: 'stopped',
+        processing_state: 'completed',
+        latest_seq: 1,
+        transcript,
+        hints: [],
+        realtime_analysis: null,
+        knowledge_extraction: knowledgeExtraction,
+        post_session_analytics: analytics,
+        last_error: null,
+        updated_at: timestamp,
+        finalized_at: timestamp,
+      },
+      analyticsScheduled: false,
+    };
+
+    sessions.set(sessionId, record);
+    return detailFromRecord(record);
+  },
+
   async uploadAudioChunk(sessionId, file, seq, durationMs, mimeType, isFinal, signal) {
     void file;
     void durationMs;
@@ -468,6 +564,7 @@ export const mockSessionApi: SessionApi = {
       transcript: stableText,
       hints: storedHints,
       realtime_analysis: analysis,
+      performance_metrics: buildPerformanceMetrics(seq, 25),
       last_error: null,
       updated_at: timestamp,
       finalized_at: null,

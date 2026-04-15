@@ -431,6 +431,37 @@ button:disabled,
   margin-top: 20px;
 }
 
+.session-form-switcher {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.session-form-switcher-button {
+  min-height: 46px;
+  border: 1px solid rgba(23, 49, 59, 0.1);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
+  font-weight: 700;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.session-form-switcher-button:hover {
+  transform: translateY(-1px);
+}
+
+.session-form-switcher-button.is-active {
+  border-color: rgba(203, 106, 51, 0.28);
+  background: rgba(203, 106, 51, 0.12);
+  color: var(--text);
+}
+
 .form-row {
   display: flex;
   flex-direction: column;
@@ -459,6 +490,17 @@ button:disabled,
 .history-filters select:focus {
   outline: 2px solid rgba(203, 106, 51, 0.2);
   outline-offset: 2px;
+}
+
+.upload-file-input {
+  min-height: auto;
+  padding: 12px 14px;
+}
+
+.form-helper-text {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
 }
 
 .inline-error {
@@ -671,6 +713,18 @@ button:disabled,
 
 .session-facts {
   gap: 12px;
+}
+
+.session-section-title {
+  margin: 22px 0 12px;
+  font-size: 0.84rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.session-performance-facts {
+  margin-top: 0;
 }
 
 .session-action-stack {

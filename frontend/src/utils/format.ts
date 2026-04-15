@@ -10,6 +10,14 @@ export function formatDateTime(value: string | null | undefined): string {
   }).format(date);
 }
 
+export function formatDurationMs(value: number | null | undefined): string {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '—';
+  if (value < 1000) return `${Math.round(value)} ms`;
+
+  const seconds = value / 1000;
+  return `${seconds.toFixed(seconds >= 10 ? 0 : 1)} s`;
+}
+
 export function formatStatusLabel(status: string): string {
   switch (status) {
     case 'idle':

@@ -36,6 +36,35 @@ def create_session(
 
 
 @router.post(
+    "/sessions/import-audio",
+    response_model=SessionDetailResponse,
+    summary="Create a completed consultation from an uploaded audio recording",
+)
+def import_audio_session(
+    doctor_id: str = Form(...),
+    patient_id: str = Form(...),
+    file: UploadFile = File(...),
+    doctor_name: str | None = Form(default=None),
+    doctor_specialty: str | None = Form(default=None),
+    patient_name: str | None = Form(default=None),
+    chief_complaint: str | None = Form(default=None),
+    service: SessionService = Depends(get_session_service),
+) -> SessionDetailResponse:
+    file_bytes = file.file.read()
+    return service.import_recorded_session(
+        doctor_id=doctor_id,
+        patient_id=patient_id,
+        file_name=file.filename,
+        mime_type=file.content_type,
+        file_bytes=file_bytes,
+        doctor_name=doctor_name,
+        doctor_specialty=doctor_specialty,
+        patient_name=patient_name,
+        chief_complaint=chief_complaint,
+    )
+
+
+@router.post(
     "/sessions/{session_id}/audio-chunks",
     response_model=AudioChunkResponse,
     summary="Upload a sequential audio chunk",

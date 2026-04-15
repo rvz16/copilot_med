@@ -48,6 +48,26 @@ def upload_chunk(
     )
 
 
+def import_audio_session(
+    client: TestClient,
+    *,
+    file_name: str = "consultation.mp3",
+    mime_type: str = "audio/mpeg",
+):
+    return client.post(
+        "/api/v1/sessions/import-audio",
+        data={
+            "doctor_id": "doc_001",
+            "doctor_name": "Dr. Amelia Carter",
+            "doctor_specialty": "Family Medicine",
+            "patient_id": "pat_001",
+            "patient_name": "Olivia Bennett",
+            "chief_complaint": "Recurring headache",
+        },
+        files={"file": (file_name, b"fake-audio", mime_type)},
+    )
+
+
 def test_health_check_returns_200(client: TestClient):
     response = client.get("/health")
 
@@ -87,6 +107,33 @@ def test_create_session_validation_failure(client: TestClient):
 
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_import_audio_session_creates_finished_archive(client: TestClient):
+    response = import_audio_session(client)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["session_id"].startswith("sess_")
+    assert body["status"] == "finished"
+    assert body["recording_state"] == "stopped"
+    assert body["processing_state"] == "completed"
+    assert body["latest_seq"] == 1
+    assert body["stable_transcript"] == FULL_TRANSCRIPT
+    assert body["snapshot"]["transcript"] == FULL_TRANSCRIPT
+    assert body["snapshot"]["knowledge_extraction"]["soap_note"] is not None
+    assert body["snapshot"]["post_session_analytics"]["full_transcript"]["full_text"] == FULL_TRANSCRIPT
+
+
+def test_import_audio_session_rejects_unsupported_format(client: TestClient):
+    response = import_audio_session(
+        client,
+        file_name="consultation.ogg",
+        mime_type="audio/ogg",
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "UNSUPPORTED_AUDIO_FORMAT"
 
 
 def test_upload_chunk_success_for_seq_one(client: TestClient):
@@ -226,6 +273,9 @@ def test_get_session_returns_profile_and_snapshot(client: TestClient):
     assert body["snapshot"]["knowledge_extraction"]["persistence"]["enabled"] is True
     assert body["snapshot"]["knowledge_extraction"]["ehr_sync"]["status"] == "synced"
     assert body["snapshot"]["post_session_analytics"]["full_transcript"]["full_text"] == FULL_TRANSCRIPT
+    assert body["snapshot"]["performance_metrics"]["documentation_service"] == {"processing_time_ms": 85}
+    assert body["snapshot"]["performance_metrics"]["post_session_analysis"] == {"processing_time_ms": 150}
+    assert body["snapshot"]["performance_metrics"]["realtime_analysis"] is None
     assert body["snapshot"]["finalized_at"] is not None
 
 
@@ -448,6 +498,29 @@ def test_upload_chunk_includes_realtime_analysis_when_enabled(app_factory):
         assert body["realtime_analysis"]["model"]["name"] == "mock-realtime-analysis"
         assert body["realtime_analysis"]["suggestions"][0]["type"] == "question_to_ask"
         assert len(body["new_hints"]) >= 1
+
+
+def test_finished_snapshot_includes_average_realtime_latency(app_factory):
+    app = app_factory(
+        REALTIME_ANALYSIS_ENABLED=True,
+        REALTIME_ANALYSIS_MODE="mock",
+    )
+    with TestClient(app) as client:
+        session_id = create_session(client)
+        upload_chunk(client, session_id, seq=1)
+        upload_chunk(client, session_id, seq=2, is_final=True)
+        client.post(
+            f"/api/v1/sessions/{session_id}/close",
+            json={"trigger_post_session_analytics": True},
+        )
+
+        response = client.get(f"/api/v1/sessions/{session_id}")
+
+        assert response.status_code == 200
+        metrics = response.json()["snapshot"]["performance_metrics"]
+        assert metrics["realtime_analysis"] == {"average_latency_ms": 12, "sample_count": 2}
+        assert metrics["documentation_service"] == {"processing_time_ms": 85}
+        assert metrics["post_session_analysis"] == {"processing_time_ms": 150}
 
 
 def test_realtime_analysis_failure_falls_back_to_local_hints(app_factory):

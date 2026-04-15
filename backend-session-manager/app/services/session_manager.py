@@ -1,6 +1,7 @@
 from dataclasses import replace
 from datetime import UTC, datetime
 import logging
+from pathlib import Path
 import shutil
 from uuid import uuid4
 
@@ -54,6 +55,20 @@ PUBLIC_SESSION_STATUS_ACTIVE = "active"
 PUBLIC_SESSION_STATUS_ANALYZING = "analyzing"
 PUBLIC_SESSION_STATUS_FINISHED = "finished"
 
+SUPPORTED_IMPORTED_AUDIO_MIME_TYPES = {
+    "audio/mpeg": "audio/mpeg",
+    "audio/mp3": "audio/mpeg",
+    "audio/x-mp3": "audio/mpeg",
+    "audio/wav": "audio/wav",
+    "audio/wave": "audio/wav",
+    "audio/x-wav": "audio/wav",
+    "audio/vnd.wave": "audio/wav",
+}
+SUPPORTED_IMPORTED_AUDIO_EXTENSIONS = {
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+}
+
 
 def utcnow() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
@@ -99,40 +114,74 @@ class SessionService:
         patient_name: str | None = None,
         chief_complaint: str | None = None,
     ) -> CreateSessionResponse:
-        session = SessionRecord(
-            session_id=self._new_public_id("sess"),
-            doctor_id=doctor_id.strip(),
-            patient_id=patient_id.strip(),
-            status="created",
-            recording_state="idle",
-            processing_state="pending",
-        )
-        self.db.add(session)
-        self.db.flush()
-
-        profile = SessionProfile(
-            session_db_id=session.id,
+        session = self._create_session_record(
+            doctor_id=doctor_id,
+            patient_id=patient_id,
             doctor_name=doctor_name,
             doctor_specialty=doctor_specialty,
             patient_name=patient_name,
             chief_complaint=chief_complaint,
         )
-        self.db.add(profile)
-        session.profile = profile
-        self._upsert_session_snapshot(session=session, realtime_analysis=None)
-
         self.db.commit()
         self.db.refresh(session)
-        return CreateSessionResponse(
-            session_id=session.session_id,
-            status=self._public_status(session),
-            recording_state=session.recording_state,
-            upload_config=self._upload_config(),
-            doctor_name=profile.doctor_name,
-            doctor_specialty=profile.doctor_specialty,
-            patient_name=profile.patient_name,
-            chief_complaint=profile.chief_complaint,
+        return self._build_create_session_response(session)
+
+    def import_recorded_session(
+        self,
+        *,
+        doctor_id: str,
+        patient_id: str,
+        file_name: str | None,
+        mime_type: str | None,
+        file_bytes: bytes,
+        doctor_name: str | None = None,
+        doctor_specialty: str | None = None,
+        patient_name: str | None = None,
+        chief_complaint: str | None = None,
+    ) -> SessionDetailResponse:
+        if not file_bytes:
+            raise ApiError("EMPTY_AUDIO_FILE", "Аудиофайл пуст.", 400)
+
+        normalized_mime_type = self._normalize_import_audio_mime_type(file_name=file_name, mime_type=mime_type)
+        session = self._create_session_record(
+            doctor_id=doctor_id,
+            patient_id=patient_id,
+            doctor_name=doctor_name,
+            doctor_specialty=doctor_specialty,
+            patient_name=patient_name,
+            chief_complaint=chief_complaint,
         )
+
+        recorded_at = utcnow()
+        session.started_at = recorded_at
+        session.stopped_at = recorded_at
+        session.recording_state = "stopped"
+        session.latest_seq = 1
+
+        try:
+            recording_path = self.storage_service.save_recording(
+                session.session_id,
+                content=file_bytes,
+                mime_type=normalized_mime_type,
+                file_name=file_name,
+            )
+        except OSError as exc:
+            raise ApiError("AUDIO_IMPORT_FAILED", "Не удалось сохранить загруженную запись.", 500) from exc
+
+        self.db.add(
+            AudioChunk(
+                session_db_id=session.id,
+                seq=1,
+                duration_ms=0,
+                mime_type=normalized_mime_type,
+                file_path=str(recording_path),
+                is_final=True,
+            )
+        )
+
+        self.close_session(session.session_id, trigger_post_session_analytics=True)
+        imported_session = self._get_session(session.session_id)
+        return self._build_session_detail(imported_session)
 
     def upload_audio_chunk(
         self,
@@ -735,6 +784,22 @@ class SessionService:
             logger.info("Full transcription empty for session %s, skipping analytics", session.session_id)
             return
 
+        normalized_full_text = normalize_transcript_text(full_transcription.full_text)
+        normalized_stable_text = normalize_transcript_text(session.stable_transcript or "")
+        session.current_transcript = full_transcription.full_text
+        session.stable_transcript = full_transcription.full_text
+        if normalized_full_text != normalized_stable_text:
+            self.db.add(
+                TranscriptEvent(
+                    session_db_id=session.id,
+                    seq=session.latest_seq or None,
+                    event_type="final_full",
+                    delta_text=None,
+                    full_text=full_transcription.full_text,
+                    source=full_transcription.source,
+                )
+            )
+
         self.db.add(
             ExtractedArtifact(
                 session_db_id=session.id,
@@ -996,6 +1061,78 @@ class SessionService:
             return None
         return full_text
 
+    def _build_performance_metrics_snapshot(self, session: SessionRecord) -> dict | None:
+        self.db.flush()
+        service_names = (
+            self.realtime_analysis.service_name,
+            self.knowledge_extractor.service_name,
+            self.post_session_analytics.service_name,
+        )
+        calls = self.db.scalars(
+            select(ExternalCallLog)
+            .where(ExternalCallLog.session_db_id == session.id)
+            .where(ExternalCallLog.status == "success")
+            .where(ExternalCallLog.service_name.in_(service_names))
+            .order_by(ExternalCallLog.created_at.asc(), ExternalCallLog.id.asc())
+        ).all()
+
+        realtime_latencies: list[int] = []
+        documentation_service_ms: int | None = None
+        post_session_analysis_ms: int | None = None
+
+        for call in calls:
+            payload = call.response_payload_json
+            if not isinstance(payload, dict):
+                continue
+
+            if call.service_name == self.realtime_analysis.service_name:
+                latency_ms = self._read_metric_ms(payload, "latency_ms")
+                if latency_ms is not None:
+                    realtime_latencies.append(latency_ms)
+                continue
+
+            if call.service_name == self.knowledge_extractor.service_name:
+                documentation_service_ms = self._read_metric_ms(payload, "processing_time_ms")
+                continue
+
+            if call.service_name == self.post_session_analytics.service_name:
+                post_session_analysis_ms = self._read_metric_ms(payload, "processing_time_ms")
+
+        if not realtime_latencies and documentation_service_ms is None and post_session_analysis_ms is None:
+            return None
+
+        return {
+            "realtime_analysis": (
+                {
+                    "average_latency_ms": round(sum(realtime_latencies) / len(realtime_latencies)),
+                    "sample_count": len(realtime_latencies),
+                }
+                if realtime_latencies
+                else None
+            ),
+            "documentation_service": (
+                {"processing_time_ms": documentation_service_ms}
+                if documentation_service_ms is not None
+                else None
+            ),
+            "post_session_analysis": (
+                {"processing_time_ms": post_session_analysis_ms}
+                if post_session_analysis_ms is not None
+                else None
+            ),
+        }
+
+    @staticmethod
+    def _read_metric_ms(payload: dict, key: str) -> int | None:
+        value = payload.get(key)
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return max(value, 0)
+        if isinstance(value, float):
+            return max(int(round(value)), 0)
+        return None
+
     def _prefer_complete_transcript(self, *, stable_text: str, full_transcription):
         candidate = full_transcription.full_text.strip()
         stable = stable_text.strip()
@@ -1119,6 +1256,80 @@ class SessionService:
             snapshot=self._build_snapshot_response(session.workspace_snapshot),
         )
 
+    def _build_create_session_response(self, session: SessionRecord) -> CreateSessionResponse:
+        profile = session.profile
+        return CreateSessionResponse(
+            session_id=session.session_id,
+            status=self._public_status(session),
+            recording_state=session.recording_state,
+            upload_config=self._upload_config(),
+            doctor_name=profile.doctor_name if profile else None,
+            doctor_specialty=profile.doctor_specialty if profile else None,
+            patient_name=profile.patient_name if profile else None,
+            chief_complaint=profile.chief_complaint if profile else None,
+        )
+
+    def _create_session_record(
+        self,
+        *,
+        doctor_id: str,
+        patient_id: str,
+        doctor_name: str | None = None,
+        doctor_specialty: str | None = None,
+        patient_name: str | None = None,
+        chief_complaint: str | None = None,
+    ) -> SessionRecord:
+        session = SessionRecord(
+            session_id=self._new_public_id("sess"),
+            doctor_id=self._normalize_required_text(doctor_id, field_name="doctor_id"),
+            patient_id=self._normalize_required_text(patient_id, field_name="patient_id"),
+            status="created",
+            recording_state="idle",
+            processing_state="pending",
+        )
+        self.db.add(session)
+        self.db.flush()
+
+        profile = SessionProfile(
+            session_db_id=session.id,
+            doctor_name=self._normalize_optional_text(doctor_name),
+            doctor_specialty=self._normalize_optional_text(doctor_specialty),
+            patient_name=self._normalize_optional_text(patient_name),
+            chief_complaint=self._normalize_optional_text(chief_complaint),
+        )
+        self.db.add(profile)
+        session.profile = profile
+        self._upsert_session_snapshot(session=session, realtime_analysis=None)
+        return session
+
+    def _normalize_import_audio_mime_type(self, *, file_name: str | None, mime_type: str | None) -> str:
+        normalized_mime_type = (mime_type or "").split(";", 1)[0].strip().lower()
+        if normalized_mime_type in SUPPORTED_IMPORTED_AUDIO_MIME_TYPES:
+            return SUPPORTED_IMPORTED_AUDIO_MIME_TYPES[normalized_mime_type]
+
+        suffix = Path(file_name or "").suffix.lower()
+        if suffix in SUPPORTED_IMPORTED_AUDIO_EXTENSIONS:
+            return SUPPORTED_IMPORTED_AUDIO_EXTENSIONS[suffix]
+
+        raise ApiError(
+            "UNSUPPORTED_AUDIO_FORMAT",
+            "Загрузите MP3 или WAV файл с записью консультации.",
+            400,
+        )
+
+    @staticmethod
+    def _normalize_optional_text(value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    def _normalize_required_text(self, value: str, *, field_name: str) -> str:
+        normalized = self._normalize_optional_text(value)
+        if normalized is None:
+            raise ApiError("VALIDATION_ERROR", f"Поле '{field_name}' должно быть непустым.", 400)
+        return normalized
+
     def _upsert_session_snapshot(
         self,
         *,
@@ -1149,6 +1360,9 @@ class SessionService:
         )
         transcript_text = session.stable_transcript or session.current_transcript or ""
         archived_full_text = self._extract_full_transcript_text(post_session_analytics)
+        performance_metrics = self._build_performance_metrics_snapshot(session) or previous_payload.get(
+            "performance_metrics"
+        )
         if finalized and archived_full_text:
             transcript_text = archived_full_text
         payload = {
@@ -1163,6 +1377,7 @@ class SessionService:
                 if realtime_analysis is not None
                 else previous_payload.get("realtime_analysis")
             ),
+            "performance_metrics": performance_metrics,
             "knowledge_extraction": knowledge_extraction,
             "post_session_analytics": post_session_analytics,
             "last_error": session.last_error,

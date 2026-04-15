@@ -81,6 +81,63 @@ describe('sessionApi', () => {
     expect(result.session_id).toBe('sess_1');
   });
 
+  it('importHistoricalSession sends multipart/form-data with metadata and file', async () => {
+    const response: SessionDetail = {
+      session_id: 'sess_import_1',
+      doctor_id: 'doc_1',
+      doctor_name: 'Dr. Amelia Carter',
+      doctor_specialty: 'Family Medicine',
+      patient_id: 'pat_1',
+      patient_name: 'Olivia Bennett',
+      chief_complaint: 'Recurring headache',
+      encounter_id: null,
+      status: 'finished',
+      recording_state: 'stopped',
+      processing_state: 'completed',
+      latest_seq: 1,
+      transcript_preview: 'Patient reports headache',
+      stable_transcript: 'Patient reports headache',
+      last_error: null,
+      created_at: '2026-04-12T10:00:00.000Z',
+      updated_at: '2026-04-12T10:15:00.000Z',
+      started_at: '2026-04-12T10:01:00.000Z',
+      stopped_at: '2026-04-12T10:14:00.000Z',
+      closed_at: '2026-04-12T10:15:00.000Z',
+      snapshot_available: true,
+      snapshot: {
+        status: 'finished',
+        recording_state: 'stopped',
+        processing_state: 'completed',
+        latest_seq: 1,
+        transcript: 'Patient reports headache',
+        hints: [],
+        realtime_analysis: null,
+        last_error: null,
+        updated_at: '2026-04-12T10:15:00.000Z',
+        finalized_at: '2026-04-12T10:15:00.000Z',
+      },
+    };
+    globalThis.fetch = mockFetchOk(response);
+
+    const result = await sessionApi.importHistoricalSession(
+      {
+        doctor_id: 'doc_1',
+        doctor_name: 'Dr. Amelia Carter',
+        doctor_specialty: 'Family Medicine',
+        patient_id: 'pat_1',
+        patient_name: 'Olivia Bennett',
+        chief_complaint: 'Recurring headache',
+      },
+      new File(['audio'], 'consultation.mp3', { type: 'audio/mpeg' }),
+    );
+
+    const [url, opts] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toContain('/api/v1/sessions/import-audio');
+    expect(opts.method).toBe('POST');
+    expect(opts.body).toBeInstanceOf(FormData);
+    expect(result.status).toBe('finished');
+  });
+
   /* ── uploadAudioChunk ──────────────────── */
 
   it('uploadAudioChunk sends multipart/form-data with correct fields', async () => {

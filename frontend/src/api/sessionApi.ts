@@ -9,6 +9,7 @@ import type {
   CreateSessionRequest,
   CreateSessionResponse,
   HealthResponse,
+  ImportRecordedSessionRequest,
   ListSessionsResponse,
   SessionDetail,
   SessionApi,
@@ -40,6 +41,23 @@ export const sessionApi: SessionApi = {
       body: JSON.stringify(payload),
     });
     return handleResponse<CreateSessionResponse>(res);
+  },
+
+  async importHistoricalSession(payload: ImportRecordedSessionRequest, file: File) {
+    const form = new FormData();
+    form.append('doctor_id', payload.doctor_id);
+    form.append('patient_id', payload.patient_id);
+    if (payload.doctor_name) form.append('doctor_name', payload.doctor_name);
+    if (payload.doctor_specialty) form.append('doctor_specialty', payload.doctor_specialty);
+    if (payload.patient_name) form.append('patient_name', payload.patient_name);
+    if (payload.chief_complaint) form.append('chief_complaint', payload.chief_complaint);
+    form.append('file', file);
+
+    const res = await fetch(withBaseUrl('/api/v1/sessions/import-audio'), {
+      method: 'POST',
+      body: form,
+    });
+    return handleResponse<SessionDetail>(res);
   },
 
   async uploadAudioChunk(sessionId, file, seq, durationMs, mimeType, isFinal, signal) {

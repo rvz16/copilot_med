@@ -9,17 +9,26 @@ interface NewSessionFormData {
   chiefComplaint: string;
 }
 
+interface ImportedSessionFormData {
+  patientId: string;
+  patientName: string;
+  chiefComplaint: string;
+  file: File;
+}
+
 interface Props {
   doctor: DoctorAccount;
   sessions: SessionSummary[];
   loading: boolean;
   error: string | null;
   isStartingSession: boolean;
+  isImportingSession: boolean;
   onRefresh: () => void;
   onLogout: () => void;
   onOpenSession: (sessionId: string) => Promise<void>;
   onDeleteSession: (sessionId: string) => Promise<void>;
   onStartSession: (payload: NewSessionFormData) => Promise<void>;
+  onImportSession: (payload: ImportedSessionFormData) => Promise<void>;
 }
 
 export function DoctorDashboard({
@@ -28,15 +37,22 @@ export function DoctorDashboard({
   loading,
   error,
   isStartingSession,
+  isImportingSession,
   onRefresh,
   onLogout,
   onOpenSession,
   onDeleteSession,
   onStartSession,
+  onImportSession,
 }: Props) {
+  const [formMode, setFormMode] = useState<'live' | 'import'>('live');
   const [patientId, setPatientId] = useState('');
   const [patientName, setPatientName] = useState('');
   const [chiefComplaint, setChiefComplaint] = useState('');
+  const [importPatientId, setImportPatientId] = useState('');
+  const [importPatientName, setImportPatientName] = useState('');
+  const [importChiefComplaint, setImportChiefComplaint] = useState('');
+  const [importFile, setImportFile] = useState<File | null>(null);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'analyzing' | 'finished'>('all');
   const [openingSessionId, setOpeningSessionId] = useState<string | null>(null);
@@ -84,6 +100,26 @@ export function DoctorDashboard({
       setPatientId('');
       setPatientName('');
       setChiefComplaint('');
+    } catch {
+      // Parent component exposes the error state.
+    }
+  };
+
+  const handleImportSession = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!importFile) return;
+
+    try {
+      await onImportSession({
+        patientId: importPatientId,
+        patientName: importPatientName,
+        chiefComplaint: importChiefComplaint,
+        file: importFile,
+      });
+      setImportPatientId('');
+      setImportPatientName('');
+      setImportChiefComplaint('');
+      setImportFile(null);
     } catch {
       // Parent component exposes the error state.
     }
@@ -155,52 +191,134 @@ export function DoctorDashboard({
       <section className="dashboard-grid">
         <article className="panel form-panel">
           <div className="section-heading compact">
-            <p className="eyebrow">Новая сессия</p>
-            <h2>Создать новую консультацию</h2>
+            <p className="eyebrow">Запуск консультации</p>
+            <h2>{formMode === 'live' ? 'Создать новую консультацию' : 'Поднять уже прошедшую встречу'}</h2>
           </div>
 
-          <form className="dashboard-form" onSubmit={handleStartSession}>
-            <div className="form-row">
-              <label htmlFor="patient-name">Имя пациента</label>
-              <input
-                id="patient-name"
-                type="text"
-                value={patientName}
-                onChange={(event) => setPatientName(event.target.value)}
-                placeholder="Olivia Bennett"
-              />
-            </div>
-
-            <div className="form-row">
-              <label htmlFor="patient-id">ID пациента</label>
-              <input
-                id="patient-id"
-                type="text"
-                value={patientId}
-                onChange={(event) => setPatientId(event.target.value)}
-                placeholder="pat_olivia_bennett"
-              />
-            </div>
-
-            <div className="form-row">
-              <label htmlFor="chief-complaint">Причина обращения</label>
-              <input
-                id="chief-complaint"
-                type="text"
-                value={chiefComplaint}
-                onChange={(event) => setChiefComplaint(event.target.value)}
-                placeholder="Повторяющаяся лобная головная боль"
-              />
-            </div>
-
+          <div className="session-form-switcher" role="tablist" aria-label="Режим создания сессии">
             <button
-              type="submit"
-              className="primary-cta"
-              disabled={isStartingSession || !patientId.trim() || !patientName.trim()}
+              type="button"
+              className={`session-form-switcher-button ${formMode === 'live' ? 'is-active' : ''}`}
+              onClick={() => setFormMode('live')}
             >
-              {isStartingSession ? 'Создание…' : 'Открыть рабочую сессию'}
+              Новая консультация
             </button>
-          </form>
+            <button
+              type="button"
+              className={`session-form-switcher-button ${formMode === 'import' ? 'is-active' : ''}`}
+              onClick={() => setFormMode('import')}
+            >
+              Уже прошедшая
+            </button>
+          </div>
+
+          {formMode === 'live' ? (
+            <form className="dashboard-form" onSubmit={handleStartSession}>
+              <div className="form-row">
+                <label htmlFor="patient-name">Имя пациента</label>
+                <input
+                  id="patient-name"
+                  type="text"
+                  value={patientName}
+                  onChange={(event) => setPatientName(event.target.value)}
+                  placeholder="Olivia Bennett"
+                />
+              </div>
+
+              <div className="form-row">
+                <label htmlFor="patient-id">ID пациента</label>
+                <input
+                  id="patient-id"
+                  type="text"
+                  value={patientId}
+                  onChange={(event) => setPatientId(event.target.value)}
+                  placeholder="pat_olivia_bennett"
+                />
+              </div>
+
+              <div className="form-row">
+                <label htmlFor="chief-complaint">Причина обращения</label>
+                <input
+                  id="chief-complaint"
+                  type="text"
+                  value={chiefComplaint}
+                  onChange={(event) => setChiefComplaint(event.target.value)}
+                  placeholder="Повторяющаяся лобная головная боль"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="primary-cta"
+                disabled={isStartingSession || !patientId.trim() || !patientName.trim()}
+              >
+                {isStartingSession ? 'Создание…' : 'Открыть рабочую сессию'}
+              </button>
+            </form>
+          ) : (
+            <form className="dashboard-form" onSubmit={handleImportSession}>
+              <div className="form-row">
+                <label htmlFor="import-patient-name">Имя пациента</label>
+                <input
+                  id="import-patient-name"
+                  type="text"
+                  value={importPatientName}
+                  onChange={(event) => setImportPatientName(event.target.value)}
+                  placeholder="Olivia Bennett"
+                />
+              </div>
+
+              <div className="form-row">
+                <label htmlFor="import-patient-id">ID пациента</label>
+                <input
+                  id="import-patient-id"
+                  type="text"
+                  value={importPatientId}
+                  onChange={(event) => setImportPatientId(event.target.value)}
+                  placeholder="pat_olivia_bennett"
+                />
+              </div>
+
+              <div className="form-row">
+                <label htmlFor="import-chief-complaint">Причина обращения</label>
+                <input
+                  id="import-chief-complaint"
+                  type="text"
+                  value={importChiefComplaint}
+                  onChange={(event) => setImportChiefComplaint(event.target.value)}
+                  placeholder="Повторяющаяся лобная головная боль"
+                />
+              </div>
+
+              <div className="form-row">
+                <label htmlFor="import-audio">Аудиозапись консультации</label>
+                <input
+                  id="import-audio"
+                  className="upload-file-input"
+                  type="file"
+                  accept=".mp3,.wav,audio/mpeg,audio/wav"
+                  onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
+                />
+                <p className="form-helper-text">
+                  Загрузите MP3 или WAV. После загрузки MedCoPilot выполнит транскрибацию,
+                  document service и post-session analysis на всей беседе.
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                className="primary-cta"
+                disabled={
+                  isImportingSession ||
+                  !importPatientId.trim() ||
+                  !importPatientName.trim() ||
+                  !importFile
+                }
+              >
+                {isImportingSession ? 'Разбираем запись…' : 'Создать завершённую сессию'}
+              </button>
+            </form>
+          )}
         </article>
 
         <article className="panel history-panel">

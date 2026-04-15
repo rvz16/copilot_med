@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Any
 
 from app.core.config import settings
@@ -81,6 +82,7 @@ class DocumentationService:
         )
 
     def build_documentation(self, request: ExtractionRequest) -> ExtractionResponse:
+        started_at = time.perf_counter()
         canonical = self._extract_canonical(request.transcript)
         canonical = self.sanitizer.sanitize(canonical)
         has_meaningful_data = canonical.has_meaningful_data()
@@ -116,6 +118,7 @@ class DocumentationService:
 
         return ExtractionResponse(
             session_id=request.session_id,
+            processing_time_ms=int((time.perf_counter() - started_at) * 1000),
             soap_note=soap_note,
             extracted_facts=extracted_facts,
             summary=summary,

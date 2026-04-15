@@ -1,4 +1,5 @@
-import { formatDateTime, formatStatusLabel } from '../utils/format';
+import type { SessionPerformanceMetrics } from '../types/types';
+import { formatDateTime, formatDurationMs, formatStatusLabel } from '../utils/format';
 
 interface Props {
   mode: 'live' | 'archive';
@@ -15,6 +16,7 @@ interface Props {
   createdAt: string | null;
   updatedAt: string | null;
   closedAt: string | null;
+  performanceMetrics?: SessionPerformanceMetrics | null;
   disableActions?: boolean;
   onCloseSession?: () => Promise<void>;
   onBackToDashboard?: () => void;
@@ -35,10 +37,25 @@ export function SessionOverviewPanel({
   createdAt,
   updatedAt,
   closedAt,
+  performanceMetrics,
   disableActions = false,
   onCloseSession,
   onBackToDashboard,
 }: Props) {
+  const isProcessingMetricsPending = status === 'analyzing' || processingState === 'processing';
+  const realtimeMetrics = performanceMetrics?.realtime_analysis;
+  const documentationMetrics = performanceMetrics?.documentation_service;
+  const postSessionMetrics = performanceMetrics?.post_session_analysis;
+  const realtimeMetricLabel = realtimeMetrics
+    ? `${formatDurationMs(realtimeMetrics.average_latency_ms)} · ${realtimeMetrics.sample_count} изм.`
+    : '—';
+  const postProcessingMetricLabel = (value?: number | null) => {
+    if (typeof value === 'number') {
+      return formatDurationMs(value);
+    }
+    return isProcessingMetricsPending ? 'Вычисляется' : '—';
+  };
+
   const sessionProgress = (() => {
     if (status === 'finished') {
       return {
@@ -134,6 +151,26 @@ export function SessionOverviewPanel({
           <dd>{formatDateTime(closedAt)}</dd>
         </div>
       </dl>
+
+      {mode === 'archive' && (
+        <>
+          <h3 className="session-section-title">Метрики производительности</h3>
+          <dl className="session-facts session-performance-facts">
+            <div>
+              <dt>Средняя задержка Real-Time</dt>
+              <dd>{realtimeMetricLabel}</dd>
+            </div>
+            <div>
+              <dt>Documentation Service</dt>
+              <dd>{postProcessingMetricLabel(documentationMetrics?.processing_time_ms)}</dd>
+            </div>
+            <div>
+              <dt>Post-Session Analysis</dt>
+              <dd>{postProcessingMetricLabel(postSessionMetrics?.processing_time_ms)}</dd>
+            </div>
+          </dl>
+        </>
+      )}
 
       <div className="session-action-stack">
         {mode === 'live' && onCloseSession && (

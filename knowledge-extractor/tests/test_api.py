@@ -28,6 +28,7 @@ def test_extract_contract_preview_mode() -> None:
     data = response.json()
     assert data["status"] == "ok"
     assert data["session_id"] == payload["session_id"]
+    assert data["processing_time_ms"] >= 0
 
     assert set(data["soap_note"].keys()) == {"subjective", "objective", "assessment", "plan"}
     assert "extracted_facts" in data

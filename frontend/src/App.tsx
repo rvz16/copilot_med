@@ -42,6 +42,7 @@ export default function App() {
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [isStartingSession, setIsStartingSession] = useState(false);
+  const [isImportingSession, setIsImportingSession] = useState(false);
   const [isClosingSession, setIsClosingSession] = useState(false);
   const [selectedSession, setSelectedSession] = useState<SessionDetail | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<'live' | 'archive'>('live');
@@ -210,6 +211,46 @@ export default function App() {
     }
   }, [activeDoctor, refreshSessions, selectedSession]);
 
+  const handleImportSession = useCallback(async (payload: {
+    patientId: string;
+    patientName: string;
+    chiefComplaint: string;
+    file: File;
+  }) => {
+    if (!activeDoctor) return;
+
+    const importPayload: CreateSessionRequest = {
+      doctor_id: activeDoctor.id,
+      doctor_name: activeDoctor.name,
+      doctor_specialty: activeDoctor.specialty,
+      patient_id: payload.patientId.trim(),
+      patient_name: payload.patientName.trim(),
+      chief_complaint: payload.chiefComplaint.trim() || undefined,
+    };
+
+    try {
+      setIsImportingSession(true);
+      setSessionsError(null);
+      recorder.resetRecorder();
+      uploader.resetUploader();
+      session.resetSession();
+      setLiveSessionProfile(null);
+      setSelectedSession(null);
+
+      const detail = await api.importHistoricalSession(importPayload, payload.file);
+      setSelectedSession(detail);
+      setWorkspaceMode('archive');
+      setScreen('workspace');
+      await refreshSessions(activeDoctor);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось импортировать завершённую сессию';
+      setSessionsError(message);
+      throw error;
+    } finally {
+      setIsImportingSession(false);
+    }
+  }, [activeDoctor, recorder, refreshSessions, session, uploader]);
+
   const ensureRecordingStopped = useCallback(async () => {
     const hadActiveRecording = recorder.isRecording || session.recordingState === 'recording';
 
@@ -354,11 +395,13 @@ export default function App() {
           loading={sessionsLoading}
           error={sessionsError ?? session.error}
           isStartingSession={isStartingSession}
+          isImportingSession={isImportingSession}
           onRefresh={() => void refreshSessions()}
           onLogout={handleLogout}
           onOpenSession={handleOpenSession}
           onDeleteSession={handleDeleteSession}
           onStartSession={handleStartSession}
+          onImportSession={handleImportSession}
         />
       </div>
     );
@@ -393,6 +436,7 @@ export default function App() {
           createdAt={selectedSession.created_at}
           updatedAt={selectedSession.snapshot?.updated_at ?? selectedSession.updated_at}
           closedAt={selectedSession.closed_at}
+          performanceMetrics={selectedSession.snapshot?.performance_metrics ?? null}
           transcript={selectedSession.snapshot?.transcript ?? selectedSession.stable_transcript ?? ''}
           hints={selectedSession.snapshot?.hints ?? []}
           analysis={selectedSession.snapshot?.realtime_analysis ?? null}
@@ -445,6 +489,7 @@ export default function App() {
         createdAt={liveSessionProfile?.createdAt ?? null}
         updatedAt={liveSessionProfile?.createdAt ?? null}
         closedAt={null}
+        performanceMetrics={null}
         transcript={uploader.transcript}
         hints={uploader.hints}
         analysis={uploader.latestAnalysis}

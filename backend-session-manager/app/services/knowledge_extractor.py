@@ -45,6 +45,7 @@ class MockKnowledgeExtractorProvider:
         return {
             "status": "ok",
             "session_id": payload["session_id"],
+            "processing_time_ms": 85,
             "soap_note": {
                 "subjective": {
                     "reported_symptoms": symptoms or [summary_text],

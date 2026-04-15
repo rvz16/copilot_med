@@ -147,6 +147,21 @@ class RealtimeAnalysisResponse(ApiBaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
+class RealtimePerformanceMetricsResponse(ApiBaseModel):
+    average_latency_ms: int
+    sample_count: int
+
+
+class ServicePerformanceMetricsResponse(ApiBaseModel):
+    processing_time_ms: int
+
+
+class SessionPerformanceMetricsResponse(ApiBaseModel):
+    realtime_analysis: RealtimePerformanceMetricsResponse | None = None
+    documentation_service: ServicePerformanceMetricsResponse | None = None
+    post_session_analysis: ServicePerformanceMetricsResponse | None = None
+
+
 class HintResponse(ApiBaseModel):
     hint_id: str
     type: str
@@ -266,6 +281,7 @@ class ConsultationSnapshotResponse(ApiBaseModel):
     transcript: str
     hints: list[HintListItem] = Field(default_factory=list)
     realtime_analysis: RealtimeAnalysisResponse | None = None
+    performance_metrics: SessionPerformanceMetricsResponse | None = None
     knowledge_extraction: dict | None = None
     post_session_analytics: dict | None = None
     last_error: str | None = None
