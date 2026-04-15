@@ -180,6 +180,56 @@ def test_assist_passes_formatted_fhir_context_to_llm() -> None:
     assert "Current medications: Metformin 500mg, Lisinopril 10mg" in call_kwargs["patient_context"]
 
 
+def test_assist_passes_selected_analysis_model_to_llm() -> None:
+    llm = LLMClient.__new__(LLMClient)
+    llm.base_url = "http://stub"
+    llm.model_name = "qwen3:4b"
+    llm.max_tokens = 512
+    llm.temperature = 0.0
+    llm.timeout = 5.0
+    llm.generate_structured = AsyncMock(return_value={  # type: ignore[assignment]
+        "suggestions": [],
+        "drug_interactions": [],
+        "extracted_facts": {
+            "symptoms": [],
+            "conditions": [],
+            "medications": [],
+            "allergies": [],
+            "vitals": {
+                "age": None,
+                "weight_kg": None,
+                "height_cm": None,
+                "bp": None,
+                "hr": None,
+                "temp_c": None,
+            },
+        },
+        "knowledge_refs": [],
+        "errors": [],
+    })
+    llm.close = AsyncMock()
+
+    app = create_app(llm=llm, fhir=_make_stub_fhir())
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/assist",
+        json={
+            "request_id": "req-model-override",
+            "patient_id": "pt-override",
+            "transcript_chunk": "Patient reports headache.",
+            "analysis_model": "llama-3.3-70b-versatile",
+            "context": {"language": "en"},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["model"]["name"] == "llama-3.3-70b-versatile"
+    llm.generate_structured.assert_awaited_once()
+    call_kwargs = llm.generate_structured.await_args.kwargs
+    assert call_kwargs["model_name"] == "llama-3.3-70b-versatile"
+
+
 def test_assist_without_patient_id() -> None:
     app = create_app(llm=_make_stub_llm(), fhir=_make_stub_fhir())
     client = TestClient(app)

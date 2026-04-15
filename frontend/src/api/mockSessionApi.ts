@@ -77,12 +77,17 @@ function isoNow(): string {
   return new Date().toISOString();
 }
 
-function buildRealtimeAnalysis(stableText: string, seq: number): RealtimeAnalysis {
+function buildRealtimeAnalysis(
+  stableText: string,
+  seq: number,
+  analysisModel: string | null | undefined,
+): RealtimeAnalysis {
+  const normalizedModel = analysisModel?.trim() || 'тестовый модуль анализа';
   return {
     request_id: `mock-analysis-${seq}`,
     latency_ms: 25,
     model: {
-      name: 'тестовый модуль анализа',
+      name: normalizedModel,
       quantization: 'none',
     },
     suggestions: [
@@ -517,7 +522,7 @@ export const mockSessionApi: SessionApi = {
     return detailFromRecord(record);
   },
 
-  async uploadAudioChunk(sessionId, file, seq, durationMs, mimeType, isFinal, signal) {
+  async uploadAudioChunk(sessionId, file, seq, durationMs, mimeType, isFinal, analysisModel, signal) {
     void file;
     void durationMs;
     void mimeType;
@@ -529,7 +534,7 @@ export const mockSessionApi: SessionApi = {
     const fragmentIndex = (seq - 1) % TRANSCRIPT_FRAGMENTS.length;
     const stableText = TRANSCRIPT_FRAGMENTS.slice(0, fragmentIndex + 1).join('');
     const deltaText = TRANSCRIPT_FRAGMENTS[fragmentIndex];
-    const analysis = buildRealtimeAnalysis(stableText, seq);
+    const analysis = buildRealtimeAnalysis(stableText, seq, analysisModel);
     const timestamp = isoNow();
 
     const newHints: Hint[] =

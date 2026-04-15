@@ -76,6 +76,7 @@ def upload_audio_chunk(
     duration_ms: int = Form(...),
     mime_type: str = Form(...),
     is_final: bool = Form(...),
+    analysis_model: str | None = Form(default=None),
     service: SessionService = Depends(get_session_service),
 ) -> AudioChunkResponse:
     file_bytes = file.file.read()
@@ -85,6 +86,7 @@ def upload_audio_chunk(
         duration_ms=duration_ms,
         mime_type=mime_type,
         is_final=is_final,
+        analysis_model=analysis_model,
         file_bytes=file_bytes,
     )
 

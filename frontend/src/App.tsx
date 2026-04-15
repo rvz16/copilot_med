@@ -4,6 +4,7 @@ import { ConsultationWorkspace } from './components/ConsultationWorkspace';
 import { DoctorDashboard } from './components/DoctorDashboard';
 import { LandingPage } from './components/LandingPage';
 import { LoginPage } from './components/LoginPage';
+import { ANALYSIS_MODEL_OPTIONS } from './data/analysisModels';
 import {
   SAMPLE_DOCTORS,
   authenticateDoctor,
@@ -47,10 +48,11 @@ export default function App() {
   const [selectedSession, setSelectedSession] = useState<SessionDetail | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<'live' | 'archive'>('live');
   const [liveSessionProfile, setLiveSessionProfile] = useState<LiveSessionProfile | null>(null);
+  const [selectedAnalysisModel, setSelectedAnalysisModel] = useState<string | null>(null);
   const pendingStopRequestRef = useRef<Promise<unknown> | null>(null);
 
   const session = useSession();
-  const uploader = useUploader(session.sessionId);
+  const uploader = useUploader(session.sessionId, selectedAnalysisModel);
 
   const onChunk = useCallback((blob: Blob, isFinal: boolean) => {
     uploader.enqueueChunk(blob, isFinal);
@@ -136,6 +138,7 @@ export default function App() {
     setActiveDoctor(null);
     setSelectedSession(null);
     setLiveSessionProfile(null);
+    setSelectedAnalysisModel(null);
     setSessions([]);
     setSessionsError(null);
     setScreen('landing');
@@ -437,6 +440,7 @@ export default function App() {
           updatedAt={selectedSession.snapshot?.updated_at ?? selectedSession.updated_at}
           closedAt={selectedSession.closed_at}
           performanceMetrics={selectedSession.snapshot?.performance_metrics ?? null}
+          analysisModel={null}
           transcript={selectedSession.snapshot?.transcript ?? selectedSession.stable_transcript ?? ''}
           hints={selectedSession.snapshot?.hints ?? []}
           analysis={selectedSession.snapshot?.realtime_analysis ?? null}
@@ -490,6 +494,8 @@ export default function App() {
         updatedAt={liveSessionProfile?.createdAt ?? null}
         closedAt={null}
         performanceMetrics={null}
+        analysisModel={selectedAnalysisModel}
+        analysisModelOptions={ANALYSIS_MODEL_OPTIONS}
         transcript={uploader.transcript}
         hints={uploader.hints}
         analysis={uploader.latestAnalysis}
@@ -503,6 +509,7 @@ export default function App() {
         }
         isBusy={isClosingSession}
         errors={liveErrors}
+        onAnalysisModelChange={setSelectedAnalysisModel}
         onStartRecording={handleStartRecording}
         onStopRecording={handleStopRecording}
         onCloseSession={handleCloseSession}

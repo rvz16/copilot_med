@@ -90,4 +90,85 @@ def test_openai_compatible_provider_posts_bearer_request(monkeypatch) -> None:
     assert captured["kwargs"]["headers"]["Authorization"] == "Bearer test-key"
     assert captured["kwargs"]["json"]["stream"] is False
     assert "format" not in captured["kwargs"]["json"]
+    assert captured["kwargs"]["json"]["reasoning_effort"] == "low"
     assert result["suggestions"][0]["text"] == "рак легких"
+
+
+def test_openai_compatible_llama_request_omits_reasoning_effort(monkeypatch) -> None:
+    captured: dict = {}
+
+    async def fake_post(self, url: str, **kwargs):
+        del self
+        captured["url"] = url
+        captured["kwargs"] = kwargs
+        return DummyResponse(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": '{"suggestions":[],"drug_interactions":[],"extracted_facts":{"symptoms":[],"conditions":[],"medications":[],"allergies":[],"vitals":{"age":null,"weight_kg":null,"height_cm":null,"bp":null,"hr":null,"temp_c":null}},"knowledge_refs":[]}'
+                        }
+                    }
+                ]
+            }
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    client = LLMClient(
+        provider="openai_compatible",
+        base_url="https://api.groq.com/openai/v1",
+        model_name="llama-3.1-8b-instant",
+        api_key="test-key",
+        timeout=5.0,
+    )
+    try:
+        result = asyncio.run(client.generate_structured("Пациент жалуется на кашель.", language="ru"))
+    finally:
+        asyncio.run(client.close())
+
+    assert captured["url"] == "https://api.groq.com/openai/v1/chat/completions"
+    assert "reasoning_effort" not in captured["kwargs"]["json"]
+    assert result["errors"] == []
+
+
+def test_generate_structured_uses_request_model_override(monkeypatch) -> None:
+    captured: dict = {}
+
+    async def fake_post(self, url: str, **kwargs):
+        del self
+        captured["url"] = url
+        captured["kwargs"] = kwargs
+        return DummyResponse(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": '{"suggestions":[],"drug_interactions":[],"extracted_facts":{"symptoms":[],"conditions":[],"medications":[],"allergies":[],"vitals":{"age":null,"weight_kg":null,"height_cm":null,"bp":null,"hr":null,"temp_c":null}},"knowledge_refs":[]}'
+                        }
+                    }
+                ]
+            }
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    client = LLMClient(
+        provider="openai_compatible",
+        base_url="https://example.com/v1",
+        model_name="google/gemini-2.0-flash",
+        api_key="test-key",
+        timeout=5.0,
+    )
+    try:
+        asyncio.run(
+            client.generate_structured(
+                "Пациент жалуется на кашель.",
+                language="ru",
+                model_name="llama-3.3-70b-versatile",
+            )
+        )
+    finally:
+        asyncio.run(client.close())
+
+    assert captured["kwargs"]["json"]["model"] == "llama-3.3-70b-versatile"

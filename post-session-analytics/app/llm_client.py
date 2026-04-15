@@ -1,6 +1,7 @@
 """OpenAI-compatible LLM client for post-session clinical analysis."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 import json
 import logging
 import re
@@ -10,6 +11,7 @@ from typing import Any
 import httpx
 
 from app.config import (
+    FALLBACK_MODEL_NAMES,
     LLM_API_KEY,
     LLM_BASE_URL,
     LLM_EXTRA_HEADERS_JSON,
@@ -24,25 +26,79 @@ from app.config import (
 logger = logging.getLogger("medcopilot.post_analytics.llm")
 
 
+@dataclass(frozen=True)
+class LLMGenerationResult:
+    model_name: str
+    payload: dict[str, Any]
+
+
 class PostAnalyticsLLMClient:
-    """Synchronous OpenAI-compatible client targeting gpt-oss-120b."""
+    """Synchronous OpenAI-compatible client with optional model fallbacks."""
 
     def __init__(self) -> None:
         self.base_url = LLM_BASE_URL.rstrip("/")
         self.model_name = MODEL_NAME
+        self.fallback_model_names = [
+            model_name for model_name in FALLBACK_MODEL_NAMES if model_name != self.model_name
+        ]
         self.api_key = LLM_API_KEY
         self.max_tokens = MAX_TOKENS
         self.temperature = TEMPERATURE
         self.timeout = LLM_TIMEOUT
         self.extra_headers = self._load_extra_headers(LLM_EXTRA_HEADERS_JSON)
         logger.info(
-            "PostAnalyticsLLMClient: base_url=%s model=%s max_tokens=%d temperature=%.2f timeout=%.1fs",
-            self.base_url, self.model_name, self.max_tokens, self.temperature, self.timeout,
+            "PostAnalyticsLLMClient: base_url=%s model=%s fallbacks=%s max_tokens=%d temperature=%.2f timeout=%.1fs",
+            self.base_url,
+            self.model_name,
+            self.fallback_model_names,
+            self.max_tokens,
+            self.temperature,
+            self.timeout,
         )
 
-    def generate(self, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    def generate(self, system_prompt: str, user_prompt: str) -> LLMGenerationResult:
+        last_error: Exception | None = None
+        candidate_models = self._candidate_model_names()
+        for index, model_name in enumerate(candidate_models):
+            try:
+                payload = self._generate_with_model(
+                    model_name=model_name,
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                )
+                return LLMGenerationResult(model_name=model_name, payload=payload)
+            except (httpx.HTTPError, ValueError) as exc:
+                last_error = exc
+                if index < len(candidate_models) - 1:
+                    logger.warning(
+                        "Model %s failed for post-session analytics, trying next fallback: %s",
+                        model_name,
+                        exc,
+                    )
+                    continue
+                raise
+
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("No post-session LLM models are configured.")
+
+    def _candidate_model_names(self) -> list[str]:
+        candidates: list[str] = []
+        for model_name in [self.model_name, *self.fallback_model_names]:
+            normalized = model_name.strip()
+            if normalized and normalized not in candidates:
+                candidates.append(normalized)
+        return candidates
+
+    def _generate_with_model(
+        self,
+        *,
+        model_name: str,
+        system_prompt: str,
+        user_prompt: str,
+    ) -> dict[str, Any]:
         body = {
-            "model": self.model_name,
+            "model": model_name,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -61,7 +117,7 @@ class PostAnalyticsLLMClient:
                 response = client.post(endpoint, json=body, headers=headers)
                 response.raise_for_status()
         except httpx.HTTPError as exc:
-            logger.error("LLM request failed for model %s via %s: %s", self.model_name, endpoint, exc)
+            logger.error("LLM request failed for model %s via %s: %s", model_name, endpoint, exc)
             raise
 
         elapsed_ms = int((time.perf_counter() - start) * 1000)
@@ -71,7 +127,12 @@ class PostAnalyticsLLMClient:
             logger.error("LLM returned a non-JSON HTTP response")
             raise ValueError("LLM response body is not valid JSON") from exc
         content = self._extract_content(data)
-        logger.info("LLM responded in %dms, content length=%d", elapsed_ms, len(content))
+        logger.info(
+            "LLM responded in %dms, model=%s, content length=%d",
+            elapsed_ms,
+            model_name,
+            len(content),
+        )
 
         parsed = self._extract_json(content)
         if parsed is None:

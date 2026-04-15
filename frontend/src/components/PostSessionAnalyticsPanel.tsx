@@ -87,7 +87,7 @@ export function PostSessionAnalyticsPanel({
     <section className="panel psa-panel" id="post-session-analytics-panel">
       <div className="psa-header">
         <h2>Результаты Post-Session Analytics</h2>
-        <span className="psa-badge">gpt-oss-120b</span>
+        <span className="psa-badge">готово</span>
       </div>
 
       <div className="psa-context-grid">

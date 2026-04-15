@@ -19,6 +19,7 @@ class AssistRequest(BaseModel):
     request_id: str = Field(min_length=1)
     patient_id: str | None = None
     transcript_chunk: str = Field(min_length=1)
+    analysis_model: str | None = None
     context: AssistContext = Field(default_factory=AssistContext)
 
     model_config = ConfigDict(extra="forbid")

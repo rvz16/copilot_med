@@ -1,6 +1,8 @@
 from fastapi.testclient import TestClient
+import httpx
 
 from app.main import app
+from app.llm_client import LLMGenerationResult
 from app import routes
 
 
@@ -8,14 +10,15 @@ client = TestClient(app)
 
 
 class StubAnalyticsClient:
-    def __init__(self, payload):
+    def __init__(self, payload, model_name: str = "stub-model"):
         self.payload = payload
+        self.model_name = model_name
 
     def generate(self, system_prompt: str, user_prompt: str):
         del system_prompt, user_prompt
         if isinstance(self.payload, Exception):
             raise self.payload
-        return self.payload
+        return LLMGenerationResult(model_name=self.model_name, payload=self.payload)
 
 
 def test_health_returns_service_status():
@@ -113,5 +116,52 @@ def test_analyze_returns_structured_error_for_invalid_llm_json(monkeypatch):
         },
     )
 
-    assert response.status_code == 502
-    assert response.json()["error"]["code"] == "INVALID_LLM_RESPONSE"
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["model_used"] == "fallback-template"
+    assert body["medical_summary"]["clinical_narrative"]
+    assert body["quality_assessment"]["metrics"]
+
+
+def test_analyze_returns_fallback_payload_for_upstream_http_errors(monkeypatch):
+    monkeypatch.setattr(
+        routes,
+        "get_llm_client",
+        lambda: StubAnalyticsClient(
+            httpx.HTTPStatusError(
+                "rate limited",
+                request=httpx.Request("POST", "https://api.groq.com/openai/v1/chat/completions"),
+                response=httpx.Response(429),
+            )
+        ),
+    )
+
+    response = client.post(
+        "/analyze",
+        json={
+            "session_id": "sess-3",
+            "patient_id": "pat-3",
+            "full_transcript": "Пациент жалуется на усталость и сухость в горле.",
+            "chief_complaint": "Усталость",
+            "realtime_analysis": {
+                "suggestions": [
+                    {"type": "diagnosis_suggestion", "text": "синдром хронической усталости", "confidence": 0.8},
+                    {"type": "next_step", "text": "Проверить длительность симптомов", "confidence": 0.7},
+                ],
+                "extracted_facts": {
+                    "symptoms": ["усталость", "сухость в горле"],
+                    "conditions": [],
+                    "medications": [],
+                    "allergies": [],
+                    "vitals": {},
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["model_used"] == "fallback-template"
+    assert "синдром хронической усталости" in body["medical_summary"]["primary_impressions"]
+    assert body["follow_up_recommendations"]

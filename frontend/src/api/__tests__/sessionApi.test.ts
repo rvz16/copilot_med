@@ -157,12 +157,21 @@ describe('sessionApi', () => {
     globalThis.fetch = mockFetchOk(response);
 
     const blob = new Blob(['audio'], { type: 'audio/webm' });
-    const result = await sessionApi.uploadAudioChunk('sess_1', blob, 1, 4000, 'audio/webm', false);
+    const result = await sessionApi.uploadAudioChunk(
+      'sess_1',
+      blob,
+      1,
+      4000,
+      'audio/webm',
+      false,
+      'llama-3.3-70b-versatile',
+    );
 
     const [url, opts] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(url).toContain('/api/v1/sessions/sess_1/audio-chunks');
     expect(opts.method).toBe('POST');
     expect(opts.body).toBeInstanceOf(FormData);
+    expect((opts.body as FormData).get('analysis_model')).toBe('llama-3.3-70b-versatile');
     expect(result.accepted).toBe(true);
     expect(result.seq).toBe(1);
   });

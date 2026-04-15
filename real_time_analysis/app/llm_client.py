@@ -72,6 +72,7 @@ class LLMClient:
         transcript_chunk: str,
         language: str = "en",
         patient_context: str | None = None,
+        model_name: str | None = None,
     ) -> dict[str, Any]:
         """Send transcript to Ollama and parse structured JSON response."""
         result: dict[str, Any] = {
@@ -81,6 +82,7 @@ class LLMClient:
             "knowledge_refs": [],
             "errors": [],
         }
+        effective_model_name = model_name.strip() if isinstance(model_name, str) and model_name.strip() else self.model_name
 
         user_content = f"Language: {language}\n"
         if patient_context:
@@ -88,7 +90,7 @@ class LLMClient:
         user_content += f"\n--- Transcript ---\n{transcript_chunk.strip()}\n"
 
         body = {
-            "model": self.model_name,
+            "model": effective_model_name,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_content},
@@ -100,7 +102,7 @@ class LLMClient:
             logger.info(
                 "Sending LLM request: provider=%s, model=%s, endpoint=%s, "
                 "user_content_length=%d",
-                self.provider, self.model_name,
+                self.provider, effective_model_name,
                 self._openai_chat_endpoint() if self.provider in _OPENAI_COMPATIBLE_PROVIDERS else f"{self.base_url}/api/chat",
                 len(user_content),
             )
@@ -191,10 +193,11 @@ class LLMClient:
             "max_tokens": self.max_tokens,
             "stream": False,
         }
-        # For reasoning models, set low effort to reduce reasoning
-        # token usage (keeping more budget for the actual JSON output).
+        model_name = str(openai_body.get("model") or self.model_name).strip()
+        # Only a subset of OpenAI-compatible models supports reasoning_effort.
+        # Groq Llama variants reject it with HTTP 400, so gate it by model family.
         reasoning_effort = os.getenv("LLM_REASONING_EFFORT", "low").strip().lower()
-        if reasoning_effort in {"low", "medium", "high"}:
+        if reasoning_effort in {"low", "medium", "high"} and self._supports_reasoning_effort(model_name):
             openai_body["reasoning_effort"] = reasoning_effort
         endpoint = self._openai_chat_endpoint()
         headers = self._openai_headers()
@@ -236,6 +239,18 @@ class LLMClient:
             len(content), content,
         )
         return content, response.status_code
+
+    @staticmethod
+    def _supports_reasoning_effort(model_name: str) -> bool:
+        normalized = model_name.strip().lower()
+        if not normalized:
+            return False
+        return (
+            "gpt-oss" in normalized
+            or normalized.startswith("o1")
+            or normalized.startswith("o3")
+            or normalized.startswith("o4")
+        )
 
     def _openai_chat_endpoint(self) -> str:
         if self.base_url.endswith("/chat/completions"):

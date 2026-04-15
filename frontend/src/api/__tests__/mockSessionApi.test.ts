@@ -61,6 +61,34 @@ describe('mockSessionApi', () => {
     expect(typeof res.transcript_update!.stable_text).toBe('string');
   });
 
+  it('uploadAudioChunk applies the selected analysis model to realtime analysis', async () => {
+    const createdPromise = mockSessionApi.createSession({
+      doctor_id: 'doc_1',
+      doctor_name: 'Dr. Amelia Carter',
+      doctor_specialty: 'Family Medicine',
+      patient_id: 'pat_model',
+      patient_name: 'Olivia Bennett',
+      chief_complaint: 'Recurring headache',
+    });
+    await vi.runAllTimersAsync();
+    const created = await createdPromise;
+    const blob = new Blob(['audio']);
+
+    const responsePromise = mockSessionApi.uploadAudioChunk(
+      created.session_id,
+      blob,
+      1,
+      4000,
+      'audio/webm',
+      false,
+      'llama-3.3-70b-versatile',
+    );
+    await vi.runAllTimersAsync();
+    const res = await responsePromise;
+
+    expect(res.realtime_analysis?.model.name).toBe('llama-3.3-70b-versatile');
+  });
+
   it('importHistoricalSession returns an archive-ready session detail', async () => {
     const responsePromise = mockSessionApi.importHistoricalSession(
       {

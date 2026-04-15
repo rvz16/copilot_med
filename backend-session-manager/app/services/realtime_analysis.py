@@ -22,6 +22,7 @@ class MockRealtimeAnalysisProvider:
 
     def analyze(self, payload: dict) -> dict:
         transcript = payload.get("transcript_chunk", "")
+        analysis_model = str(payload.get("analysis_model") or "").strip() or "mock-realtime-analysis"
         lowered = transcript.casefold()
         suggestions: list[dict] = []
         interactions: list[dict] = []
@@ -69,7 +70,7 @@ class MockRealtimeAnalysisProvider:
         return {
             "request_id": payload.get("request_id", "mock-request"),
             "latency_ms": 12,
-            "model": {"name": "mock-realtime-analysis", "quantization": "none"},
+            "model": {"name": analysis_model, "quantization": "none"},
             "suggestions": suggestions,
             "drug_interactions": interactions,
             "extracted_facts": {

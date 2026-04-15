@@ -20,6 +20,7 @@ def env_csv(name: str, default: str = "") -> list[str]:
 
 LLM_BASE_URL = env_str("POST_ANALYTICS_LLM_BASE_URL", "https://openrouter.ai/api/v1")
 MODEL_NAME = env_str("POST_ANALYTICS_MODEL_NAME", "gpt-oss-120b")
+FALLBACK_MODEL_NAMES = env_csv("POST_ANALYTICS_FALLBACK_MODEL_NAMES", "")
 LLM_API_KEY = env_str("POST_ANALYTICS_LLM_API_KEY", "")
 MAX_TOKENS = env_int("POST_ANALYTICS_MAX_TOKENS", 4096)
 TEMPERATURE = env_float("POST_ANALYTICS_TEMPERATURE", 0.1)

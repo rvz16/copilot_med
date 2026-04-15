@@ -198,6 +198,7 @@ class SessionService:
         duration_ms: int,
         mime_type: str,
         is_final: bool,
+        analysis_model: str | None = None,
         file_bytes: bytes,
     ) -> AudioChunkResponse:
         session = self._get_session(session_id)
@@ -211,6 +212,7 @@ class SessionService:
             )
 
         normalized_mime_type = mime_type.strip().lower()
+        normalized_analysis_model = self._normalize_optional_text(analysis_model)
         if normalized_mime_type not in self.settings.accepted_upload_mime_types:
             raise ApiError("UNSUPPORTED_MIME_TYPE", f"Неподдерживаемый MIME-тип: {mime_type}.", 400)
 
@@ -296,6 +298,8 @@ class SessionService:
                             "session_id": session.session_id,
                         },
                     }
+                    if normalized_analysis_model:
+                        analysis_payload["analysis_model"] = normalized_analysis_model
                     try:
                         analysis_raw = self.realtime_analysis.analyze(analysis_payload)
                         realtime_analysis_response = RealtimeAnalysisResponse.model_validate(analysis_raw)

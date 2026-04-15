@@ -35,15 +35,19 @@ def upload_chunk(
     seq: int = 1,
     mime_type: str = "audio/webm",
     is_final: bool = False,
+    analysis_model: str | None = None,
 ):
+    data = {
+        "seq": str(seq),
+        "duration_ms": "4000",
+        "mime_type": mime_type,
+        "is_final": str(is_final).lower(),
+    }
+    if analysis_model:
+        data["analysis_model"] = analysis_model
     return client.post(
         f"/api/v1/sessions/{session_id}/audio-chunks",
-        data={
-            "seq": str(seq),
-            "duration_ms": "4000",
-            "mime_type": mime_type,
-            "is_final": str(is_final).lower(),
-        },
+        data=data,
         files={"file": ("chunk.webm", b"fake-audio", "audio/webm")},
     )
 
@@ -516,6 +520,27 @@ def test_upload_chunk_includes_realtime_analysis_when_enabled(app_factory):
         assert body["realtime_analysis"]["model"]["name"] == "mock-realtime-analysis"
         assert body["realtime_analysis"]["suggestions"][0]["type"] == "question_to_ask"
         assert len(body["new_hints"]) >= 1
+
+
+def test_upload_chunk_uses_selected_analysis_model(app_factory):
+    app = app_factory(
+        REALTIME_ANALYSIS_ENABLED=True,
+        REALTIME_ANALYSIS_MODE="mock",
+    )
+    with TestClient(app) as client:
+        session_id = create_session(client)
+
+        response = upload_chunk(
+            client,
+            session_id,
+            seq=1,
+            analysis_model="llama-3.3-70b-versatile",
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["realtime_analysis"] is not None
+        assert body["realtime_analysis"]["model"]["name"] == "llama-3.3-70b-versatile"
 
 
 def test_finished_snapshot_includes_average_realtime_latency(app_factory):

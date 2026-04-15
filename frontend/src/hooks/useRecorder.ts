@@ -14,7 +14,7 @@
    resulted in garbled audio after the first chunk.
    ────────────────────────────────────────────── */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export interface UseRecorderOptions {
   chunkMs?: number;
@@ -28,6 +28,7 @@ interface StopRecordingOptions {
 export function useRecorder({ chunkMs = 4000, onChunk }: UseRecorderOptions) {
   const [isRecording, setIsRecording] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
+  const onChunkRef = useRef(onChunk);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -40,6 +41,10 @@ export function useRecorder({ chunkMs = 4000, onChunk }: UseRecorderOptions) {
     const waiters = stopWaitersRef.current.splice(0);
     waiters.forEach((resolve) => resolve());
   };
+
+  useEffect(() => {
+    onChunkRef.current = onChunk;
+  }, [onChunk]);
 
   const startRecording = useCallback(async () => {
     try {
@@ -68,7 +73,7 @@ export function useRecorder({ chunkMs = 4000, onChunk }: UseRecorderOptions) {
         recorder.onstop = () => {
           if (parts.length > 0 && !discardCurrentChunkRef.current) {
             const blob = new Blob(parts, { type: mimeType });
-            onChunk(blob, stopRequestedRef.current);
+            onChunkRef.current(blob, stopRequestedRef.current);
           }
           if (!stopRequestedRef.current) {
             startChunkRecorder();
@@ -102,7 +107,7 @@ export function useRecorder({ chunkMs = 4000, onChunk }: UseRecorderOptions) {
       setMicError(msg);
       return false;
     }
-  }, [chunkMs, onChunk]);
+  }, [chunkMs]);
 
   const stopRecording = useCallback((options: StopRecordingOptions = {}) => {
     stopRequestedRef.current = true;

@@ -12,7 +12,7 @@ import type { Hint, RealtimeAnalysis, RecommendedDocument } from '../types/types
 export type UploadStatus = 'idle' | 'uploading';
 type QueuedChunk = { blob: Blob; isFinal: boolean };
 
-export function useUploader(sessionId: string | null) {
+export function useUploader(sessionId: string | null, analysisModel: string | null) {
   const [transcript, setTranscript] = useState('');
   const [hints, setHints] = useState<Hint[]>([]);
   const [latestAnalysis, setLatestAnalysis] = useState<RealtimeAnalysis | null>(null);
@@ -69,6 +69,7 @@ export function useUploader(sessionId: string | null) {
           4000,                       // duration_ms – fixed chunk duration
           blob.type || 'audio/webm',
           isFinal,
+          analysisModel,
           abortController.signal,
         );
         if (runId !== activeRunIdRef.current) {
@@ -112,7 +113,7 @@ export function useUploader(sessionId: string | null) {
       setUploadStatus('idle');
       settleIdleWaiters();
     }
-  }, [sessionId, settleIdleWaiters]);
+  }, [analysisModel, sessionId, settleIdleWaiters]);
 
   const enqueueChunk = useCallback(
     (blob: Blob, isFinal = false) => {

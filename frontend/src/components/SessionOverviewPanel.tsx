@@ -1,3 +1,4 @@
+import type { AnalysisModelOption } from '../data/analysisModels';
 import type { SessionPerformanceMetrics } from '../types/types';
 import { formatDateTime, formatDurationMs, formatStatusLabel } from '../utils/format';
 
@@ -17,7 +18,10 @@ interface Props {
   updatedAt: string | null;
   closedAt: string | null;
   performanceMetrics?: SessionPerformanceMetrics | null;
+  analysisModel?: string | null;
+  analysisModelOptions?: readonly AnalysisModelOption[];
   disableActions?: boolean;
+  onAnalysisModelChange?: (value: string | null) => void;
   onCloseSession?: () => Promise<void>;
   onBackToDashboard?: () => void;
 }
@@ -38,7 +42,10 @@ export function SessionOverviewPanel({
   updatedAt,
   closedAt,
   performanceMetrics,
+  analysisModel = null,
+  analysisModelOptions = [],
   disableActions = false,
+  onAnalysisModelChange,
   onCloseSession,
   onBackToDashboard,
 }: Props) {
@@ -55,6 +62,8 @@ export function SessionOverviewPanel({
     }
     return isProcessingMetricsPending ? 'Вычисляется' : '—';
   };
+  const selectedAnalysisModelOption =
+    analysisModelOptions.find((option) => option.value === (analysisModel ?? '')) ?? analysisModelOptions[0];
 
   const sessionProgress = (() => {
     if (status === 'finished') {
@@ -151,6 +160,31 @@ export function SessionOverviewPanel({
           <dd>{formatDateTime(closedAt)}</dd>
         </div>
       </dl>
+
+      {mode === 'live' && analysisModelOptions.length > 0 && onAnalysisModelChange && (
+        <>
+          <h3 className="session-section-title">Модель анализа</h3>
+          <div className="form-row analysis-model-control">
+            <label htmlFor="analysis-model-select">Модель для следующих realtime-запросов</label>
+            <select
+              id="analysis-model-select"
+              value={analysisModel ?? ''}
+              onChange={(event) => onAnalysisModelChange(event.target.value || null)}
+              disabled={disableActions}
+            >
+              {analysisModelOptions.map((option) => (
+                <option key={option.value || 'service-default'} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <p className="form-helper-text">
+              {selectedAnalysisModelOption?.description ??
+                'Изменение применяется к следующим порциям аудио, которые уйдут в realtime analysis.'}
+            </p>
+          </div>
+        </>
+      )}
 
       {mode === 'archive' && (
         <>

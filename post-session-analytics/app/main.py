@@ -22,7 +22,7 @@ logging.basicConfig(
 app = FastAPI(
     title="Post-Session Analytics",
     version="1.0.0",
-    summary="Deep clinical analysis of completed consultation sessions using gpt-oss-120b",
+    summary="Deep clinical analysis of completed consultation sessions using OpenAI-compatible LLMs",
 )
 
 app.add_middleware(

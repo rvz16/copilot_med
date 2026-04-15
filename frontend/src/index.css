@@ -475,6 +475,7 @@ button:disabled,
 }
 
 .form-row input,
+.form-row select,
 .history-filters input,
 .history-filters select {
   min-height: 48px;
@@ -486,6 +487,7 @@ button:disabled,
 }
 
 .form-row input:focus,
+.form-row select:focus,
 .history-filters input:focus,
 .history-filters select:focus {
   outline: 2px solid rgba(203, 106, 51, 0.2);
@@ -735,6 +737,10 @@ button:disabled,
   flex-direction: column;
   gap: 10px;
   margin-top: 20px;
+}
+
+.analysis-model-control {
+  margin-bottom: 4px;
 }
 
 .button-row {

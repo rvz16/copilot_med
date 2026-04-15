@@ -402,6 +402,7 @@ export interface SessionApi {
     durationMs: number,
     mimeType: string,
     isFinal: boolean,
+    analysisModel?: string | null,
     signal?: AbortSignal,
   ): Promise<AudioChunkResponse>;
   stopRecording(sessionId: string): Promise<StopRecordingResponse>;

@@ -49,6 +49,8 @@ class AssistController:
         started = time.perf_counter()
         transcript = payload.transcript_chunk
         language = payload.context.language
+        analysis_model = payload.analysis_model.strip() if payload.analysis_model and payload.analysis_model.strip() else None
+        effective_model_name = analysis_model or self.llm.model_name
         evidence_defaults = extract_evidence_quotes(transcript, max_quotes=2)
 
         async def fetch_fhir() -> dict[str, Any] | None:
@@ -66,11 +68,14 @@ class AssistController:
                     await fhir.close()
 
         async def call_llm(patient_context_text: str | None = None) -> dict[str, Any]:
-            return await self.llm.generate_structured(
-                transcript_chunk=transcript,
-                language=language,
-                patient_context=patient_context_text,
-            )
+            llm_kwargs = {
+                "transcript_chunk": transcript,
+                "language": language,
+                "patient_context": patient_context_text,
+            }
+            if analysis_model:
+                llm_kwargs["model_name"] = analysis_model
+            return await self.llm.generate_structured(**llm_kwargs)
 
         # Fetch patient context first so the LLM can use it in the prompt when available.
         patient_ctx = await fetch_fhir()
@@ -100,7 +105,7 @@ class AssistController:
         response = AssistResponse(
             request_id=payload.request_id,
             latency_ms=latency_ms,
-            model={"name": self.llm.model_name, "quantization": "none"},
+            model={"name": effective_model_name, "quantization": "none"},
             suggestions=suggestions,
             drug_interactions=interactions,
             extracted_facts=merged_facts,

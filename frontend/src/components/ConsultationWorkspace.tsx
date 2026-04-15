@@ -6,6 +6,7 @@ import { RecordingControls } from './RecordingControls';
 import { SessionOverviewPanel } from './SessionOverviewPanel';
 import { StatusPanel } from './StatusPanel';
 import { TranscriptPanel } from './TranscriptPanel';
+import type { AnalysisModelOption } from '../data/analysisModels';
 import type {
   Hint,
   KnowledgeExtraction,
@@ -31,6 +32,8 @@ interface Props {
   updatedAt: string | null;
   closedAt: string | null;
   performanceMetrics?: SessionPerformanceMetrics | null;
+  analysisModel?: string | null;
+  analysisModelOptions?: readonly AnalysisModelOption[];
   transcript: string;
   hints: Hint[];
   analysis: RealtimeAnalysis | null;
@@ -42,6 +45,7 @@ interface Props {
   canRecord: boolean;
   isBusy: boolean;
   errors: string[];
+  onAnalysisModelChange?: (value: string | null) => void;
   onStartRecording?: () => Promise<void>;
   onStopRecording?: () => Promise<void>;
   onCloseSession?: () => Promise<void>;
@@ -64,6 +68,8 @@ export function ConsultationWorkspace({
   updatedAt,
   closedAt,
   performanceMetrics,
+  analysisModel,
+  analysisModelOptions,
   transcript,
   hints,
   analysis,
@@ -75,6 +81,7 @@ export function ConsultationWorkspace({
   canRecord,
   isBusy,
   errors,
+  onAnalysisModelChange,
   onStartRecording,
   onStopRecording,
   onCloseSession,
@@ -116,7 +123,10 @@ export function ConsultationWorkspace({
             updatedAt={updatedAt}
             closedAt={closedAt}
             performanceMetrics={performanceMetrics}
+            analysisModel={analysisModel}
+            analysisModelOptions={analysisModelOptions}
             disableActions={isBusy}
+            onAnalysisModelChange={onAnalysisModelChange}
             onCloseSession={onCloseSession}
             onBackToDashboard={onBackToDashboard}
           />
