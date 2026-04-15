@@ -39,6 +39,28 @@ def test_transcribe_chunk_rejects_mime_type_mismatch():
     assert response.json()["error"]["code"] == "MIME_TYPE_MISMATCH"
 
 
+def test_transcribe_chunk_accepts_parameterized_webm_mime(monkeypatch):
+    pcm = np.ones(16000, dtype=np.float32)
+    monkeypatch.setattr(routes, "decode_audio_to_pcm", lambda content, ext: pcm)
+    monkeypatch.setattr(routes, "apply_vad_and_mask", lambda chunk_pcm: (True, chunk_pcm))
+    monkeypatch.setattr(
+        routes,
+        "transcribe_pcm",
+        lambda *args, **kwargs: {
+            "text": "Пациент жалуется на кашель",
+            "speech_detected": True,
+            "language": "ru",
+            "language_probability": 0.99,
+            "audio_file_duration": 1.0,
+        },
+    )
+
+    response = _post_chunk(data={"mime_type": "audio/webm;codecs=opus"})
+
+    assert response.status_code == 200
+    assert response.json()["mime_type"] == "audio/webm"
+
+
 def test_transcribe_chunk_rejects_oversized_files(monkeypatch):
     monkeypatch.setattr(routes, "MAX_FILE_SIZE_MB", 0)
 

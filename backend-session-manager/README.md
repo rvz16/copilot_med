@@ -2,6 +2,8 @@
 
 FastAPI-based MVP backend for the MedCoPilot Session Manager. It owns consultation session lifecycle, sequential audio chunk intake, transcript accumulation, hint generation, and post-session extraction orchestration behind a single REST API.
 
+Post-session work now runs through a background queue. Queue behavior and state transitions are documented in [docs/post-session-queue.md](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/backend-session-manager/docs/post-session-queue.md).
+
 ## Architecture
 
 - `app/main.py` boots the FastAPI app, CORS, error handlers, and DB lifecycle.
@@ -66,10 +68,10 @@ This starts:
 
 - frontend on `http://localhost:3000`
 - Session Manager API on `http://localhost:8080`
-- ASR service on `http://localhost:8000`
-- Realtime analysis service on `http://localhost:8001`
 
-In the repository-level compose stack, Session Manager uses the `transcribation` service as its HTTP ASR provider at `http://transcribation:8000` and the `realtime-analysis` service at `http://realtime-analysis:8000/v1/assist` for per-chunk clinical analysis. On first boot the ASR service downloads the Kaggle model `danchik575/whisper-ct2-ru` into a Docker volume if it is not already present. The realtime-analysis container expects Ollama on the host by default but still degrades to heuristic output if the LLM endpoint is unavailable. Knowledge extraction remains in mock mode so missing downstream analytics services do not block local development.
+In the repository-level compose stack, only `frontend` and `session-manager` are published to the host. `transcribation`, `realtime-analysis`, `clinical-recommendations`, `post-session-analytics`, `knowledge-extractor`, and `fhir` stay on the internal Docker network and are reached by service name. On first boot the ASR service downloads the Kaggle model `danchik575/whisper-ct2-ru` into a Docker volume if it is not already present. The realtime-analysis container expects Ollama on the host by default but still degrades to heuristic output if the LLM endpoint is unavailable.
+
+Clinical recommendation PDF links are now proxied through `session-manager`, so the frontend does not need direct host access to the `clinical-recommendations` container.
 
 ## Tests
 
@@ -97,6 +99,8 @@ pytest
 | `REALTIME_ANALYSIS_URL` | `http://localhost:8001/v1/assist` | HTTP realtime-analysis endpoint |
 | `REALTIME_ANALYSIS_LANGUAGE` | `ru` | Language sent in the realtime-analysis request context |
 | `REALTIME_ANALYSIS_TIMEOUT_SECONDS` | `8` | Timeout budget for each realtime-analysis call |
+| `CLINICAL_RECOMMENDATIONS_ENABLED` | `true` | Enables recommendation lookup |
+| `CLINICAL_RECOMMENDATIONS_PUBLIC_URL` | `http://localhost:8002` | Base URL used in returned PDF links; in the root Compose stack this should point to `session-manager` |
 | `KNOWLEDGE_EXTRACTOR_ENABLED` | `true` | Enables post-session analytics on close |
 | `KNOWLEDGE_EXTRACTOR_MODE` | `mock` | `mock` for local DX, `http` for real external service |
 | `KNOWLEDGE_EXTRACTOR_URL` | `http://localhost:8000/extract` | HTTP extractor endpoint |
@@ -119,6 +123,7 @@ Debug/read endpoints:
 - `GET /api/v1/sessions/{session_id}/transcript`
 - `GET /api/v1/sessions/{session_id}/hints`
 - `GET /api/v1/sessions/{session_id}/extractions`
+- `GET /api/v1/clinical-recommendations/{recommendation_id}/pdf`
 
 ## Curl Examples
 
@@ -157,6 +162,8 @@ curl -X POST http://localhost:8080/api/v1/sessions/sess_example/close \
   -d "{\"trigger_post_session_analytics\":true}"
 ```
 
+The close call returns immediately. While queued post-session work is still running, expect `status="analyzing"` and `processing_state="queued"` or `processing`. Poll the detail or extraction endpoints until the state becomes `completed` or `failed`.
+
 Read transcript:
 
 ```bash
@@ -175,9 +182,15 @@ Read extracted results:
 curl http://localhost:8080/api/v1/sessions/sess_example/extractions
 ```
 
+Download a recommendation PDF through the backend:
+
+```bash
+curl -OJ http://localhost:8080/api/v1/clinical-recommendations/30_5/pdf
+```
+
 ## Notes
 
 - Mock ASR is deterministic and mirrors the frontend mock transcript flow, which keeps local testing predictable.
 - The backend advertises `audio/webm` and `audio/wav`, and additionally accepts `audio/webm;codecs=opus` because browsers commonly send that exact MIME string.
-- In `KNOWLEDGE_EXTRACTOR_MODE=mock`, close-session analytics complete locally without another service.
+- In `KNOWLEDGE_EXTRACTOR_MODE=mock`, queued close-session analytics complete locally without another service.
 - In `KNOWLEDGE_EXTRACTOR_MODE=http`, close still returns success if the extractor fails; the failure is persisted and `processing_state` becomes `failed`.

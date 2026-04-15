@@ -68,6 +68,12 @@ def import_audio_session(
     )
 
 
+def wait_for_post_session_queue(client: TestClient, timeout: float = 2.0) -> None:
+    queue = getattr(client.app.state, "post_session_queue", None)
+    assert queue is not None
+    assert queue.wait_until_idle(timeout=timeout), "post-session queue did not become idle in time"
+
+
 def test_health_check_returns_200(client: TestClient):
     response = client.get("/health")
 
@@ -113,7 +119,9 @@ def test_import_audio_session_creates_finished_archive(client: TestClient):
     response = import_audio_session(client)
 
     assert response.status_code == 200
-    body = response.json()
+    session_id = response.json()["session_id"]
+    wait_for_post_session_queue(client)
+    body = client.get(f"/api/v1/sessions/{session_id}").json()
     assert body["session_id"].startswith("sess_")
     assert body["status"] == "finished"
     assert body["recording_state"] == "stopped"
@@ -244,9 +252,9 @@ def test_close_session_success(client: TestClient):
 
     assert response.status_code == 200
     body = response.json()
-    assert body["status"] == "finished"
+    assert body["status"] == "analyzing"
     assert body["recording_state"] == "stopped"
-    assert body["processing_state"] == "completed"
+    assert body["processing_state"] == "queued"
     assert body["full_transcript_ready"] is True
 
 
@@ -257,6 +265,7 @@ def test_get_session_returns_profile_and_snapshot(client: TestClient):
         f"/api/v1/sessions/{session_id}/close",
         json={"trigger_post_session_analytics": True},
     )
+    wait_for_post_session_queue(client)
 
     response = client.get(f"/api/v1/sessions/{session_id}")
 
@@ -313,6 +322,7 @@ def test_delete_session_removes_detail_list_entry_and_storage(client: TestClient
         f"/api/v1/sessions/{session_id}/close",
         json={"trigger_post_session_analytics": True},
     )
+    wait_for_post_session_queue(client)
 
     storage_dir = Path(client.app.state.settings.storage_dir)
 
@@ -351,8 +361,11 @@ def test_close_with_knowledge_extractor_mock_success(client: TestClient):
     extraction_response = client.get(f"/api/v1/sessions/{session_id}/extractions")
 
     assert close_response.status_code == 200
-    assert close_response.json()["processing_state"] == "completed"
+    assert close_response.json()["processing_state"] == "queued"
+    wait_for_post_session_queue(client)
+    extraction_response = client.get(f"/api/v1/sessions/{session_id}/extractions")
     assert extraction_response.status_code == 200
+    assert extraction_response.json()["processing_state"] == "completed"
     assert extraction_response.json()["soap_note"] is not None
     assert extraction_response.json()["persistence"]["enabled"] is True
     assert extraction_response.json()["validation"]["all_sections_populated"] is True
@@ -373,10 +386,12 @@ def test_knowledge_extractor_failure_does_not_crash_close(app_factory):
             f"/api/v1/sessions/{session_id}/close",
             json={"trigger_post_session_analytics": True},
         )
+        wait_for_post_session_queue(client)
+        detail = client.get(f"/api/v1/sessions/{session_id}")
 
         assert response.status_code == 200
-        assert response.json()["status"] == "finished"
-        assert response.json()["processing_state"] == "failed"
+        assert response.json()["status"] == "analyzing"
+        assert detail.json()["processing_state"] == "failed"
 
 
 def test_transcript_retrieval_endpoint_works(client: TestClient):
@@ -416,6 +431,7 @@ def test_close_session_falls_back_to_stable_transcript_when_full_transcription_i
             f"/api/v1/sessions/{session_id}/close",
             json={"trigger_post_session_analytics": True},
         )
+        wait_for_post_session_queue(client)
 
         body = client.get(f"/api/v1/sessions/{session_id}").json()
 
@@ -443,6 +459,7 @@ def test_close_session_prefers_full_transcript_for_knowledge_extraction(app_fact
             f"/api/v1/sessions/{session_id}/close",
             json={"trigger_post_session_analytics": True},
         )
+        wait_for_post_session_queue(client)
 
     assert captured["transcript"] == FULL_TRANSCRIPT
 
@@ -462,6 +479,7 @@ def test_close_session_keeps_full_transcript_when_post_session_analytics_fails(a
             f"/api/v1/sessions/{session_id}/close",
             json={"trigger_post_session_analytics": True},
         )
+        wait_for_post_session_queue(client)
 
         body = client.get(f"/api/v1/sessions/{session_id}").json()
 
@@ -513,6 +531,7 @@ def test_finished_snapshot_includes_average_realtime_latency(app_factory):
             f"/api/v1/sessions/{session_id}/close",
             json={"trigger_post_session_analytics": True},
         )
+        wait_for_post_session_queue(client)
 
         response = client.get(f"/api/v1/sessions/{session_id}")
 
@@ -644,6 +663,32 @@ def test_upload_chunk_skips_recommendation_lookup_without_diagnosis_suggestion(a
         assert response.json()["realtime_analysis"]["recommended_document"] is None
 
 
+def test_session_manager_proxies_clinical_recommendation_pdf(app_factory, monkeypatch):
+    def fake_download_pdf(self, recommendation_id: str):
+        del self
+        assert recommendation_id == "30_5"
+        return (
+            b"%PDF-1.4\nproxied\n",
+            "application/pdf",
+            'attachment; filename="KR30.pdf"',
+        )
+
+    monkeypatch.setattr(HttpClinicalRecommendationsClient, "download_pdf", fake_download_pdf)
+
+    app = app_factory(
+        CLINICAL_RECOMMENDATIONS_ENABLED=True,
+        CLINICAL_RECOMMENDATIONS_URL="http://recommendations.local",
+        CLINICAL_RECOMMENDATIONS_PUBLIC_URL="http://localhost:8080",
+    )
+    with TestClient(app) as client:
+        response = client.get("/api/v1/clinical-recommendations/30_5/pdf")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"
+        assert response.headers["content-disposition"] == 'attachment; filename="KR30.pdf"'
+        assert response.content == b"%PDF-1.4\nproxied\n"
+
+
 def test_repeated_stop_is_idempotent(client: TestClient):
     session_id = create_session(client)
     upload_chunk(client, session_id, seq=1)
@@ -675,7 +720,7 @@ def test_repeated_close_is_idempotent(client: TestClient):
 
     assert first.status_code == 200
     assert second.status_code == 200
-    assert second.json()["status"] == "finished"
+    assert second.json()["status"] in {"analyzing", "finished"}
 
 
 def test_audio_webm_codecs_opus_is_accepted(client: TestClient):
@@ -702,6 +747,7 @@ def test_extractor_results_endpoint_returns_processing_state(client: TestClient)
         f"/api/v1/sessions/{session_id}/close",
         json={"trigger_post_session_analytics": True},
     )
+    wait_for_post_session_queue(client)
 
     response = client.get(f"/api/v1/sessions/{session_id}/extractions")
 

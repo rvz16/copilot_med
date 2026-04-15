@@ -53,6 +53,10 @@ def _normalize_required_text(value: str, field_name: str) -> str:
     return stripped
 
 
+def _normalize_mime_type(value: str) -> str:
+    return _normalize_required_text(value, "mime_type").split(";", 1)[0].strip().lower()
+
+
 def validate_upload(file: UploadFile, content: bytes, mime_type: str) -> str:
     if not file.filename:
         raise ApiError("MISSING_FILENAME", "Uploaded file must include a filename.", 400)
@@ -75,7 +79,7 @@ def validate_upload(file: UploadFile, content: bytes, mime_type: str) -> str:
             413,
         )
 
-    normalized_mime = _normalize_required_text(mime_type, "mime_type").lower()
+    normalized_mime = _normalize_mime_type(mime_type)
     allowed_mime_types = ALLOWED_MIME_TYPES.get(ext, set())
     if allowed_mime_types and normalized_mime not in allowed_mime_types:
         raise ApiError(
@@ -129,7 +133,7 @@ async def transcribe_chunk(
     use_hallucination_filter: bool = Form(default=DEFAULT_USE_HALLUCINATION_FILTER),
 ):
     normalized_session_id = _normalize_required_text(session_id, "session_id")
-    normalized_mime_type = _normalize_required_text(mime_type, "mime_type").lower()
+    normalized_mime_type = _normalize_mime_type(mime_type)
 
     try:
         content = await file.read()

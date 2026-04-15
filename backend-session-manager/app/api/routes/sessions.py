@@ -164,3 +164,18 @@ def get_extractions(
     service: SessionService = Depends(get_session_service),
 ) -> ExtractionsResponse:
     return service.get_extractions(session_id)
+
+
+@router.get(
+    "/clinical-recommendations/{recommendation_id}/pdf",
+    summary="Proxy recommendation PDF download through session-manager",
+)
+def download_clinical_recommendation_pdf(
+    recommendation_id: str,
+    service: SessionService = Depends(get_session_service),
+) -> Response:
+    content, media_type, content_disposition = service.download_clinical_recommendation_pdf(recommendation_id)
+    headers = {}
+    if content_disposition:
+        headers["content-disposition"] = content_disposition
+    return Response(content=content, media_type=media_type, headers=headers)

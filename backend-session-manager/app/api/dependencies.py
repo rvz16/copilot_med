@@ -10,6 +10,7 @@ from app.services.clinical_recommendations import build_clinical_recommendations
 from app.services.hints import HintService
 from app.services.knowledge_extractor import build_knowledge_extractor_provider
 from app.services.post_session_analytics import build_post_session_analytics_provider
+from app.services.post_session_queue import PostSessionTaskQueue
 from app.services.realtime_analysis import build_realtime_analysis_provider
 from app.services.session_manager import SessionService
 from app.services.storage import StorageService
@@ -21,6 +22,10 @@ def get_settings(request: Request) -> Settings:
 
 def get_database(request: Request) -> Database:
     return request.app.state.db
+
+
+def get_post_session_queue(request: Request) -> PostSessionTaskQueue | None:
+    return getattr(request.app.state, "post_session_queue", None)
 
 
 def get_db(request: Request) -> Generator[Session, None, None]:
@@ -36,6 +41,7 @@ def get_session_service(
     db: Session = Depends(get_db),
 ) -> SessionService:
     settings = get_settings(request)
+    post_session_queue = get_post_session_queue(request)
     return SessionService(
         db=db,
         settings=settings,
@@ -46,4 +52,5 @@ def get_session_service(
         clinical_recommendations=build_clinical_recommendations_provider(settings),
         knowledge_extractor=build_knowledge_extractor_provider(settings),
         post_session_analytics=build_post_session_analytics_provider(settings),
+        post_session_queue=post_session_queue,
     )

@@ -3,8 +3,10 @@ from datetime import UTC, datetime
 import logging
 from pathlib import Path
 import shutil
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
+import httpx
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -48,6 +50,9 @@ from app.services.knowledge_extractor import KnowledgeExtractorProvider
 from app.services.post_session_analytics import PostSessionAnalyticsProvider
 from app.services.realtime_analysis import RealtimeAnalysisProvider
 from app.services.storage import StorageService
+
+if TYPE_CHECKING:
+    from app.services.post_session_queue import PostSessionTaskQueue
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +98,7 @@ class SessionService:
         clinical_recommendations: ClinicalRecommendationsProvider,
         knowledge_extractor: KnowledgeExtractorProvider,
         post_session_analytics: PostSessionAnalyticsProvider,
+        post_session_queue: "PostSessionTaskQueue | None" = None,
     ) -> None:
         self.db = db
         self.settings = settings
@@ -103,6 +109,7 @@ class SessionService:
         self.clinical_recommendations = clinical_recommendations
         self.knowledge_extractor = knowledge_extractor
         self.post_session_analytics = post_session_analytics
+        self.post_session_queue = post_session_queue
 
     def create_session(
         self,
@@ -443,17 +450,10 @@ class SessionService:
         session.recording_state = "stopped"
         session.closed_at = session.closed_at or utcnow()
         session.processing_state = "completed"
-
-        if trigger_post_session_analytics and self.settings.post_session_analytics_enabled:
-            if session.processing_state != "failed":
-                session.processing_state = "processing"
-            self.db.flush()
-            self._run_full_transcript_analytics(session)
-
-        if trigger_post_session_analytics and self.settings.knowledge_extractor_enabled:
-            session.processing_state = "processing"
-            self.db.flush()
-            self._run_post_session_analytics(session)
+        should_enqueue = self._should_run_post_session_pipeline(trigger_post_session_analytics)
+        if should_enqueue:
+            session.processing_state = "queued"
+            session.last_error = None
 
         # Pending analytics artifacts must be flushed before snapshot assembly,
         # otherwise the finalized snapshot will miss post-session results.
@@ -466,6 +466,8 @@ class SessionService:
         )
         self.db.commit()
         self.db.refresh(session)
+        if should_enqueue and self.post_session_queue is not None:
+            self.post_session_queue.enqueue(session.session_id)
         return self._build_close_response(session)
 
     def _find_recommended_documents(
@@ -649,6 +651,24 @@ class SessionService:
             items=self._build_hint_list_items(session.id),
         )
 
+    def download_clinical_recommendation_pdf(self, recommendation_id: str) -> tuple[bytes, str, str | None]:
+        try:
+            return self.clinical_recommendations.download_pdf(recommendation_id)
+        except ApiError:
+            raise
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                raise ApiError(
+                    "RECOMMENDATION_PDF_NOT_FOUND",
+                    "PDF клинической рекомендации не найден.",
+                    404,
+                ) from exc
+            raise ApiError(
+                "CLINICAL_RECOMMENDATIONS_UNAVAILABLE",
+                "Не удалось получить PDF клинической рекомендации.",
+                502,
+            ) from exc
+
     def get_extractions(self, session_id: str) -> ExtractionsResponse:
         session = self._get_session(session_id)
         artifacts = self.db.scalars(
@@ -672,6 +692,65 @@ class SessionService:
             post_analytics_insights=artifact_map.get("post_analytics_insights"),
             post_analytics_recommendations=artifact_map.get("post_analytics_recommendations"),
             post_analytics_quality=artifact_map.get("post_analytics_quality"),
+        )
+
+    def process_post_session_queue_item(self, session_id: str) -> None:
+        session = self._get_session(session_id)
+        if session.status != "closed":
+            logger.info("Skipping queued post-session work for non-closed session %s", session_id)
+            return
+        if session.processing_state == "completed":
+            logger.info("Skipping queued post-session work for completed session %s", session_id)
+            return
+
+        try:
+            if self.settings.post_session_analytics_enabled:
+                if session.processing_state != "failed":
+                    session.processing_state = "processing"
+                self.db.flush()
+                session.updated_at = utcnow()
+                self._upsert_session_snapshot(session=session, realtime_analysis=None, finalized=True)
+                self.db.commit()
+                session = self._get_session(session_id)
+                self._run_full_transcript_analytics(session)
+                self.db.flush()
+                self.db.commit()
+                session = self._get_session(session_id)
+
+            if self.settings.knowledge_extractor_enabled:
+                session.processing_state = "processing"
+                self.db.flush()
+                session.updated_at = utcnow()
+                self._upsert_session_snapshot(session=session, realtime_analysis=None, finalized=True)
+                self.db.commit()
+                session = self._get_session(session_id)
+                self._run_post_session_analytics(session)
+                self.db.flush()
+                self.db.commit()
+                session = self._get_session(session_id)
+
+            if session.processing_state != "failed":
+                session.processing_state = "completed"
+            session.updated_at = utcnow()
+            self._upsert_session_snapshot(session=session, realtime_analysis=None, finalized=True)
+            self.db.commit()
+        except Exception as exc:
+            logger.exception("Queued post-session work failed for session %s", session_id)
+            self.db.rollback()
+            failed_session = self._get_session(session_id)
+            failed_session.processing_state = "failed"
+            failed_session.last_error = str(exc)
+            failed_session.updated_at = utcnow()
+            self._upsert_session_snapshot(session=failed_session, realtime_analysis=None, finalized=True)
+            self.db.commit()
+
+    def _should_run_post_session_pipeline(self, trigger_post_session_analytics: bool) -> bool:
+        return bool(
+            trigger_post_session_analytics
+            and (
+                self.settings.post_session_analytics_enabled
+                or self.settings.knowledge_extractor_enabled
+            )
         )
 
     def _run_post_session_analytics(self, session: SessionRecord) -> None:
@@ -1417,7 +1496,7 @@ class SessionService:
     def _public_status(session: SessionRecord) -> str:
         if session.status != "closed":
             return PUBLIC_SESSION_STATUS_ACTIVE
-        if session.processing_state == "processing":
+        if session.processing_state in {"queued", "processing"}:
             return PUBLIC_SESSION_STATUS_ANALYZING
         return PUBLIC_SESSION_STATUS_FINISHED
 
@@ -1426,9 +1505,15 @@ class SessionService:
         if status == PUBLIC_SESSION_STATUS_ACTIVE:
             return [SessionRecord.status != "closed"]
         if status == PUBLIC_SESSION_STATUS_ANALYZING:
-            return [SessionRecord.status == "closed", SessionRecord.processing_state == "processing"]
+            return [
+                SessionRecord.status == "closed",
+                SessionRecord.processing_state.in_(("queued", "processing")),
+            ]
         if status == PUBLIC_SESSION_STATUS_FINISHED:
-            return [SessionRecord.status == "closed", SessionRecord.processing_state != "processing"]
+            return [
+                SessionRecord.status == "closed",
+                ~SessionRecord.processing_state.in_(("queued", "processing")),
+            ]
         return [SessionRecord.status == status]
 
     def _upload_config(self) -> UploadConfig:

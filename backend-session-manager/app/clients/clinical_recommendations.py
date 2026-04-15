@@ -16,3 +16,15 @@ class HttpClinicalRecommendationsClient:
             )
             response.raise_for_status()
             return response.json()
+
+    def download_pdf(self, recommendation_id: str) -> tuple[bytes, str, str | None]:
+        with httpx.Client(timeout=self.timeout_seconds) as client:
+            response = client.get(
+                f"{self.base_url}/api/v1/clinical-recommendations/{recommendation_id}/pdf",
+            )
+            response.raise_for_status()
+            return (
+                response.content,
+                response.headers.get("content-type", "application/pdf"),
+                response.headers.get("content-disposition"),
+            )

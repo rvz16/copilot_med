@@ -30,10 +30,11 @@ Browser
   -> frontend (:3000)
   -> session-manager (:8080)
       -> transcribation (:8000) for chunk transcription
-      -> realtime-analysis (:8001 externally, :8000 internally) for live suggestions
+      -> realtime-analysis (:8000 internally) for live suggestions
           -> Ollama on the host at :11434 by default
           -> optional remote FHIR server for patient context
-  -> clinical-recommendations (:8002) for official recommendation lookup and PDF download
+      -> clinical-recommendations (:8002 internally) for official recommendation lookup
+      -> post-session queue for background offline analytics
 ```
 
 Runtime behavior:
@@ -42,6 +43,8 @@ Runtime behavior:
 - `session-manager` sends each accepted chunk to `transcribation`
 - once stable transcript text is available, `session-manager` calls `realtime-analysis`
 - `session-manager` returns both stored hints and structured realtime analysis to the frontend
+- when a session is closed, `session-manager` queues post-session analytics and knowledge extraction in the background
+- recommendation PDFs are downloaded through `session-manager`, so the clinical recommendations container stays internal-only
 - if realtime analysis is unavailable, the backend still returns transcript updates and local rule-based hints
 
 ## Prerequisites
@@ -99,15 +102,13 @@ This starts:
 
 - frontend at `http://localhost:3000`
 - session-manager API at `http://localhost:8080`
-- clinical-recommendations API at `http://localhost:8002`
-- transcribation at `http://localhost:8000`
-- realtime-analysis at `http://localhost:8001`
 
 Notes:
 
 - on first startup, `transcribation` may take several minutes because it downloads `danchik575/whisper-ct2-ru`
 - `session-manager` waits for both `transcribation` and `realtime-analysis` healthchecks before becoming healthy
 - frontend waits for `session-manager`
+- all other containers stay on the internal Docker network and are not published to the host
 
 ## Common Commands
 
@@ -166,30 +167,20 @@ Session manager:
 curl http://localhost:8080/health
 ```
 
-Clinical recommendations:
-
-```bash
-curl http://localhost:8002/health
-```
-
-Transcribation:
-
-```bash
-curl http://localhost:8000/health
-```
-
-Realtime analysis:
-
-```bash
-curl http://localhost:8001/health
-```
-
 Expected backend-style responses:
 
 - `session-manager`: `{"status":"ok","service":"session-manager"}`
-- `clinical-recommendations`: `{"status":"ok","service":"clinical-recommendations"}`
-- `transcribation`: includes `status`, `service`, `device`, `model_path`
-- `realtime-analysis`: includes `status`, `model`, `vllm_url`, `fhir_url`
+
+Internal services are not published to the host anymore. Inspect them with:
+
+```bash
+docker compose ps
+docker compose logs -f clinical-recommendations
+docker compose logs -f transcribation
+docker compose logs -f realtime-analysis
+docker compose logs -f post-session-analytics
+docker compose logs -f knowledge-extractor
+```
 
 ## End-to-End Smoke Flow
 
@@ -206,6 +197,7 @@ Once all health checks are green:
    - realtime analysis should show suggestions, facts, interactions, and optional patient context
 7. Click `Stop Recording`.
 8. Click `Close Session`.
+9. The session will move to `analyzing` while the background post-session queue completes offline analytics.
 
 If you want to inspect the backend directly after a session:
 
@@ -214,6 +206,7 @@ curl http://localhost:8080/api/v1/sessions
 curl http://localhost:8080/api/v1/sessions/<session_id>/transcript
 curl http://localhost:8080/api/v1/sessions/<session_id>/hints
 curl http://localhost:8080/api/v1/sessions/<session_id>/extractions
+curl -OJ http://localhost:8080/api/v1/clinical-recommendations/30_5/pdf
 ```
 
 ## Service Details
@@ -233,20 +226,22 @@ curl http://localhost:8080/api/v1/sessions/<session_id>/extractions
 - Calls:
   - `transcribation` for chunk ASR
   - `realtime-analysis` for live structured clinical analysis
+- Queues post-session analytics and knowledge extraction in the background
+- Proxies recommendation PDF downloads through `/api/v1/clinical-recommendations/{recommendation_id}/pdf`
 - Returns `realtime_analysis` and `new_hints` in chunk-upload responses
 
 ### Clinical Recommendations
 
 - Source: [`clinical-recommendations-service/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/clinical-recommendations-service)
-- Published port: `8002`
+- Internal-only container in the root Compose stack
 - Loads official entries from [`clinical_recommendations/clinical_recommendations.csv`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/clinical_recommendations/clinical_recommendations.csv)
 - Maps entry ids like `286_3` to PDFs like `КР286.pdf` in [`clinical_recommendations/pdf_files/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/clinical_recommendations/pdf_files)
-- Exposes list, search, detail, and PDF download endpoints
+- Exposes list, search, detail, and PDF download endpoints to other containers on the Docker network
 
 ### Transcribation
 
 - Source: [`transcribation/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/transcribation)
-- Published port: `8000`
+- Internal-only container in the root Compose stack
 - Uses the CPU Dockerfile in the root stack
 - Persists the Whisper model in `transcribation-model`
 - Accepts backend chunk uploads and returns transcript deltas plus stable text
@@ -254,7 +249,7 @@ curl http://localhost:8080/api/v1/sessions/<session_id>/extractions
 ### Realtime Analysis
 
 - Source: [`real_time_analysis/`](/Users/bulatsaripov/Desktop/Courses_Inno/AI_In_Healthcare/Project/copilot_med/real_time_analysis)
-- Published port: `8001`
+- Internal-only container in the root Compose stack
 - Receives stable transcript updates from `session-manager`
 - Returns:
   - suggestions
@@ -328,7 +323,6 @@ Likely causes:
 Check:
 
 ```bash
-curl http://localhost:8001/health
 docker compose logs -f realtime-analysis
 ```
 

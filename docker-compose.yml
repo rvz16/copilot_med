@@ -14,8 +14,6 @@ services:
       CLINICAL_RECOMMENDATIONS_PDF_DIR: /app/clinical_recommendations/pdf_files
     volumes:
       - ./clinical_recommendations/pdf_files:/app/clinical_recommendations/pdf_files:ro
-    ports:
-      - "8002:8002"
     healthcheck:
       test:
         - CMD
@@ -41,8 +39,6 @@ services:
       GROQ_API_KEY: ${TRANSCRIBATION_GROQ_API_KEY:-}
       GROQ_MODEL: ${TRANSCRIBATION_GROQ_MODEL:-whisper-large-v3-turbo}
       AUDIO_CONTEXT_SECONDS: 10.0
-    ports:
-      - "8000:8000"
     volumes:
       - transcribation-model:/models
       - ${HOME}/.kaggle:/root/.kaggle:ro
@@ -61,8 +57,6 @@ services:
     build:
       context: ./fhir
     user: "0:0"
-    ports:
-      - "8092:8092"
     volumes:
       - fhir-data:/data/hapi
 
@@ -88,8 +82,6 @@ services:
       LOG_LEVEL: ${REALTIME_ANALYSIS_LOG_LEVEL:-INFO}
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    ports:
-      - "8001:8000"
     healthcheck:
       test:
         - CMD
@@ -117,8 +109,6 @@ services:
       LOG_LEVEL: ${POST_ANALYTICS_LOG_LEVEL:-INFO}
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    ports:
-      - "8003:8000"
     healthcheck:
       test:
         - CMD
@@ -159,8 +149,6 @@ services:
       LLM_EXTRA_HEADERS_JSON: ${REALTIME_ANALYSIS_LLM_EXTRA_HEADERS_JSON:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    ports:
-      - "8004:8000"
     healthcheck:
       test:
         - CMD
@@ -199,7 +187,7 @@ services:
       REALTIME_ANALYSIS_TIMEOUT_SECONDS: ${REALTIME_ANALYSIS_TIMEOUT_SECONDS:-8}
       CLINICAL_RECOMMENDATIONS_ENABLED: "true"
       CLINICAL_RECOMMENDATIONS_URL: http://clinical-recommendations:8002
-      CLINICAL_RECOMMENDATIONS_PUBLIC_URL: http://localhost:8002
+      CLINICAL_RECOMMENDATIONS_PUBLIC_URL: http://localhost:8080
       CLINICAL_RECOMMENDATIONS_TIMEOUT_SECONDS: 5
       CLINICAL_RECOMMENDATIONS_MIN_CONFIDENCE: 0.6
       KNOWLEDGE_EXTRACTOR_MODE: http

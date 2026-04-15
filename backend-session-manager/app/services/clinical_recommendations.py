@@ -2,6 +2,7 @@ from typing import Protocol
 
 from app.clients.clinical_recommendations import HttpClinicalRecommendationsClient
 from app.core.config import Settings
+from app.core.errors import ApiError
 
 
 class ClinicalRecommendationsProvider(Protocol):
@@ -12,6 +13,9 @@ class ClinicalRecommendationsProvider(Protocol):
     public_base_url: str
 
     def search(self, query: str, limit: int = 1) -> dict:
+        ...
+
+    def download_pdf(self, recommendation_id: str) -> tuple[bytes, str, str | None]:
         ...
 
     def build_pdf_url(self, recommendation_id: str) -> str:
@@ -28,6 +32,14 @@ class DisabledClinicalRecommendationsProvider:
     def search(self, query: str, limit: int = 1) -> dict:
         del query, limit
         return {"query": "", "items": []}
+
+    def download_pdf(self, recommendation_id: str) -> tuple[bytes, str, str | None]:
+        del recommendation_id
+        raise ApiError(
+            "CLINICAL_RECOMMENDATIONS_DISABLED",
+            "Сервис клинических рекомендаций отключён.",
+            503,
+        )
 
     def build_pdf_url(self, recommendation_id: str) -> str:
         del recommendation_id
@@ -51,6 +63,9 @@ class HttpClinicalRecommendationsProvider:
 
     def search(self, query: str, limit: int = 1) -> dict:
         return self.client.search(query=query, limit=limit)
+
+    def download_pdf(self, recommendation_id: str) -> tuple[bytes, str, str | None]:
+        return self.client.download_pdf(recommendation_id)
 
     def build_pdf_url(self, recommendation_id: str) -> str:
         return f"{self.public_base_url}/api/v1/clinical-recommendations/{recommendation_id}/pdf"
