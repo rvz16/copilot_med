@@ -1,0 +1,52 @@
+{
+  "resourceType": "Bundle",
+  "id": "synthetic-observations-synthetic-patient-003",
+  "type": "collection",
+  "total": 2,
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "synthetic-observation-003-headache",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "75325-1",
+              "display": "Headache severity"
+            }
+          ],
+          "text": "Headache severity"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-patient-003"
+        },
+        "effectiveDateTime": "2026-04-01T18:00:00Z",
+        "valueString": "Reported headaches 3 times in the last month"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "synthetic-observation-003-bp",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "85354-9",
+              "display": "Blood pressure panel with all children optional"
+            }
+          ],
+          "text": "Blood pressure panel with all children optional"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-patient-003"
+        },
+        "effectiveDateTime": "2026-01-08T08:40:00Z",
+        "valueString": "Blood pressure 114/72 mmHg"
+      }
+    }
+  ]
+}

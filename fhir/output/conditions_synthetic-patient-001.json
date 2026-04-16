@@ -1,0 +1,59 @@
+{
+  "resourceType": "Bundle",
+  "id": "synthetic-conditions-synthetic-patient-001",
+  "type": "collection",
+  "total": 1,
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "synthetic-condition-001",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "resolved",
+              "display": "Resolved"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ]
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "problem-list-item",
+                "display": "Problem List Item"
+              }
+            ],
+            "text": "Problem List Item"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "59621000",
+              "display": "Essential hypertension"
+            }
+          ],
+          "text": "Essential hypertension"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-patient-001"
+        },
+        "onsetDateTime": "2019-05-11T00:00:00Z",
+        "recordedDate": "2025-12-12"
+      }
+    }
+  ]
+}

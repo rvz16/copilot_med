@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980" role="img" aria-labelledby="title desc">
+  <title id="title">MedCoPilot Project Architecture</title>
+  <desc id="desc">Architecture diagram showing the frontend, session manager, internal services, FHIR server, LLM providers, recommendations dataset, and storage.</desc>
+
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#4b5563"/>
+    </marker>
+    <marker id="arrowDashed" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#6b7280"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#0f172a" flood-opacity="0.12"/>
+    </filter>
+    <style>
+      .bg { fill: #f8fafc; }
+      .network { fill: #eef6ff; stroke: #bfdbfe; stroke-width: 2; stroke-dasharray: 10 8; }
+      .box { rx: 24; ry: 24; filter: url(#shadow); }
+      .title { font: 700 34px Arial, Helvetica, sans-serif; fill: #0f172a; }
+      .subtitle { font: 500 16px Arial, Helvetica, sans-serif; fill: #475569; }
+      .label { font: 700 20px Arial, Helvetica, sans-serif; fill: #0f172a; }
+      .text { font: 500 14px Arial, Helvetica, sans-serif; fill: #334155; }
+      .small { font: 500 13px Arial, Helvetica, sans-serif; fill: #475569; }
+      .pill { font: 700 12px Arial, Helvetica, sans-serif; fill: #ffffff; }
+      .edge { stroke: #4b5563; stroke-width: 3.5; fill: none; marker-end: url(#arrow); }
+      .edge-back { stroke: #4b5563; stroke-width: 3.5; fill: none; marker-end: url(#arrow); }
+      .edge-dashed { stroke: #6b7280; stroke-width: 3.5; fill: none; stroke-dasharray: 11 8; marker-end: url(#arrowDashed); }
+      .edge-light { stroke: #94a3b8; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .legend { font: 600 12px Arial, Helvetica, sans-serif; fill: #1e293b; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1600" height="980"/>
+
+  <text class="title" x="800" y="60" text-anchor="middle">MedCoPilot Project Architecture</text>
+  <text class="subtitle" x="800" y="90" text-anchor="middle">Containerized healthcare copilot with live consultation support, analytics, and FHIR integration</text>
+
+  <rect class="network" x="500" y="120" width="1020" height="760" rx="34" ry="34"/>
+  <text class="legend" x="530" y="152">Internal Docker Network</text>
+
+  <rect class="box" x="70" y="165" width="210" height="110" fill="#dbeafe"/>
+  <text class="label" x="175" y="205" text-anchor="middle">Doctor / Browser</text>
+  <text class="text" x="175" y="232" text-anchor="middle">consultation UI</text>
+  <text class="text" x="175" y="252" text-anchor="middle">microphone + results</text>
+
+  <rect class="box" x="320" y="145" width="250" height="150" fill="#bfdbfe"/>
+  <rect x="338" y="160" width="68" height="24" rx="12" ry="12" fill="#2563eb"/>
+  <text class="pill" x="372" y="177" text-anchor="middle">PUBLIC</text>
+  <text class="label" x="445" y="205" text-anchor="middle">Frontend</text>
+  <text class="text" x="445" y="232" text-anchor="middle">React + Vite + Nginx</text>
+  <text class="text" x="445" y="254" text-anchor="middle">port 3000</text>
+  <text class="small" x="445" y="276" text-anchor="middle">Displays transcript, hints, and analysis</text>
+
+  <rect class="box" x="640" y="150" width="360" height="180" fill="#99f6e4"/>
+  <rect x="658" y="165" width="68" height="24" rx="12" ry="12" fill="#0f766e"/>
+  <text class="pill" x="692" y="182" text-anchor="middle">PUBLIC</text>
+  <text class="label" x="820" y="210" text-anchor="middle">Session Manager</text>
+  <text class="text" x="820" y="238" text-anchor="middle">FastAPI orchestration hub, port 8080</text>
+  <text class="text" x="820" y="262" text-anchor="middle">chunk intake, transcript assembly, hints,</text>
+  <text class="text" x="820" y="283" text-anchor="middle">recommendation proxy, background jobs</text>
+  <text class="small" x="820" y="307" text-anchor="middle">Central API between UI and internal services</text>
+
+  <rect class="box" x="1080" y="155" width="260" height="140" fill="#e2e8f0"/>
+  <text class="label" x="1210" y="210" text-anchor="middle">Session Storage</text>
+  <text class="text" x="1210" y="236" text-anchor="middle">SQLite + file/audio storage</text>
+  <text class="small" x="1210" y="262" text-anchor="middle">sessions, transcripts, chunks</text>
+
+  <rect class="box" x="560" y="390" width="280" height="140" fill="#ddd6fe"/>
+  <text class="label" x="700" y="440" text-anchor="middle">Transcribation / ASR</text>
+  <text class="text" x="700" y="466" text-anchor="middle">FastAPI + Whisper</text>
+  <text class="small" x="700" y="490" text-anchor="middle">audio chunk transcription</text>
+
+  <rect class="box" x="880" y="390" width="300" height="160" fill="#fed7aa"/>
+  <text class="label" x="1030" y="438" text-anchor="middle">Realtime Analysis</text>
+  <text class="text" x="1030" y="464" text-anchor="middle">FastAPI + LLM</text>
+  <text class="small" x="1030" y="488" text-anchor="middle">suggestions, extracted facts,</text>
+  <text class="small" x="1030" y="507" text-anchor="middle">drug interactions, patient context</text>
+
+  <rect class="box" x="1220" y="390" width="260" height="150" fill="#f9a8d4"/>
+  <text class="label" x="1350" y="438" text-anchor="middle">Clinical Recommendations</text>
+  <text class="text" x="1350" y="464" text-anchor="middle">FastAPI lookup service</text>
+  <text class="small" x="1350" y="488" text-anchor="middle">guidelines and PDF access</text>
+
+  <rect class="box" x="600" y="630" width="270" height="140" fill="#e5e7eb"/>
+  <text class="label" x="735" y="680" text-anchor="middle">Post-Session Analytics</text>
+  <text class="text" x="735" y="706" text-anchor="middle">FastAPI retrospective analysis</text>
+  <text class="small" x="735" y="730" text-anchor="middle">async session-close processing</text>
+
+  <rect class="box" x="930" y="630" width="280" height="150" fill="#d1fae5"/>
+  <text class="label" x="1070" y="680" text-anchor="middle">Knowledge Extractor</text>
+  <text class="text" x="1070" y="706" text-anchor="middle">FastAPI structured extraction</text>
+  <text class="small" x="1070" y="730" text-anchor="middle">documentation, FHIR mapping,</text>
+  <text class="small" x="1070" y="749" text-anchor="middle">optional write-back</text>
+
+  <rect class="box" x="1310" y="635" width="190" height="135" fill="#bbf7d0"/>
+  <text class="label" x="1405" y="685" text-anchor="middle">FHIR Server</text>
+  <text class="text" x="1405" y="710" text-anchor="middle">HAPI FHIR R4</text>
+  <text class="small" x="1405" y="734" text-anchor="middle">patient context and persistence</text>
+
+  <ellipse cx="1315" cy="225" rx="120" ry="62" fill="#e5e7eb" filter="url(#shadow)"/>
+  <text class="label" x="1315" y="218" text-anchor="middle">LLM Providers</text>
+  <text class="text" x="1315" y="243" text-anchor="middle">Ollama / OpenRouter / Groq</text>
+
+  <rect class="box" x="1315" y="560" width="185" height="110" fill="#f3e8ff"/>
+  <text class="label" x="1407" y="603" text-anchor="middle">Recommendations</text>
+  <text class="text" x="1407" y="628" text-anchor="middle">CSV + PDF dataset</text>
+
+  <path class="edge" d="M 280 220 L 320 220"/>
+  <text class="small" x="300" y="206" text-anchor="middle">doctor uses UI</text>
+
+  <path class="edge" d="M 570 220 L 640 220"/>
+  <text class="small" x="605" y="201" text-anchor="middle">API calls / audio chunks</text>
+  <path class="edge-back" d="M 640 248 L 570 248"/>
+  <text class="small" x="605" y="267" text-anchor="middle">transcript / hints / analysis</text>
+
+  <path class="edge" d="M 820 330 L 700 390"/>
+  <text class="small" x="730" y="352" text-anchor="middle">audio chunk transcription</text>
+  <path class="edge-back" d="M 700 390 L 775 347"/>
+  <text class="small" x="745" y="407" text-anchor="middle">transcript deltas / stable text</text>
+
+  <path class="edge" d="M 880 330 L 990 390"/>
+  <text class="small" x="930" y="352" text-anchor="middle">stable transcript</text>
+  <path class="edge-back" d="M 1030 390 L 930 342"/>
+  <text class="small" x="1000" y="370" text-anchor="middle">clinical suggestions</text>
+
+  <path class="edge" d="M 1000 245 L 1080 245"/>
+  <text class="small" x="1040" y="232" text-anchor="middle">persist session state</text>
+
+  <path class="edge" d="M 980 255 C 1100 310, 1220 350, 1295 390"/>
+  <text class="small" x="1200" y="338" text-anchor="middle">guideline lookup / PDF proxy</text>
+
+  <path class="edge-dashed" d="M 760 330 C 740 420, 730 530, 735 630"/>
+  <text class="small" x="660" y="510" text-anchor="middle">async session close job</text>
+
+  <path class="edge-dashed" d="M 910 330 C 965 430, 1040 530, 1070 630"/>
+  <text class="small" x="1005" y="540" text-anchor="middle">async structured extraction</text>
+
+  <path class="edge-light" d="M 1180 445 L 1310 445"/>
+  <text class="small" x="1245" y="430" text-anchor="middle">patient context</text>
+
+  <path class="edge-light" d="M 1210 710 L 1310 710"/>
+  <text class="small" x="1260" y="695" text-anchor="middle">FHIR persistence / retrieval</text>
+
+  <path class="edge-light" d="M 1180 420 C 1230 360, 1260 300, 1288 260"/>
+  <text class="small" x="1215" y="350" text-anchor="middle">LLM inference</text>
+
+  <path class="edge-light" d="M 870 680 C 1040 610, 1170 410, 1260 255"/>
+  <text class="small" x="1020" y="604" text-anchor="middle">offline analysis prompts</text>
+
+  <path class="edge-light" d="M 1407 560 L 1407 540"/>
+  <text class="small" x="1460" y="552">source data</text>
+
+  <rect x="80" y="890" width="1440" height="52" rx="18" ry="18" fill="#e2e8f0"/>
+  <text class="legend" x="800" y="922" text-anchor="middle">Only Frontend (:3000) and Session Manager (:8080) are public. All other services run inside the internal Docker network.</text>
+</svg>

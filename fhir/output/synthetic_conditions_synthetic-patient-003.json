@@ -1,0 +1,59 @@
+{
+  "resourceType": "Bundle",
+  "id": "synthetic-conditions-synthetic-patient-003",
+  "type": "collection",
+  "total": 1,
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "synthetic-condition-003",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "resolved",
+              "display": "Resolved"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ]
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "problem-list-item",
+                "display": "Problem List Item"
+              }
+            ],
+            "text": "Problem List Item"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "37796009",
+              "display": "Migraine without aura"
+            }
+          ],
+          "text": "Migraine without aura"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-patient-003"
+        },
+        "onsetDateTime": "2021-08-09T00:00:00Z",
+        "recordedDate": "2025-10-22"
+      }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "resourceType": "Patient",
+  "id": "synthetic-patient-005",
+  "active": true,
+  "name": [
+    {
+      "use": "official",
+      "family": "Smirnova",
+      "given": [
+        "Olga"
+      ]
+    }
+  ],
+  "gender": "female",
+  "birthDate": "1969-04-09"
+}

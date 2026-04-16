@@ -1,0 +1,52 @@
+{
+  "resourceType": "Bundle",
+  "id": "synthetic-observations-synthetic-patient-002",
+  "type": "collection",
+  "total": 2,
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "synthetic-observation-002-a1c",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "4548-4",
+              "display": "Hemoglobin A1c/Hemoglobin.total in Blood"
+            }
+          ],
+          "text": "Hemoglobin A1c/Hemoglobin.total in Blood"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-patient-002"
+        },
+        "effectiveDateTime": "2026-03-14T07:45:00Z",
+        "valueString": "HbA1c 7.1%"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "synthetic-observation-002-ldl",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "13457-7",
+              "display": "Cholesterol in LDL [Mass/volume] in Serum or Plasma by calculation"
+            }
+          ],
+          "text": "Cholesterol in LDL [Mass/volume] in Serum or Plasma by calculation"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-patient-002"
+        },
+        "effectiveDateTime": "2026-01-20T07:45:00Z",
+        "valueString": "LDL cholesterol 142 mg/dL"
+      }
+    }
+  ]
+}

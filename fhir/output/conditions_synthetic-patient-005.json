@@ -1,0 +1,59 @@
+{
+  "resourceType": "Bundle",
+  "id": "synthetic-conditions-synthetic-patient-005",
+  "type": "collection",
+  "total": 1,
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "synthetic-condition-005",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "resolved",
+              "display": "Resolved"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ]
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "problem-list-item",
+                "display": "Problem List Item"
+              }
+            ],
+            "text": "Problem List Item"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "235595009",
+              "display": "Gastroesophageal reflux disease"
+            }
+          ],
+          "text": "Gastroesophageal reflux disease"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-patient-005"
+        },
+        "onsetDateTime": "2017-01-23T00:00:00Z",
+        "recordedDate": "2025-08-30"
+      }
+    }
+  ]
+}

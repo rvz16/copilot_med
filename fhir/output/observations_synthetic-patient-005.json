@@ -1,0 +1,52 @@
+{
+  "resourceType": "Bundle",
+  "id": "synthetic-observations-synthetic-patient-005",
+  "type": "collection",
+  "total": 2,
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "synthetic-observation-005-weight",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "29463-7",
+              "display": "Body weight"
+            }
+          ],
+          "text": "Body weight"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-patient-005"
+        },
+        "effectiveDateTime": "2026-02-09T10:20:00Z",
+        "valueString": "Body weight 82 kg"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "synthetic-observation-005-bp",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "85354-9",
+              "display": "Blood pressure panel with all children optional"
+            }
+          ],
+          "text": "Blood pressure panel with all children optional"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-patient-005"
+        },
+        "effectiveDateTime": "2026-02-09T10:20:00Z",
+        "valueString": "Blood pressure 134/84 mmHg"
+      }
+    }
+  ]
+}

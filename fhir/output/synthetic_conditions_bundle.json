@@ -1,0 +1,263 @@
+{
+  "resourceType": "Bundle",
+  "id": "synthetic-conditions",
+  "type": "collection",
+  "total": 5,
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "synthetic-condition-001",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "resolved",
+              "display": "Resolved"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ]
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "problem-list-item",
+                "display": "Problem List Item"
+              }
+            ],
+            "text": "Problem List Item"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "59621000",
+              "display": "Essential hypertension"
+            }
+          ],
+          "text": "Essential hypertension"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-patient-001"
+        },
+        "onsetDateTime": "2019-05-11T00:00:00Z",
+        "recordedDate": "2025-12-12"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "synthetic-condition-002",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "resolved",
+              "display": "Resolved"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ]
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "problem-list-item",
+                "display": "Problem List Item"
+              }
+            ],
+            "text": "Problem List Item"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "44054006",
+              "display": "Type 2 diabetes mellitus"
+            }
+          ],
+          "text": "Type 2 diabetes mellitus"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-patient-002"
+        },
+        "onsetDateTime": "2018-03-20T00:00:00Z",
+        "recordedDate": "2025-11-05"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "synthetic-condition-003",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "resolved",
+              "display": "Resolved"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ]
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "problem-list-item",
+                "display": "Problem List Item"
+              }
+            ],
+            "text": "Problem List Item"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "37796009",
+              "display": "Migraine without aura"
+            }
+          ],
+          "text": "Migraine without aura"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-patient-003"
+        },
+        "onsetDateTime": "2021-08-09T00:00:00Z",
+        "recordedDate": "2025-10-22"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "synthetic-condition-004",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "resolved",
+              "display": "Resolved"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ]
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "problem-list-item",
+                "display": "Problem List Item"
+              }
+            ],
+            "text": "Problem List Item"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "195967001",
+              "display": "Mild intermittent asthma"
+            }
+          ],
+          "text": "Mild intermittent asthma"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-patient-004"
+        },
+        "onsetDateTime": "2016-04-17T00:00:00Z",
+        "recordedDate": "2025-09-14"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "synthetic-condition-005",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "resolved",
+              "display": "Resolved"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ]
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "problem-list-item",
+                "display": "Problem List Item"
+              }
+            ],
+            "text": "Problem List Item"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "235595009",
+              "display": "Gastroesophageal reflux disease"
+            }
+          ],
+          "text": "Gastroesophageal reflux disease"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-patient-005"
+        },
+        "onsetDateTime": "2017-01-23T00:00:00Z",
+        "recordedDate": "2025-08-30"
+      }
+    }
+  ]
+}

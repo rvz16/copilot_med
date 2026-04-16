@@ -1,0 +1,16 @@
+{
+  "resourceType": "Patient",
+  "id": "synthetic-patient-003",
+  "active": true,
+  "name": [
+    {
+      "use": "official",
+      "family": "Sokolova",
+      "given": [
+        "Anna"
+      ]
+    }
+  ],
+  "gender": "female",
+  "birthDate": "1994-06-22"
+}

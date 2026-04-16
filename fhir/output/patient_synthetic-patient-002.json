@@ -1,0 +1,16 @@
+{
+  "resourceType": "Patient",
+  "id": "synthetic-patient-002",
+  "active": true,
+  "name": [
+    {
+      "use": "official",
+      "family": "Petrov",
+      "given": [
+        "Ivan"
+      ]
+    }
+  ],
+  "gender": "male",
+  "birthDate": "1975-09-03"
+}

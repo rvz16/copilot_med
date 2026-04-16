@@ -129,6 +129,7 @@ def print_patient_summaries(summaries: list[dict[str, Any]]) -> None:
 def print_synthetic_summary(result: dict[str, Any]) -> None:
     print(
         f"synthetic fallback saved {len(result['patient_summaries'])} patients and "
+        f"{result.get('condition_bundle', {}).get('total', 0)} conditions and "
         f"{result['observation_bundle'].get('total', 0)} observations"
     )
     print(f"selected patient id: {result['selected_patient_id']}")
@@ -167,6 +168,12 @@ def fetch_live_data(base_url: str, output_dir: Path) -> dict[str, Any]:
     )
     save_json(output_dir / f"patient_{selected_patient_id}.json", selected_patient)
 
+    condition_bundle = request_json(
+        session,
+        resource_url(base_url, f"Condition?patient={selected_patient_id}&_count=10"),
+    )
+    save_json(output_dir / f"conditions_{selected_patient_id}.json", condition_bundle)
+
     observation_bundle = request_json(
         session,
         resource_url(base_url, f"Observation?patient={selected_patient_id}&_count=10"),
@@ -181,6 +188,7 @@ def fetch_live_data(base_url: str, output_dir: Path) -> dict[str, Any]:
         "patient_summaries": patient_summaries,
         "selected_patient_id": selected_patient_id,
         "selected_patient": selected_patient,
+        "condition_bundle": condition_bundle,
         "observation_bundle": observation_bundle,
     }
 
@@ -208,6 +216,14 @@ def collect_resources_for_import(result: dict[str, Any]) -> list[dict[str, Any]]
         resource_id = resource.get("id")
         if resource_type and resource_id:
             by_identity[(resource_type, resource_id)] = resource
+
+    condition_bundle = result.get("condition_bundle")
+    if isinstance(condition_bundle, dict):
+        for resource in extract_bundle_resources(condition_bundle, "Condition"):
+            resource_type = resource.get("resourceType")
+            resource_id = resource.get("id")
+            if resource_type and resource_id:
+                by_identity[(resource_type, resource_id)] = resource
 
     return list(by_identity.values())
 
@@ -261,6 +277,7 @@ def main() -> int:
             result = fetch_live_data(args.base_url, output_dir)
             print(
                 f"live fetch saved {len(result['patient_summaries'])} patients and "
+                f"{result.get('condition_bundle', {}).get('total', 0)} conditions and "
                 f"{result['observation_bundle'].get('total', 0)} observations"
             )
         except FHIRFetchError as exc:

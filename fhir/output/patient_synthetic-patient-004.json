@@ -1,0 +1,16 @@
+{
+  "resourceType": "Patient",
+  "id": "synthetic-patient-004",
+  "active": true,
+  "name": [
+    {
+      "use": "official",
+      "family": "Volkov",
+      "given": [
+        "Maksim"
+      ]
+    }
+  ],
+  "gender": "male",
+  "birthDate": "1981-11-30"
+}

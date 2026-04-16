@@ -1,0 +1,52 @@
+{
+  "resourceType": "Bundle",
+  "id": "synthetic-observations-synthetic-patient-004",
+  "type": "collection",
+  "total": 2,
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "synthetic-observation-004-pef",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "33453-9",
+              "display": "Expiratory flow peak"
+            }
+          ],
+          "text": "Expiratory flow peak"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-patient-004"
+        },
+        "effectiveDateTime": "2026-03-28T11:10:00Z",
+        "valueString": "Peak expiratory flow 410 L/min"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "synthetic-observation-004-oxygen",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "59408-5",
+              "display": "Oxygen saturation in Arterial blood by Pulse oximetry"
+            }
+          ],
+          "text": "Oxygen saturation in Arterial blood by Pulse oximetry"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-patient-004"
+        },
+        "effectiveDateTime": "2026-03-28T11:10:00Z",
+        "valueString": "Oxygen saturation 98% on room air"
+      }
+    }
+  ]
+}
