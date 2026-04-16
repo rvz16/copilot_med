@@ -133,6 +133,7 @@ It is responsible for:
 | `VITE_USE_MOCK` | use mock API instead of the real backend |
 | `VITE_SESSION_MANAGER_URL` | build-time API base URL override |
 | `SESSION_MANAGER_UPSTREAM` | Nginx upstream used in the container image |
+| `FRONTEND_CLIENT_MAX_BODY_SIZE` | Nginx request-body limit for importing completed session audio |
 
 ## Important Files to Read
 

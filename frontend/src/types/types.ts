@@ -19,7 +19,23 @@ export interface CreateSessionRequest {
   chief_complaint?: string;
 }
 
-export interface ImportRecordedSessionRequest extends CreateSessionRequest {}
+export type ImportRecordedSessionRequest = CreateSessionRequest;
+
+export interface ImportRecordedSessionBatchItem {
+  file_name: string | null;
+  status: 'accepted' | 'failed' | string;
+  session_id: string | null;
+  processing_state: string | null;
+  session: SessionDetail | null;
+  error_code: string | null;
+  error_message: string | null;
+}
+
+export interface ImportRecordedSessionBatchResponse {
+  items: ImportRecordedSessionBatchItem[];
+  accepted_count: number;
+  failed_count: number;
+}
 
 export interface CreateSessionResponse {
   session_id: string;
@@ -392,6 +408,11 @@ export interface SessionApi {
     payload: ImportRecordedSessionRequest,
     file: File,
   ): Promise<SessionDetail>;
+  importHistoricalSessions(
+    payload: ImportRecordedSessionRequest,
+    files: File[],
+  ): Promise<ImportRecordedSessionBatchResponse>;
+  getSessionReportUrl(sessionId: string): string;
   uploadAudioChunk(
     sessionId: string,
     file: Blob,

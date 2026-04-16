@@ -32,6 +32,8 @@ from app.schemas.session import (
     HintListItem,
     HintResponse,
     HintsResponse,
+    ImportAudioBatchItem,
+    ImportAudioBatchResponse,
     ListSessionsResponse,
     RecommendedDocumentResponse,
     RealtimeAnalysisResponse,
@@ -49,6 +51,7 @@ from app.services.hints import HintService
 from app.services.knowledge_extractor import KnowledgeExtractorProvider
 from app.services.post_session_analytics import PostSessionAnalyticsProvider
 from app.services.realtime_analysis import RealtimeAnalysisProvider
+from app.services.session_report import build_session_report_pdf, safe_report_filename
 from app.services.storage import StorageService
 
 if TYPE_CHECKING:
@@ -189,6 +192,72 @@ class SessionService:
         self.close_session(session.session_id, trigger_post_session_analytics=True)
         imported_session = self._get_session(session.session_id)
         return self._build_session_detail(imported_session)
+
+    def import_recorded_sessions(
+        self,
+        *,
+        doctor_id: str,
+        patient_id: str,
+        files: list[tuple[str | None, str | None, bytes]],
+        doctor_name: str | None = None,
+        doctor_specialty: str | None = None,
+        patient_name: str | None = None,
+        chief_complaint: str | None = None,
+    ) -> ImportAudioBatchResponse:
+        if not files:
+            raise ApiError("NO_AUDIO_FILES", "Загрузите хотя бы один MP3 или WAV файл.", 400)
+
+        items: list[ImportAudioBatchItem] = []
+        for file_name, mime_type, file_bytes in files:
+            try:
+                session = self.import_recorded_session(
+                    doctor_id=doctor_id,
+                    patient_id=patient_id,
+                    file_name=file_name,
+                    mime_type=mime_type,
+                    file_bytes=file_bytes,
+                    doctor_name=doctor_name,
+                    doctor_specialty=doctor_specialty,
+                    patient_name=patient_name,
+                    chief_complaint=chief_complaint,
+                )
+                items.append(
+                    ImportAudioBatchItem(
+                        file_name=file_name,
+                        status="accepted",
+                        session_id=session.session_id,
+                        processing_state=session.processing_state,
+                        session=session,
+                    )
+                )
+            except ApiError as exc:
+                self.db.rollback()
+                items.append(
+                    ImportAudioBatchItem(
+                        file_name=file_name,
+                        status="failed",
+                        error_code=exc.code,
+                        error_message=exc.message,
+                    )
+                )
+            except Exception as exc:
+                self.db.rollback()
+                logger.exception("Unexpected batch audio import failure for %s", file_name)
+                items.append(
+                    ImportAudioBatchItem(
+                        file_name=file_name,
+                        status="failed",
+                        error_code="AUDIO_IMPORT_FAILED",
+                        error_message=str(exc),
+                    )
+                )
+
+        accepted_count = sum(1 for item in items if item.status == "accepted")
+        return ImportAudioBatchResponse(
+            items=items,
+            accepted_count=accepted_count,
+            failed_count=len(items) - accepted_count,
+        )
 
     def upload_audio_chunk(
         self,
@@ -691,6 +760,26 @@ class SessionService:
                 "Не удалось получить PDF клинической рекомендации.",
                 502,
             ) from exc
+
+    def download_session_report_pdf(self, session_id: str) -> tuple[bytes, str, str]:
+        session = self._get_session(session_id)
+        if session.status != "closed":
+            raise ApiError(
+                "SESSION_NOT_FINISHED",
+                "PDF-отчёт доступен после завершения сессии.",
+                409,
+            )
+        if session.processing_state in {"queued", "processing"}:
+            raise ApiError(
+                "SESSION_ANALYSIS_IN_PROGRESS",
+                "PDF-отчёт будет доступен после завершения post-session analysis.",
+                409,
+            )
+
+        detail = self._build_session_detail(session).model_dump(mode="json")
+        content = build_session_report_pdf(detail)
+        content_disposition = f'attachment; filename="{safe_report_filename(session.session_id)}"'
+        return content, "application/pdf", content_disposition
 
     def get_extractions(self, session_id: str) -> ExtractionsResponse:
         session = self._get_session(session_id)
@@ -1352,7 +1441,192 @@ class SessionService:
     ) -> ConsultationSnapshotResponse | None:
         if snapshot is None:
             return None
-        return ConsultationSnapshotResponse.model_validate(snapshot.payload_json)
+        payload = snapshot.payload_json if isinstance(snapshot.payload_json, dict) else {}
+        return ConsultationSnapshotResponse.model_validate(self._enrich_snapshot_payload(payload))
+
+    def _enrich_snapshot_payload(self, payload: dict) -> dict:
+        if not isinstance(payload, dict):
+            return {}
+
+        analytics = payload.get("post_session_analytics")
+        if not isinstance(analytics, dict):
+            return payload
+
+        summary = analytics.get("summary")
+        summary_dict = summary if isinstance(summary, dict) else {}
+        insights = analytics.get("insights")
+        insight_list = insights if isinstance(insights, list) else []
+        recommendations = analytics.get("recommendations")
+        recommendation_list = recommendations if isinstance(recommendations, list) else []
+        quality = analytics.get("quality")
+        quality_dict = quality if isinstance(quality, dict) else {}
+        quality_metrics = quality_dict.get("metrics") if isinstance(quality_dict.get("metrics"), list) else []
+
+        if (
+            summary_dict.get("key_findings")
+            and insight_list
+            and recommendation_list
+            and quality_metrics
+        ):
+            return payload
+
+        realtime_analysis = payload.get("realtime_analysis")
+        realtime_dict = realtime_analysis if isinstance(realtime_analysis, dict) else {}
+        knowledge_extraction = payload.get("knowledge_extraction")
+        knowledge_dict = knowledge_extraction if isinstance(knowledge_extraction, dict) else {}
+        hints = payload.get("hints")
+        hint_list = [item for item in hints if isinstance(item, dict)] if isinstance(hints, list) else []
+
+        symptom_candidates = self._snapshot_nested_values(realtime_dict, "extracted_facts", "symptoms")
+        if not symptom_candidates:
+            symptom_candidates = self._snapshot_values(knowledge_dict, "extracted_facts", "symptoms")
+        condition_candidates = self._snapshot_nested_values(realtime_dict, "extracted_facts", "conditions")
+        diagnosis_candidates = self._snapshot_hint_messages(hint_list, "diagnosis_suggestion")
+        next_step_candidates = self._snapshot_hint_messages(hint_list, "next_step")
+        question_candidates = self._snapshot_hint_messages(hint_list, "question_to_ask")
+        follow_up_candidates = self._snapshot_values(
+            knowledge_dict,
+            "soap_note",
+            "plan",
+            "follow_up_instructions",
+        )
+        evaluation_candidates = self._snapshot_values(
+            knowledge_dict,
+            "soap_note",
+            "assessment",
+            "evaluation",
+        )
+
+        summary_update = dict(summary_dict)
+        if not summary_update.get("key_findings"):
+            summary_update["key_findings"] = [
+                item
+                for item in (
+                    (
+                        f"Symptoms discussed: {', '.join(symptom_candidates[:3])}"
+                        if symptom_candidates
+                        else ""
+                    ),
+                    (
+                        f"Structured conditions: {', '.join(condition_candidates[:2])}"
+                        if condition_candidates
+                        else ""
+                    ),
+                    (
+                        f"Archived transcript length: {len(str(payload.get('transcript') or ''))} chars"
+                        if payload.get("transcript")
+                        else ""
+                    ),
+                )
+                if item
+            ][:5]
+        if not summary_update.get("primary_impressions"):
+            summary_update["primary_impressions"] = diagnosis_candidates[:3]
+        if not summary_update.get("differential_diagnoses"):
+            summary_update["differential_diagnoses"] = (condition_candidates or evaluation_candidates)[:3]
+
+        if not insight_list:
+            insight_list = [
+                {
+                    "category": "diagnostic_gap" if item.get("type") != "question_to_ask" else "missed_symptom",
+                    "description": item.get("message"),
+                    "severity": item.get("severity") or "medium",
+                    "confidence": item.get("confidence") or 0.55,
+                    "evidence": "Recovered from archived realtime hints.",
+                }
+                for item in hint_list
+                if item.get("message")
+            ][:5]
+
+        if not recommendation_list:
+            merged_actions = self._unique_snapshot_values(
+                [*next_step_candidates, *question_candidates, *follow_up_candidates]
+            )
+            recommendation_list = [
+                {
+                    "action": action,
+                    "priority": "routine",
+                    "timeframe": "при ближайшем разборе случая",
+                    "rationale": "Recovered from archived realtime and knowledge-extraction artifacts.",
+                }
+                for action in merged_actions[:5]
+            ]
+
+        if not quality_metrics:
+            key_findings_count = len(summary_update.get("key_findings") or [])
+            quality_dict = {
+                "overall_score": 0.68 if key_findings_count >= 2 else 0.58,
+                "metrics": [
+                    {
+                        "metric_name": "Полнота анамнеза",
+                        "score": 0.7 if symptom_candidates else 0.55,
+                        "description": "Оценка восстановлена из сохранённой финальной транскрипции и extracted facts.",
+                        "improvement_suggestion": "Проверить, все ли ключевые симптомы и их динамика попали в итоговый разбор.",
+                    },
+                    {
+                        "metric_name": "Качество документирования",
+                        "score": 0.72 if knowledge_dict.get("soap_note") else 0.56,
+                        "description": "Оценка основана на наличии SOAP-структуры и архивных артефактов.",
+                        "improvement_suggestion": "Сверить итоговую заметку с полной транскрипцией перед финальным использованием.",
+                    },
+                    {
+                        "metric_name": "Дифференциальное мышление",
+                        "score": 0.7 if diagnosis_candidates else 0.52,
+                        "description": "Оценка опирается на сохранённые диагностические гипотезы и follow-up шаги.",
+                        "improvement_suggestion": "Добавить явные альтернативные гипотезы и план их исключения.",
+                    },
+                ],
+            }
+
+        enriched_analytics = dict(analytics)
+        enriched_analytics["summary"] = summary_update
+        enriched_analytics["insights"] = insight_list
+        enriched_analytics["recommendations"] = recommendation_list
+        enriched_analytics["quality"] = quality_dict
+
+        enriched_payload = dict(payload)
+        enriched_payload["post_session_analytics"] = enriched_analytics
+        return enriched_payload
+
+    @staticmethod
+    def _snapshot_values(payload: dict, *path: str) -> list[str]:
+        current = payload
+        for key in path:
+            if not isinstance(current, dict):
+                return []
+            current = current.get(key)
+        if isinstance(current, list):
+            return [str(item).strip() for item in current if str(item).strip()]
+        if isinstance(current, str) and current.strip():
+            return [current.strip()]
+        return []
+
+    @classmethod
+    def _snapshot_nested_values(cls, payload: dict, section: str, key: str) -> list[str]:
+        return cls._snapshot_values(payload, section, key)
+
+    @staticmethod
+    def _snapshot_hint_messages(hints: list[dict], hint_type: str) -> list[str]:
+        return [
+            str(item.get("message")).strip()
+            for item in hints
+            if item.get("type") == hint_type and str(item.get("message")).strip()
+        ]
+
+    @staticmethod
+    def _unique_snapshot_values(values: list[str]) -> list[str]:
+        seen: set[str] = set()
+        result: list[str] = []
+        for value in values:
+            normalized = value.strip()
+            if not normalized:
+                continue
+            key = normalized.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(normalized)
+        return result
 
     def _build_session_detail(self, session: SessionRecord) -> SessionDetailResponse:
         summary = self._build_session_summary(session)

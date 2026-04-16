@@ -86,11 +86,11 @@ def _extract_fact_texts(realtime_analysis: dict[str, object], key: str) -> list[
     return _unique_texts([_safe_str(value) for value in values])
 
 
-def _build_fallback_response(
+def _compose_fallback_response(
     request: AnalyticsRequest,
     *,
     elapsed_ms: int,
-    error_message: str,
+    model_used: str,
 ) -> AnalyticsResponse:
     realtime_analysis = request.realtime_analysis if isinstance(request.realtime_analysis, dict) else {}
     diagnosis_candidates = _extract_suggestion_texts(realtime_analysis, "diagnosis_suggestion")
@@ -237,14 +237,9 @@ def _build_fallback_response(
         ],
     )
 
-    logger.warning(
-        "Returning fallback post-session analytics for session %s because LLM failed: %s",
-        request.session_id,
-        error_message,
-    )
     return AnalyticsResponse(
         session_id=request.session_id,
-        model_used="fallback-template",
+        model_used=model_used,
         processing_time_ms=elapsed_ms,
         medical_summary=MedicalSummary(
             clinical_narrative=clinical_narrative,
@@ -256,6 +251,20 @@ def _build_fallback_response(
         follow_up_recommendations=follow_up_recommendations,
         quality_assessment=quality,
     )
+
+
+def _build_fallback_response(
+    request: AnalyticsRequest,
+    *,
+    elapsed_ms: int,
+    error_message: str,
+) -> AnalyticsResponse:
+    logger.warning(
+        "Returning fallback post-session analytics for session %s because LLM failed: %s",
+        request.session_id,
+        error_message,
+    )
+    return _compose_fallback_response(request, elapsed_ms=elapsed_ms, model_used="fallback-template")
 
 
 def _parse_response(raw: dict, session_id: str, elapsed_ms: int, model_used: str) -> AnalyticsResponse:
@@ -341,6 +350,60 @@ def _parse_response(raw: dict, session_id: str, elapsed_ms: int, model_used: str
     )
 
 
+def _enrich_sparse_response(
+    request: AnalyticsRequest,
+    response: AnalyticsResponse,
+    *,
+    elapsed_ms: int,
+) -> AnalyticsResponse:
+    fallback = _compose_fallback_response(request, elapsed_ms=elapsed_ms, model_used=response.model_used)
+    needs_enrichment = any(
+        (
+            not response.medical_summary.key_findings,
+            not response.medical_summary.primary_impressions,
+            not response.medical_summary.differential_diagnoses,
+            not response.critical_insights,
+            not response.follow_up_recommendations,
+            not response.quality_assessment.metrics,
+        )
+    )
+    if not needs_enrichment and response.medical_summary.clinical_narrative != "Анализ недоступен.":
+        return response
+
+    logger.warning(
+        "Enriching sparse post-session analytics response for session %s from model %s",
+        request.session_id,
+        response.model_used,
+    )
+    summary = MedicalSummary(
+        clinical_narrative=(
+            response.medical_summary.clinical_narrative
+            if response.medical_summary.clinical_narrative != "Анализ недоступен."
+            else fallback.medical_summary.clinical_narrative
+        ),
+        key_findings=response.medical_summary.key_findings or fallback.medical_summary.key_findings,
+        primary_impressions=response.medical_summary.primary_impressions
+        or fallback.medical_summary.primary_impressions,
+        differential_diagnoses=response.medical_summary.differential_diagnoses
+        or fallback.medical_summary.differential_diagnoses,
+    )
+    quality = (
+        response.quality_assessment
+        if response.quality_assessment.metrics
+        else fallback.quality_assessment
+    )
+    return AnalyticsResponse(
+        status=response.status,
+        session_id=response.session_id,
+        model_used=response.model_used,
+        processing_time_ms=response.processing_time_ms,
+        medical_summary=summary,
+        critical_insights=response.critical_insights or fallback.critical_insights,
+        follow_up_recommendations=response.follow_up_recommendations or fallback.follow_up_recommendations,
+        quality_assessment=quality,
+    )
+
+
 @router.post("/analyze", response_model=AnalyticsResponse)
 def analyze(request: AnalyticsRequest) -> AnalyticsResponse:
     logger.info(
@@ -380,6 +443,7 @@ def analyze(request: AnalyticsRequest) -> AnalyticsResponse:
     raw_payload = result.payload if isinstance(result, LLMGenerationResult) else result
     model_used = result.model_name if isinstance(result, LLMGenerationResult) else "unknown-model"
     response = _parse_response(raw_payload, request.session_id, elapsed_ms, model_used)
+    response = _enrich_sparse_response(request, response, elapsed_ms=elapsed_ms)
     logger.info(
         "analyze_request_completed session_id=%s processing_time_ms=%d model=%s insights=%d recommendations=%d quality_metrics=%d",
         request.session_id,

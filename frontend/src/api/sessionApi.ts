@@ -6,6 +6,7 @@ import type {
   CreateSessionRequest,
   CreateSessionResponse,
   HealthResponse,
+  ImportRecordedSessionBatchResponse,
   ImportRecordedSessionRequest,
   ListSessionsResponse,
   SessionDetail,
@@ -20,11 +21,17 @@ function withBaseUrl(path: string): string {
   return `${BASE_URL}${path}`;
 }
 
+function defaultErrorMessage(status: number): string {
+  if (status === 413) {
+    return 'Размер загружаемых файлов превышает допустимый лимит.';
+  }
+  return `Запрос завершился с ошибкой ${status}`;
+}
+
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => null);
-    const msg =
-      body?.error?.message ?? `Запрос завершился с ошибкой ${res.status}`;
+    const msg = body?.error?.message ?? defaultErrorMessage(res.status);
     throw new Error(msg);
   }
   return res.json() as Promise<T>;
@@ -55,6 +62,27 @@ export const sessionApi: SessionApi = {
       body: form,
     });
     return handleResponse<SessionDetail>(res);
+  },
+
+  async importHistoricalSessions(payload: ImportRecordedSessionRequest, files: File[]) {
+    const form = new FormData();
+    form.append('doctor_id', payload.doctor_id);
+    form.append('patient_id', payload.patient_id);
+    if (payload.doctor_name) form.append('doctor_name', payload.doctor_name);
+    if (payload.doctor_specialty) form.append('doctor_specialty', payload.doctor_specialty);
+    if (payload.patient_name) form.append('patient_name', payload.patient_name);
+    if (payload.chief_complaint) form.append('chief_complaint', payload.chief_complaint);
+    files.forEach((file) => form.append('files', file));
+
+    const res = await fetch(withBaseUrl('/api/v1/sessions/import-audio/batch'), {
+      method: 'POST',
+      body: form,
+    });
+    return handleResponse<ImportRecordedSessionBatchResponse>(res);
+  },
+
+  getSessionReportUrl(sessionId: string) {
+    return withBaseUrl(`/api/v1/sessions/${sessionId}/report.pdf`);
   },
 
   async uploadAudioChunk(sessionId, file, seq, durationMs, mimeType, isFinal, analysisModel, signal) {
@@ -105,8 +133,7 @@ export const sessionApi: SessionApi = {
     });
     if (!res.ok) {
       const body = await res.json().catch(() => null);
-      const msg =
-        body?.error?.message ?? `Запрос завершился с ошибкой ${res.status}`;
+      const msg = body?.error?.message ?? defaultErrorMessage(res.status);
       throw new Error(msg);
     }
   },

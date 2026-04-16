@@ -293,6 +293,22 @@ class SessionDetailResponse(SessionSummaryResponse):
     snapshot: ConsultationSnapshotResponse | None = None
 
 
+class ImportAudioBatchItem(ApiBaseModel):
+    file_name: str | None = None
+    status: str
+    session_id: str | None = None
+    processing_state: str | None = None
+    session: SessionDetailResponse | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+
+
+class ImportAudioBatchResponse(ApiBaseModel):
+    items: list[ImportAudioBatchItem]
+    accepted_count: int
+    failed_count: int
+
+
 class ExtractionsResponse(ApiBaseModel):
     session_id: str
     processing_state: str

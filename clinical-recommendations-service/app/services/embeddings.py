@@ -80,7 +80,15 @@ class BertEmbeddingBackend:
             encoded = {key: value.to(self._device) for key, value in encoded.items()}
             with torch.no_grad():
                 output = self._model(**encoded)
-            embeddings = _mean_pool(output.last_hidden_state, encoded["attention_mask"])
+            last_hidden_state = output.last_hidden_state
+            if getattr(last_hidden_state, "device", None) is not None and last_hidden_state.device.type == "meta":
+                raise RuntimeError(
+                    f"Embedding model {self.model_name} returned meta tensors during inference."
+                )
+            attention_mask = encoded["attention_mask"]
+            if getattr(last_hidden_state, "device", None) is not None:
+                attention_mask = attention_mask.to(last_hidden_state.device)
+            embeddings = _mean_pool(last_hidden_state, attention_mask)
             embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
             vectors.append(embeddings.cpu().numpy().astype("float32"))
 
@@ -136,8 +144,21 @@ class ClinicalRecommendationEmbeddingIndex:
         self._matrix = None
 
     def ensure_current(self, entries: list[RecommendationEntryLike], *, force: bool = False) -> None:
-        if force or not self._is_current(entries):
+        available_entries = self._available_entries(entries)
+        if force:
             self.build(entries)
+        elif available_entries:
+            if not self._is_current(entries):
+                self.build(entries)
+        elif self.embeddings_path.is_file():
+            logger.warning(
+                "No matched clinical recommendation PDFs were found; reusing existing embedding index at %s",
+                self.embeddings_path,
+            )
+        else:
+            raise RuntimeError(
+                "No matched clinical recommendation PDFs were found and no existing embedding index is available."
+            )
         self.load()
 
     def build(self, entries: list[RecommendationEntryLike]) -> None:
@@ -158,7 +179,7 @@ class ClinicalRecommendationEmbeddingIndex:
             documents.append((entry, truncated_text, token_count, stat.st_size, stat.st_mtime_ns))
 
         if not documents:
-            raise RuntimeError("No clinical recommendation PDFs are available for embedding.")
+            raise RuntimeError("No matched clinical recommendation PDFs are available for embedding.")
 
         logger.info("Building embeddings for %s clinical recommendation PDFs", len(documents))
         texts = [document[1] for document in documents]
@@ -270,6 +291,14 @@ class ClinicalRecommendationEmbeddingIndex:
             pdf_text = f"{title}. {pdf_text}"
         return f"{self.passage_prefix}{pdf_text}"
 
+    @staticmethod
+    def _available_entries(entries: list[RecommendationEntryLike]) -> list[RecommendationEntryLike]:
+        return [
+            entry
+            for entry in entries
+            if entry.pdf_available and entry.pdf_path is not None and entry.pdf_path.is_file()
+        ]
+
     def _write_parquet(
         self,
         *,
@@ -359,7 +388,10 @@ def _clean_extracted_text(text: str) -> str:
 def _mean_pool(last_hidden_state, attention_mask):
     import torch
 
-    mask = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
+    mask = attention_mask.to(
+        device=last_hidden_state.device,
+        dtype=last_hidden_state.dtype,
+    ).unsqueeze(-1).expand(last_hidden_state.size())
     summed = torch.sum(last_hidden_state * mask, dim=1)
     counts = torch.clamp(mask.sum(dim=1), min=1e-9)
     return summed / counts

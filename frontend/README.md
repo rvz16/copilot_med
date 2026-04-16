@@ -82,6 +82,7 @@ Visit [http://localhost:3000](http://localhost:3000).
 | `VITE_SESSION_MANAGER_URL` | empty | Optional build-time API base URL override. Leave empty for same-origin requests; during `npm run dev`, the Vite proxy targets `http://localhost:8080` unless overridden. |
 | `VITE_USE_MOCK` | `true` | Build-time flag. Set to `true` to use the built-in mock API (no backend needed). |
 | `SESSION_MANAGER_UPSTREAM` | `http://session-manager:8080` | Nginx reverse-proxy upstream (Docker only) |
+| `FRONTEND_CLIENT_MAX_BODY_SIZE` | `64m` | Nginx request-body limit for uploads of completed consultation audio files |
 
 ## Mock Mode
 

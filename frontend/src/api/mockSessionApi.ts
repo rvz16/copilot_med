@@ -6,6 +6,7 @@ import type {
   CreateSessionRequest,
   CreateSessionResponse,
   HealthResponse,
+  ImportRecordedSessionBatchResponse,
   Hint,
   ImportRecordedSessionRequest,
   KnowledgeExtraction,
@@ -405,6 +406,63 @@ function getRecord(sessionId: string): MockSessionRecord {
   return record;
 }
 
+function createImportedSession(payload: ImportRecordedSessionRequest): SessionDetail {
+  mockSessionCounter += 1;
+  const timestamp = isoNow();
+  const sessionId = `mock_sess_${mockSessionCounter}`;
+  const transcript = TRANSCRIPT_FRAGMENTS.join('');
+  const analytics = buildPostSessionAnalytics(transcript);
+  const knowledgeExtraction = buildKnowledgeExtraction(transcript);
+
+  const summary: SessionSummary = {
+    session_id: sessionId,
+    doctor_id: payload.doctor_id,
+    doctor_name: payload.doctor_name ?? null,
+    doctor_specialty: payload.doctor_specialty ?? null,
+    patient_id: payload.patient_id,
+    patient_name: payload.patient_name ?? null,
+    chief_complaint: payload.chief_complaint ?? null,
+    encounter_id: null,
+    status: 'finished',
+    recording_state: 'stopped',
+    processing_state: 'completed',
+    latest_seq: 1,
+    transcript_preview: transcript.slice(0, 180),
+    stable_transcript: transcript,
+    last_error: null,
+    created_at: timestamp,
+    updated_at: timestamp,
+    started_at: timestamp,
+    stopped_at: timestamp,
+    closed_at: timestamp,
+    snapshot_available: true,
+  };
+
+  const record: MockSessionRecord = {
+    request: payload,
+    summary,
+    snapshot: {
+      status: 'finished',
+      recording_state: 'stopped',
+      processing_state: 'completed',
+      latest_seq: 1,
+      transcript,
+      hints: [],
+      realtime_analysis: null,
+      performance_metrics: buildPerformanceMetrics(0, null, 210, 680),
+      knowledge_extraction: knowledgeExtraction,
+      post_session_analytics: analytics,
+      last_error: null,
+      updated_at: timestamp,
+      finalized_at: timestamp,
+    },
+    analyticsScheduled: false,
+  };
+
+  sessions.set(sessionId, record);
+  return detailFromRecord(record);
+}
+
 export const mockSessionApi: SessionApi = {
   async createSession(payload) {
     await delay(MOCK_DELAY_MS);
@@ -463,59 +521,45 @@ export const mockSessionApi: SessionApi = {
   async importHistoricalSession(payload: ImportRecordedSessionRequest, file: File) {
     void file;
     await delay(MOCK_DELAY_MS * 2);
-    mockSessionCounter += 1;
-    const timestamp = isoNow();
-    const sessionId = `mock_sess_${mockSessionCounter}`;
-    const transcript = TRANSCRIPT_FRAGMENTS.join('');
-    const analytics = buildPostSessionAnalytics(transcript);
-    const knowledgeExtraction = buildKnowledgeExtraction(transcript);
+    return createImportedSession(payload);
+  },
 
-    const summary: SessionSummary = {
-      session_id: sessionId,
-      doctor_id: payload.doctor_id,
-      doctor_name: payload.doctor_name ?? null,
-      doctor_specialty: payload.doctor_specialty ?? null,
-      patient_id: payload.patient_id,
-      patient_name: payload.patient_name ?? null,
-      chief_complaint: payload.chief_complaint ?? null,
-      encounter_id: null,
-      status: 'finished',
-      recording_state: 'stopped',
-      processing_state: 'completed',
-      latest_seq: 1,
-      transcript_preview: transcript.slice(0, 180),
-      stable_transcript: transcript,
-      last_error: null,
-      created_at: timestamp,
-      updated_at: timestamp,
-      started_at: timestamp,
-      stopped_at: timestamp,
-      closed_at: timestamp,
-      snapshot_available: true,
+  async importHistoricalSessions(payload: ImportRecordedSessionRequest, files: File[]) {
+    await delay(MOCK_DELAY_MS * 2);
+    const items: ImportRecordedSessionBatchResponse['items'] = files.map((file) => {
+      if (!file.name.toLowerCase().match(/\.(mp3|wav)$/)) {
+        return {
+          file_name: file.name,
+          status: 'failed',
+          session_id: null,
+          processing_state: null,
+          session: null,
+          error_code: 'UNSUPPORTED_AUDIO_FORMAT',
+          error_message: 'Загрузите MP3 или WAV файл с записью консультации.',
+        };
+      }
+
+      const detail = createImportedSession(payload);
+      return {
+        file_name: file.name,
+        status: 'accepted',
+        session_id: detail.session_id,
+        processing_state: detail.processing_state,
+        session: detail,
+        error_code: null,
+        error_message: null,
+      };
+    });
+    const acceptedCount = items.filter((item) => item.status === 'accepted').length;
+    return {
+      items,
+      accepted_count: acceptedCount,
+      failed_count: items.length - acceptedCount,
     };
+  },
 
-    const record: MockSessionRecord = {
-      request: payload,
-      summary,
-      snapshot: {
-        status: 'finished',
-        recording_state: 'stopped',
-        processing_state: 'completed',
-        latest_seq: 1,
-        transcript,
-        hints: [],
-        realtime_analysis: null,
-        knowledge_extraction: knowledgeExtraction,
-        post_session_analytics: analytics,
-        last_error: null,
-        updated_at: timestamp,
-        finalized_at: timestamp,
-      },
-      analyticsScheduled: false,
-    };
-
-    sessions.set(sessionId, record);
-    return detailFromRecord(record);
+  getSessionReportUrl(sessionId: string) {
+    return `data:application/pdf;base64,${btoa(`%PDF-1.4\n% Mock report for ${sessionId}\n`)}`;
   },
 
   async uploadAudioChunk(sessionId, file, seq, durationMs, mimeType, isFinal, analysisModel, signal) {

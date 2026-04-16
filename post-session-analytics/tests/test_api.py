@@ -124,6 +124,60 @@ def test_analyze_returns_structured_error_for_invalid_llm_json(monkeypatch):
     assert body["quality_assessment"]["metrics"]
 
 
+def test_analyze_enriches_sparse_llm_payload(monkeypatch):
+    monkeypatch.setattr(
+        routes,
+        "get_llm_client",
+        lambda: StubAnalyticsClient(
+            {
+                "medical_summary": {
+                    "clinical_narrative": "Пациент жалуется на хроническую усталость и сухость во рту.",
+                    "key_findings": [],
+                    "primary_impressions": [],
+                    "differential_diagnoses": [],
+                },
+                "critical_insights": [],
+                "follow_up_recommendations": [],
+                "quality_assessment": {
+                    "overall_score": 0.5,
+                    "metrics": [],
+                },
+            },
+            model_name="sparse-model",
+        ),
+    )
+
+    response = client.post(
+        "/analyze",
+        json={
+            "session_id": "sess-sparse",
+            "patient_id": "pat-sparse",
+            "full_transcript": "Пациент жалуется на усталость и сухость в горле.",
+            "chief_complaint": "Усталость",
+            "realtime_analysis": {
+                "suggestions": [
+                    {"type": "diagnosis_suggestion", "text": "синдром хронической усталости", "confidence": 0.8},
+                    {"type": "next_step", "text": "Проверить длительность симптомов", "confidence": 0.7},
+                ],
+                "extracted_facts": {
+                    "symptoms": ["усталость", "сухость в горле"],
+                    "conditions": [],
+                    "medications": [],
+                    "allergies": [],
+                    "vitals": {},
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["model_used"] == "sparse-model"
+    assert body["medical_summary"]["primary_impressions"]
+    assert body["follow_up_recommendations"]
+    assert body["quality_assessment"]["metrics"]
+
+
 def test_analyze_returns_fallback_payload_for_upstream_http_errors(monkeypatch):
     monkeypatch.setattr(
         routes,

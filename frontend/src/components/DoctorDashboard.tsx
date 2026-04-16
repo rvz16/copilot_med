@@ -13,7 +13,7 @@ interface ImportedSessionFormData {
   patientId: string;
   patientName: string;
   chiefComplaint: string;
-  file: File;
+  files: File[];
 }
 
 interface Props {
@@ -21,6 +21,7 @@ interface Props {
   sessions: SessionSummary[];
   loading: boolean;
   error: string | null;
+  notice: string | null;
   isStartingSession: boolean;
   isImportingSession: boolean;
   onRefresh: () => void;
@@ -36,6 +37,7 @@ export function DoctorDashboard({
   sessions,
   loading,
   error,
+  notice,
   isStartingSession,
   isImportingSession,
   onRefresh,
@@ -52,7 +54,7 @@ export function DoctorDashboard({
   const [importPatientId, setImportPatientId] = useState('');
   const [importPatientName, setImportPatientName] = useState('');
   const [importChiefComplaint, setImportChiefComplaint] = useState('');
-  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importFiles, setImportFiles] = useState<File[]>([]);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'analyzing' | 'finished'>('all');
   const [openingSessionId, setOpeningSessionId] = useState<string | null>(null);
@@ -107,19 +109,19 @@ export function DoctorDashboard({
 
   const handleImportSession = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!importFile) return;
+    if (importFiles.length === 0) return;
 
     try {
       await onImportSession({
         patientId: importPatientId,
         patientName: importPatientName,
         chiefComplaint: importChiefComplaint,
-        file: importFile,
+        files: importFiles,
       });
       setImportPatientId('');
       setImportPatientName('');
       setImportChiefComplaint('');
-      setImportFile(null);
+      setImportFiles([]);
     } catch {
       // The parent component already exposes the error state.
     }
@@ -296,13 +298,21 @@ export function DoctorDashboard({
                   id="import-audio"
                   className="upload-file-input"
                   type="file"
+                  multiple
                   accept=".mp3,.wav,audio/mpeg,audio/wav"
-                  onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
+                  onChange={(event) => setImportFiles(Array.from(event.target.files ?? []))}
                 />
                 <p className="form-helper-text">
-                  Загрузите MP3 или WAV. После загрузки MedCoPilot выполнит транскрибацию,
-                  document service и post-session analysis на всей беседе.
+                  Загрузите один или несколько MP3/WAV файлов. Каждый файл станет отдельной
+                  завершённой сессией и попадёт в очередь post-session analysis.
                 </p>
+                {importFiles.length > 0 && (
+                  <div className="selected-file-list" aria-live="polite">
+                    {importFiles.map((file) => (
+                      <span key={`${file.name}-${file.size}`}>{file.name}</span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <button
@@ -312,10 +322,10 @@ export function DoctorDashboard({
                   isImportingSession ||
                   !importPatientId.trim() ||
                   !importPatientName.trim() ||
-                  !importFile
+                  importFiles.length === 0
                 }
               >
-                {isImportingSession ? 'Разбираем запись…' : 'Создать завершённую сессию'}
+                {isImportingSession ? 'Ставим в очередь…' : 'Создать завершённые сессии'}
               </button>
             </form>
           )}
@@ -350,6 +360,7 @@ export function DoctorDashboard({
           </div>
 
           {error && <p className="inline-error">{error}</p>}
+          {notice && !error && <p className="inline-notice">{notice}</p>}
           {loading ? <p className="placeholder-text">Загружаем историю врача…</p> : null}
 
           {!loading && filteredSessions.length === 0 ? (

@@ -96,6 +96,27 @@ def test_search_uses_embedding_index_when_available(sample_data):
     assert results[0].score == 0.9123
 
 
+def test_search_backfills_pdf_result_when_embeddings_fail(sample_data):
+    csv_path, pdf_dir = sample_data
+
+    class FailingEmbeddingIndex:
+        def search(self, query: str, *, limit: int):
+            del query, limit
+            raise RuntimeError("embedding backend unavailable")
+
+    service = ClinicalRecommendationsService(
+        csv_path=csv_path,
+        pdf_dir=pdf_dir,
+        embedding_index=FailingEmbeddingIndex(),
+        embeddings_enabled=True,
+    )
+
+    results = service.search(query="полидипсия, жажда и хроническая усталость", limit=2)
+
+    assert results
+    assert any(result.entry.pdf_available for result in results)
+
+
 def test_blank_search_query_returns_400(client: TestClient):
     response = client.get(
         "/api/v1/clinical-recommendations/search",

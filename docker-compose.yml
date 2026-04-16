@@ -235,6 +235,7 @@ services:
         condition: service_healthy
     environment:
       SESSION_MANAGER_UPSTREAM: http://session-manager:8080
+      FRONTEND_CLIENT_MAX_BODY_SIZE: ${FRONTEND_CLIENT_MAX_BODY_SIZE:-64m}
     ports:
       - "3000:80"
 

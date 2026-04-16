@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+import logging
 from pathlib import Path
 import re
 
@@ -105,6 +106,11 @@ _TOKEN_SYNONYMS = {
     "миелопат": {"спинн", "мозг", "невролог"},
 }
 
+_PDF_FILENAME_PATTERN = re.compile(r"^(?:кр|kr)[\s._-]*0*(\d+)(?:[\s._-].*)?$", re.IGNORECASE)
+_PDF_NUMBER_FALLBACK_PATTERN = re.compile(r"(?<!\d)0*(\d{1,5})(?!\d)")
+
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True)
 class ClinicalRecommendationEntry:
@@ -168,6 +174,56 @@ def _expand_query_tokens(tokens: set[str]) -> set[str]:
     return expanded
 
 
+def _build_pdf_lookup(pdf_dir: Path) -> dict[int, Path]:
+    candidates_by_number: dict[int, list[Path]] = {}
+    for path in pdf_dir.iterdir():
+        if not path.is_file() or path.suffix.casefold() != ".pdf":
+            continue
+        pdf_number = _extract_pdf_number_from_filename(path)
+        if pdf_number is None:
+            continue
+        candidates_by_number.setdefault(pdf_number, []).append(path)
+
+    return {
+        number: _select_preferred_pdf_path(number=number, candidates=candidates)
+        for number, candidates in candidates_by_number.items()
+    }
+
+
+def _select_preferred_pdf_path(*, number: int, candidates: list[Path]) -> Path:
+    return min(
+        candidates,
+        key=lambda path: _pdf_candidate_sort_key(path=path, number=number),
+    )
+
+
+def _pdf_candidate_sort_key(*, path: Path, number: int) -> tuple[int, int, str]:
+    normalized_stem = re.sub(r"[\s._-]+", "", path.stem.casefold())
+    metadata_rank = 1 if path.name.startswith("._") else 0
+    if normalized_stem == f"кр{number}":
+        rank = 0
+    elif normalized_stem == f"kr{number}":
+        rank = 1
+    elif normalized_stem.startswith(f"кр{number}"):
+        rank = 2
+    elif normalized_stem.startswith(f"kr{number}"):
+        rank = 3
+    else:
+        rank = 4
+    return metadata_rank, rank, len(normalized_stem), path.name.casefold()
+
+
+def _extract_pdf_number_from_filename(path: Path) -> int | None:
+    match = _PDF_FILENAME_PATTERN.match(path.stem)
+    if match is not None:
+        return int(match.group(1))
+
+    fallback_match = _PDF_NUMBER_FALLBACK_PATTERN.search(path.stem)
+    if fallback_match is not None:
+        return int(fallback_match.group(1))
+    return None
+
+
 class ClinicalRecommendationsService:
     """Load official recommendations from CSV and expose lookup and search helpers."""
 
@@ -223,16 +279,28 @@ class ClinicalRecommendationsService:
             )
 
         lexical_results = self._search_by_lexical(normalized_query=normalized_query, limit=None)
-        embedding_results = self._search_by_embeddings(query=query, limit=max(limit * 20, 100))
+        embedding_results: list[SearchResult] = []
+        try:
+            embedding_results = self._search_by_embeddings(query=query, limit=max(limit * 20, 100))
+        except Exception as exc:
+            logger.warning("Embedding search failed for query %r, falling back to lexical ranking: %s", query, exc)
         if embedding_results:
             hybrid_results = self._merge_search_results(
                 embedding_results=embedding_results,
                 lexical_results=lexical_results,
             )
             if hybrid_results:
-                return hybrid_results[:limit]
+                return self._ensure_pdf_backfill(
+                    results=hybrid_results,
+                    normalized_query=normalized_query,
+                    limit=limit,
+                )
 
-        return lexical_results[:limit]
+        return self._ensure_pdf_backfill(
+            results=lexical_results,
+            normalized_query=normalized_query,
+            limit=limit,
+        )
 
     def _search_by_lexical(self, *, normalized_query: str, limit: int | None) -> list[SearchResult]:
         if not normalized_query:
@@ -340,6 +408,58 @@ class ClinicalRecommendationsService:
         )
         return merged
 
+    def _ensure_pdf_backfill(
+        self,
+        *,
+        results: list[SearchResult],
+        normalized_query: str,
+        limit: int,
+    ) -> list[SearchResult]:
+        trimmed = results[:limit]
+        if limit <= 0:
+            return []
+        if any(result.entry.pdf_available for result in trimmed):
+            return trimmed
+
+        backfill = self._search_pdf_backfill(normalized_query=normalized_query, limit=limit)
+        if not backfill:
+            return trimmed
+
+        existing_ids = {result.entry.id for result in trimmed}
+        for candidate in backfill:
+            if candidate.entry.id in existing_ids:
+                continue
+            if len(trimmed) < limit:
+                trimmed.append(candidate)
+            else:
+                trimmed[-1] = candidate
+            break
+        return trimmed
+
+    def _search_pdf_backfill(self, *, normalized_query: str, limit: int) -> list[SearchResult]:
+        query_tokens = set(_tokenize(normalized_query))
+        expanded_query_tokens = _expand_query_tokens(query_tokens) if query_tokens else set()
+        candidates = [entry for entry in self._entries if entry.pdf_available] or self._entries
+
+        scored: list[SearchResult] = []
+        for entry in candidates:
+            overlap = len(expanded_query_tokens & entry.search_tokens)
+            sequence_ratio = SequenceMatcher(None, normalized_query, entry.normalized_title).ratio()
+            score = round((0.08 * overlap) + (0.12 * sequence_ratio), 4)
+            if score <= 0:
+                continue
+            scored.append(SearchResult(entry=entry, score=score))
+
+        scored.sort(
+            key=lambda item: (
+                -item.score,
+                not item.entry.pdf_available,
+                item.entry.title.lower(),
+                item.entry.id,
+            ),
+        )
+        return scored[:limit]
+
     def _score_entry(
         self,
         *,
@@ -406,6 +526,7 @@ class ClinicalRecommendationsService:
         if not pdf_dir.is_dir():
             raise RuntimeError(f"Clinical recommendations PDF directory not found: {pdf_dir}")
 
+        pdf_lookup = _build_pdf_lookup(pdf_dir)
         entries: list[ClinicalRecommendationEntry] = []
         with csv_path.open("r", encoding="utf-8-sig", newline="") as file_obj:
             reader = csv.DictReader(file_obj, delimiter=";")
@@ -413,7 +534,8 @@ class ClinicalRecommendationsService:
                 recommendation_id = row["ID"].strip()
                 pdf_number = ClinicalRecommendationsService._extract_pdf_number(recommendation_id)
                 pdf_filename = f"КР{pdf_number}.pdf"
-                pdf_path = pdf_dir / pdf_filename
+                expected_pdf_path = pdf_dir / pdf_filename
+                pdf_path = expected_pdf_path if expected_pdf_path.is_file() else pdf_lookup.get(pdf_number)
                 title = row["Наименование"].strip()
                 entries.append(
                     ClinicalRecommendationEntry(
@@ -429,8 +551,8 @@ class ClinicalRecommendationsService:
                         application_status=row["Статус применения"].strip(),
                         pdf_number=pdf_number,
                         pdf_filename=pdf_filename,
-                        pdf_available=pdf_path.is_file(),
-                        pdf_path=pdf_path if pdf_path.is_file() else None,
+                        pdf_available=pdf_path is not None and pdf_path.is_file(),
+                        pdf_path=pdf_path if pdf_path is not None and pdf_path.is_file() else None,
                         normalized_title=_normalize_text(title),
                         search_tokens=frozenset(_tokenize(title)),
                     )

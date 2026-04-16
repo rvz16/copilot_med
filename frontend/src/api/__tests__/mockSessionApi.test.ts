@@ -108,6 +108,34 @@ describe('mockSessionApi', () => {
     expect(res.snapshot?.knowledge_extraction).not.toBeNull();
   });
 
+  it('importHistoricalSessions creates one archive session per supported file', async () => {
+    const responsePromise = mockSessionApi.importHistoricalSessions(
+      {
+        doctor_id: 'doc_1',
+        doctor_name: 'Dr. Amelia Carter',
+        doctor_specialty: 'Family Medicine',
+        patient_id: 'pat_batch_1',
+        patient_name: 'Olivia Bennett',
+        chief_complaint: 'Recurring headache',
+      },
+      [
+        new File(['audio'], 'first.mp3', { type: 'audio/mpeg' }),
+        new File(['audio'], 'second.wav', { type: 'audio/wav' }),
+        new File(['audio'], 'bad.ogg', { type: 'audio/ogg' }),
+      ],
+    );
+    await vi.runAllTimersAsync();
+    const res = await responsePromise;
+
+    expect(res.accepted_count).toBe(2);
+    expect(res.failed_count).toBe(1);
+    expect(res.items.filter((item) => item.session_id).map((item) => item.session_id)).toHaveLength(2);
+  });
+
+  it('getSessionReportUrl returns a PDF URL for mock archives', () => {
+    expect(mockSessionApi.getSessionReportUrl('mock_sess_1')).toMatch(/^data:application\/pdf;base64,/);
+  });
+
   it('uploadAudioChunk returns hints on odd seq numbers', async () => {
     const createdPromise = mockSessionApi.createSession({
       doctor_id: 'doc_1',

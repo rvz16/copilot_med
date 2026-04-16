@@ -42,6 +42,7 @@ export default function App() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
+  const [sessionsNotice, setSessionsNotice] = useState<string | null>(null);
   const [isStartingSession, setIsStartingSession] = useState(false);
   const [isImportingSession, setIsImportingSession] = useState(false);
   const [isClosingSession, setIsClosingSession] = useState(false);
@@ -141,6 +142,7 @@ export default function App() {
     setSelectedAnalysisModel(null);
     setSessions([]);
     setSessionsError(null);
+    setSessionsNotice(null);
     setScreen('landing');
   }, [recorder, session, uploader]);
 
@@ -163,6 +165,7 @@ export default function App() {
     try {
       setIsStartingSession(true);
       setSessionsError(null);
+      setSessionsNotice(null);
       recorder.resetRecorder();
       uploader.resetUploader();
       session.resetSession();
@@ -188,6 +191,7 @@ export default function App() {
   const handleOpenSession = useCallback(async (sessionId: string) => {
     try {
       setSessionsError(null);
+      setSessionsNotice(null);
       const detail = await api.getSession(sessionId);
       setSelectedSession(detail);
       setWorkspaceMode('archive');
@@ -201,6 +205,7 @@ export default function App() {
   const handleDeleteSession = useCallback(async (sessionId: string) => {
     try {
       setSessionsError(null);
+      setSessionsNotice(null);
       await api.deleteSession(sessionId);
       setSessions((prev) => prev.filter((sessionItem) => sessionItem.session_id !== sessionId));
       if (selectedSession?.session_id === sessionId) {
@@ -218,9 +223,10 @@ export default function App() {
     patientId: string;
     patientName: string;
     chiefComplaint: string;
-    file: File;
+    files: File[];
   }) => {
     if (!activeDoctor) return;
+    if (payload.files.length === 0) return;
 
     const importPayload: CreateSessionRequest = {
       doctor_id: activeDoctor.id,
@@ -234,16 +240,33 @@ export default function App() {
     try {
       setIsImportingSession(true);
       setSessionsError(null);
+      setSessionsNotice(null);
       recorder.resetRecorder();
       uploader.resetUploader();
       session.resetSession();
       setLiveSessionProfile(null);
       setSelectedSession(null);
 
-      const detail = await api.importHistoricalSession(importPayload, payload.file);
-      setSelectedSession(detail);
-      setWorkspaceMode('archive');
-      setScreen('workspace');
+      if (payload.files.length === 1) {
+        const detail = await api.importHistoricalSession(importPayload, payload.files[0]);
+        setSelectedSession(detail);
+        setWorkspaceMode('archive');
+        setScreen('workspace');
+      } else {
+        const result = await api.importHistoricalSessions(importPayload, payload.files);
+        if (result.accepted_count === 0) {
+          const firstError = result.items.find((item) => item.error_message)?.error_message;
+          throw new Error(firstError || 'Не удалось импортировать выбранные записи');
+        }
+        setSelectedSession(null);
+        setWorkspaceMode('archive');
+        setScreen('dashboard');
+        setSessionsNotice(
+          result.failed_count > 0
+            ? `В очередь добавлено ${result.accepted_count}; не удалось импортировать ${result.failed_count}.`
+            : `В очередь post-session analysis добавлено ${result.accepted_count} сессии.`,
+        );
+      }
       await refreshSessions(activeDoctor);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось импортировать завершённую сессию';
@@ -397,6 +420,7 @@ export default function App() {
           sessions={sessions}
           loading={sessionsLoading}
           error={sessionsError ?? session.error}
+          notice={sessionsNotice}
           isStartingSession={isStartingSession}
           isImportingSession={isImportingSession}
           onRefresh={() => void refreshSessions()}
@@ -446,6 +470,11 @@ export default function App() {
           analysis={selectedSession.snapshot?.realtime_analysis ?? null}
           knowledgeExtraction={selectedSession.snapshot?.knowledge_extraction ?? null}
           postSessionAnalytics={selectedSession.snapshot?.post_session_analytics ?? null}
+          reportUrl={
+            selectedSession.status === 'finished'
+              ? api.getSessionReportUrl(selectedSession.session_id)
+              : null
+          }
           chunksUploaded={selectedSession.snapshot?.latest_seq ?? selectedSession.latest_seq}
           uploadStatus="idle"
           isRecording={false}

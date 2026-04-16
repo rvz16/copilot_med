@@ -13,6 +13,7 @@ import type {
   ListSessionsResponse,
   SessionDetail,
   StopRecordingResponse,
+  ImportRecordedSessionBatchResponse,
 } from '../../types/types';
 
 // Test helpers.
@@ -135,6 +136,41 @@ describe('sessionApi', () => {
     expect(opts.method).toBe('POST');
     expect(opts.body).toBeInstanceOf(FormData);
     expect(result.status).toBe('finished');
+  });
+
+  it('importHistoricalSessions sends all selected files to the batch endpoint', async () => {
+    const response: ImportRecordedSessionBatchResponse = {
+      items: [],
+      accepted_count: 2,
+      failed_count: 0,
+    };
+    globalThis.fetch = mockFetchOk(response);
+
+    const result = await sessionApi.importHistoricalSessions(
+      {
+        doctor_id: 'doc_1',
+        doctor_name: 'Dr. Amelia Carter',
+        doctor_specialty: 'Family Medicine',
+        patient_id: 'pat_1',
+        patient_name: 'Olivia Bennett',
+        chief_complaint: 'Recurring headache',
+      },
+      [
+        new File(['audio'], 'first.mp3', { type: 'audio/mpeg' }),
+        new File(['audio'], 'second.wav', { type: 'audio/wav' }),
+      ],
+    );
+
+    const [url, opts] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toContain('/api/v1/sessions/import-audio/batch');
+    expect(opts.method).toBe('POST');
+    expect(opts.body).toBeInstanceOf(FormData);
+    expect((opts.body as FormData).getAll('files')).toHaveLength(2);
+    expect(result.accepted_count).toBe(2);
+  });
+
+  it('getSessionReportUrl builds the completed-session PDF endpoint', () => {
+    expect(sessionApi.getSessionReportUrl('sess_1')).toContain('/api/v1/sessions/sess_1/report.pdf');
   });
 
   /* uploadAudioChunk */
@@ -318,6 +354,23 @@ describe('sessionApi', () => {
       sessionApi.createSession({ doctor_id: '', patient_id: 'pat_1' }),
     ).rejects.toThrow(
       'doctor_id is required',
+    );
+  });
+
+  it('maps bare 413 responses to a readable upload size error', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 413,
+      json: () => Promise.reject(new Error('not json')),
+    } as unknown as Response);
+
+    await expect(
+      sessionApi.importHistoricalSessions(
+        { doctor_id: 'doc_1', patient_id: 'pat_1' },
+        [new File(['audio'], 'consultation.wav', { type: 'audio/wav' })],
+      ),
+    ).rejects.toThrow(
+      'Размер загружаемых файлов превышает допустимый лимит.',
     );
   });
 });

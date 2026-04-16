@@ -4,6 +4,7 @@ interface Props {
   analytics: PostSessionAnalytics | null;
   status?: string;
   clinicalRecommendations?: RecommendedDocument[];
+  reportUrl?: string | null;
 }
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -55,6 +56,7 @@ export function PostSessionAnalyticsPanel({
   analytics,
   status,
   clinicalRecommendations = [],
+  reportUrl,
 }: Props) {
   if (!analytics) {
     if (status !== 'analyzing') {
@@ -87,7 +89,14 @@ export function PostSessionAnalyticsPanel({
     <section className="panel psa-panel" id="post-session-analytics-panel">
       <div className="psa-header">
         <h2>Результаты Post-Session Analytics</h2>
-        <span className="psa-badge">готово</span>
+        <div className="psa-header-actions">
+          {reportUrl && (
+            <a className="psa-report-button" href={reportUrl} download>
+              Скачать PDF
+            </a>
+          )}
+          <span className="psa-badge">готово</span>
+        </div>
       </div>
 
       <div className="psa-context-grid">

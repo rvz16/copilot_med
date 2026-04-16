@@ -9,6 +9,7 @@ from app.schemas.session import (
     CreateSessionResponse,
     ExtractionsResponse,
     HintsResponse,
+    ImportAudioBatchResponse,
     ListSessionsResponse,
     SessionDetailResponse,
     StopRecordingRequest,
@@ -57,6 +58,33 @@ def import_audio_session(
         file_name=file.filename,
         mime_type=file.content_type,
         file_bytes=file_bytes,
+        doctor_name=doctor_name,
+        doctor_specialty=doctor_specialty,
+        patient_name=patient_name,
+        chief_complaint=chief_complaint,
+    )
+
+
+@router.post(
+    "/sessions/import-audio/batch",
+    response_model=ImportAudioBatchResponse,
+    summary="Create completed consultations from multiple uploaded audio recordings",
+)
+def import_audio_sessions_batch(
+    doctor_id: str = Form(...),
+    patient_id: str = Form(...),
+    files: list[UploadFile] = File(...),
+    doctor_name: str | None = Form(default=None),
+    doctor_specialty: str | None = Form(default=None),
+    patient_name: str | None = Form(default=None),
+    chief_complaint: str | None = Form(default=None),
+    service: SessionService = Depends(get_session_service),
+) -> ImportAudioBatchResponse:
+    uploaded_files = [(uploaded.filename, uploaded.content_type, uploaded.file.read()) for uploaded in files]
+    return service.import_recorded_sessions(
+        doctor_id=doctor_id,
+        patient_id=patient_id,
+        files=uploaded_files,
         doctor_name=doctor_name,
         doctor_specialty=doctor_specialty,
         patient_name=patient_name,
@@ -115,6 +143,19 @@ def get_session(
     service: SessionService = Depends(get_session_service),
 ) -> SessionDetailResponse:
     return service.get_session(session_id)
+
+
+@router.get("/sessions/{session_id}/report.pdf", summary="Download a completed session PDF report")
+def download_session_report_pdf(
+    session_id: str,
+    service: SessionService = Depends(get_session_service),
+) -> Response:
+    content, media_type, content_disposition = service.download_session_report_pdf(session_id)
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"content-disposition": content_disposition},
+    )
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete session")

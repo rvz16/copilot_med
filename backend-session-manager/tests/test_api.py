@@ -148,6 +148,38 @@ def test_import_audio_session_rejects_unsupported_format(client: TestClient):
     assert response.json()["error"]["code"] == "UNSUPPORTED_AUDIO_FORMAT"
 
 
+def test_import_audio_batch_creates_one_session_per_valid_file(client: TestClient):
+    response = client.post(
+        "/api/v1/sessions/import-audio/batch",
+        data={
+            "doctor_id": "doc_001",
+            "doctor_name": "Dr. Amelia Carter",
+            "doctor_specialty": "Family Medicine",
+            "patient_id": "pat_001",
+            "patient_name": "Olivia Bennett",
+            "chief_complaint": "Recurring headache",
+        },
+        files=[
+            ("files", ("first.mp3", b"fake-audio-one", "audio/mpeg")),
+            ("files", ("second.wav", b"fake-audio-two", "audio/wav")),
+            ("files", ("bad.ogg", b"fake-audio-three", "audio/ogg")),
+        ],
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["accepted_count"] == 2
+    assert body["failed_count"] == 1
+    assert [item["status"] for item in body["items"]] == ["accepted", "accepted", "failed"]
+    accepted_session_ids = [item["session_id"] for item in body["items"] if item["session_id"]]
+    assert len(set(accepted_session_ids)) == 2
+
+    wait_for_post_session_queue(client)
+    list_response = client.get("/api/v1/sessions", params={"doctor_id": "doc_001"})
+    assert list_response.status_code == 200
+    assert list_response.json()["total"] == 2
+
+
 def test_upload_chunk_success_for_seq_one(client: TestClient):
     session_id = create_session(client)
 
@@ -290,6 +322,34 @@ def test_get_session_returns_profile_and_snapshot(client: TestClient):
     assert body["snapshot"]["performance_metrics"]["post_session_analysis"] == {"processing_time_ms": 150}
     assert body["snapshot"]["performance_metrics"]["realtime_analysis"] is None
     assert body["snapshot"]["finalized_at"] is not None
+
+
+def test_download_session_report_pdf_after_analysis_completes(client: TestClient):
+    session_id = create_session(client)
+    upload_chunk(client, session_id, seq=1, is_final=True)
+    client.post(
+        f"/api/v1/sessions/{session_id}/close",
+        json={"trigger_post_session_analytics": True},
+    )
+    wait_for_post_session_queue(client)
+
+    response = client.get(f"/api/v1/sessions/{session_id}/report.pdf")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.headers["content-disposition"].startswith(
+        f'attachment; filename="medcopilot-report-{session_id}'
+    )
+    assert response.content.startswith(b"%PDF")
+
+
+def test_download_session_report_pdf_requires_finished_session(client: TestClient):
+    session_id = create_session(client)
+
+    response = client.get(f"/api/v1/sessions/{session_id}/report.pdf")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "SESSION_NOT_FINISHED"
 
 
 def test_list_sessions_filters_by_doctor_and_returns_snapshot_flag(client: TestClient):

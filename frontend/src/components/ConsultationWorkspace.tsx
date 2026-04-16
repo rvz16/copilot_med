@@ -39,6 +39,7 @@ interface Props {
   analysis: RealtimeAnalysis | null;
   knowledgeExtraction?: KnowledgeExtraction | null;
   postSessionAnalytics?: PostSessionAnalytics | null;
+  reportUrl?: string | null;
   chunksUploaded: number;
   uploadStatus: UploadStatus;
   isRecording: boolean;
@@ -75,6 +76,7 @@ export function ConsultationWorkspace({
   analysis,
   knowledgeExtraction,
   postSessionAnalytics,
+  reportUrl,
   chunksUploaded,
   uploadStatus,
   isRecording,
@@ -161,6 +163,7 @@ export function ConsultationWorkspace({
               analytics={postSessionAnalytics ?? null}
               status={status}
               clinicalRecommendations={recommendedDocuments}
+              reportUrl={reportUrl}
             />
           )}
           {mode === 'archive' && (

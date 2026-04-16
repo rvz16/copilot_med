@@ -505,12 +505,36 @@ button:disabled,
   line-height: 1.55;
 }
 
+.selected-file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.selected-file-list span {
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(46, 122, 114, 0.09);
+  color: var(--text);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
 .inline-error {
   margin: 0;
   padding: 12px 14px;
   border-radius: 16px;
   background: rgba(178, 68, 45, 0.09);
   color: var(--danger);
+}
+
+.inline-notice {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(46, 122, 114, 0.09);
+  color: #2e7a72;
 }
 
 .dashboard-header,
@@ -1076,6 +1100,33 @@ button:disabled,
   margin: 0;
   font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
   letter-spacing: -0.02em;
+}
+
+.psa-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.psa-report-button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(46, 122, 114, 0.11);
+  color: #2e7a72;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.psa-report-button:hover {
+  background: rgba(46, 122, 114, 0.17);
 }
 
 .psa-context-grid {

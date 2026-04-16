@@ -23,6 +23,7 @@ FROM nginx:alpine
 
 # Default upstream for API proxy
 ENV SESSION_MANAGER_UPSTREAM=http://session-manager:8080
+ENV FRONTEND_CLIENT_MAX_BODY_SIZE=64m
 
 # Copy nginx config template
 COPY nginx.conf /etc/nginx/templates/default.conf.template
