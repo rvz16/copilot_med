@@ -253,10 +253,22 @@ class TranscriptEventResponse(ApiBaseModel):
     created_at: datetime
 
 
+class DiarizedTranscriptSegmentResponse(ApiBaseModel):
+    speaker: str
+    text: str
+
+
+class TranscriptDiarizationResponse(ApiBaseModel):
+    model_used: str
+    formatted_text: str
+    segments: list[DiarizedTranscriptSegmentResponse] = Field(default_factory=list)
+
+
 class TranscriptResponse(ApiBaseModel):
     session_id: str
     stable_text: str
     events: list[TranscriptEventResponse]
+    diarization: TranscriptDiarizationResponse | None = None
 
 
 class HintListItem(ApiBaseModel):

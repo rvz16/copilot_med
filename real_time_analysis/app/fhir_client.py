@@ -1,8 +1,10 @@
 """FHIR R4 client for loading patient context from a FHIR server."""
 from __future__ import annotations
 
+import json
 import logging
 import os
+import re
 from typing import Any
 
 import httpx
@@ -10,17 +12,41 @@ import httpx
 logger = logging.getLogger("medcopilot.fhir")
 
 DEFAULT_FHIR_BASE_URL = os.getenv("FHIR_BASE_URL", "http://158.160.84.63:8092/hapi-fhir-jpaserver/fhir")
+DEFAULT_FHIR_HEADERS_JSON = os.getenv("FHIR_HEADERS_JSON", "")
+DEFAULT_FHIR_VERIFY_SSL = os.getenv("FHIR_VERIFY_SSL", "true").strip().lower() not in {"0", "false", "no"}
 
 
 class FHIRClient:
     """Async client for patient demographics and prior clinical context over FHIR."""
 
-    def __init__(self, base_url: str | None = None, timeout: float = 5.0) -> None:
+    _noise_prefixes = (
+        "понимаю",
+        "давайте",
+        "опишите",
+        "расскажите",
+        "скажите",
+        "как ",
+        "когда ",
+        "почему ",
+        "это ",
+    )
+
+    def __init__(
+        self,
+        base_url: str | None = None,
+        timeout: float = 5.0,
+        headers_json: str | None = None,
+        verify_ssl: bool | None = None,
+    ) -> None:
         self.base_url = (base_url or DEFAULT_FHIR_BASE_URL).rstrip("/")
         self.timeout = timeout
+        self.verify_ssl = DEFAULT_FHIR_VERIFY_SSL if verify_ssl is None else verify_ssl
+        headers = {"Accept": "application/fhir+json"}
+        headers.update(self._parse_headers_json(headers_json or DEFAULT_FHIR_HEADERS_JSON))
         self._client = httpx.AsyncClient(
             timeout=self.timeout,
-            headers={"Accept": "application/fhir+json"},
+            headers=headers,
+            verify=self.verify_ssl,
         )
 
     async def get_patient_context(self, patient_id: str) -> dict[str, Any] | None:
@@ -83,10 +109,9 @@ class FHIRClient:
     async def close(self) -> None:
         await self._client.aclose()
 
-    # Build the structured patient context payload.
-
-    @staticmethod
+    @classmethod
     def _build_context(
+        cls,
         patient: dict,
         conditions: list[dict],
         medication_requests: list[dict],
@@ -94,54 +119,52 @@ class FHIRClient:
         allergies: list[dict],
         observations: list[dict],
     ) -> dict[str, Any]:
-        # Patient demographics.
-        name = FHIRClient._extract_name(patient)
+        name = cls._extract_name(patient)
         gender = patient.get("gender")
         birth_date = patient.get("birthDate")
 
-        # Conditions.
         condition_list: list[str] = []
-        for c in conditions:
-            code = c.get("code", {})
-            text = code.get("text") or _first_coding_display(code)
-            if text:
+        for condition in conditions:
+            if cls._resource_reference_id(condition.get("subject")) == "string":
+                continue
+            code = condition.get("code", {})
+            text = cls._clean_display_text(code.get("text") or _first_coding_display(code))
+            if cls._is_meaningful_context_text(text):
                 condition_list.append(text)
 
-        # Medications.
         med_list: list[str] = []
-        for m in [*medication_requests, *medication_statements]:
-            med_code = m.get("medicationCodeableConcept", {})
-            text = med_code.get("text") or _first_coding_display(med_code)
-            if text:
+        for medication in [*medication_requests, *medication_statements]:
+            if cls._resource_reference_id(medication.get("subject")) == "string":
+                continue
+            med_code = medication.get("medicationCodeableConcept", {})
+            text = cls._clean_display_text(med_code.get("text") or _first_coding_display(med_code))
+            if cls._is_meaningful_context_text(text):
                 med_list.append(text)
 
-        # Allergies.
         allergy_list: list[str] = []
-        for a in allergies:
-            code = a.get("code", {})
-            text = code.get("text") or _first_coding_display(code)
-            if text:
+        for allergy in allergies:
+            if cls._resource_reference_id(allergy.get("patient")) == "string":
+                continue
+            code = allergy.get("code", {})
+            text = cls._clean_display_text(code.get("text") or _first_coding_display(code))
+            if cls._is_meaningful_context_text(text):
                 allergy_list.append(text)
 
-        # Observations.
         observation_list: list[str] = []
-        for o in observations:
-            value = o.get("valueString")
-            if isinstance(value, str) and value.strip():
-                observation_list.append(value.strip())
+        for observation in observations:
+            if cls._resource_reference_id(observation.get("subject")) == "string":
                 continue
-            code = o.get("code", {})
-            text = code.get("text") or _first_coding_display(code)
-            if text:
+            text = cls._extract_observation_display(observation)
+            if cls._is_meaningful_context_text(text):
                 observation_list.append(text)
 
         return {
             "patient_name": name,
             "gender": gender,
             "birth_date": birth_date,
-            "conditions": condition_list,
+            "conditions": list(dict.fromkeys(condition_list)),
             "medications": list(dict.fromkeys(med_list)),
-            "allergies": allergy_list,
+            "allergies": list(dict.fromkeys(allergy_list)),
             "observations": list(dict.fromkeys(observation_list)),
         }
 
@@ -150,9 +173,85 @@ class FHIRClient:
         names = patient.get("name", [])
         if not names:
             return None
-        n = names[0]
-        parts = n.get("given", []) + ([n["family"]] if "family" in n else [])
-        return " ".join(parts) if parts else n.get("text")
+        name = names[0]
+        parts = name.get("given", []) + ([name["family"]] if "family" in name else [])
+        return " ".join(parts) if parts else name.get("text")
+
+    @classmethod
+    def _extract_observation_display(cls, observation: dict[str, Any]) -> str | None:
+        value_string = cls._clean_display_text(observation.get("valueString"))
+        if value_string:
+            return value_string
+
+        code = observation.get("code", {})
+        label = cls._clean_display_text(code.get("text") or _first_coding_display(code))
+
+        quantity = observation.get("valueQuantity")
+        if isinstance(quantity, dict):
+            value = quantity.get("value")
+            unit = cls._clean_display_text(quantity.get("unit") or quantity.get("code"))
+            if value is not None:
+                if label and unit:
+                    return f"{label}: {value} {unit}"
+                if label:
+                    return f"{label}: {value}"
+                if unit:
+                    return f"{value} {unit}"
+                return str(value)
+
+        value_codeable_concept = observation.get("valueCodeableConcept")
+        if isinstance(value_codeable_concept, dict):
+            value_text = cls._clean_display_text(
+                value_codeable_concept.get("text") or _first_coding_display(value_codeable_concept)
+            )
+            if label and value_text:
+                return f"{label}: {value_text}"
+            if value_text:
+                return value_text
+
+        return label
+
+    @staticmethod
+    def _resource_reference_id(reference: Any) -> str | None:
+        if not isinstance(reference, dict):
+            return None
+        raw_reference = reference.get("reference")
+        if not isinstance(raw_reference, str) or "/" not in raw_reference:
+            return None
+        return raw_reference.rsplit("/", 1)[-1]
+
+    @staticmethod
+    def _clean_display_text(value: Any) -> str | None:
+        if not isinstance(value, str):
+            return None
+        text = re.sub(r"\s+", " ", value).strip(" \t\r\n-:.")
+        return text or None
+
+    @classmethod
+    def _is_meaningful_context_text(cls, value: str | None) -> bool:
+        if not value:
+            return False
+        normalized = value.casefold()
+        if "?" in normalized:
+            return False
+        if any(normalized.startswith(prefix) for prefix in cls._noise_prefixes):
+            return False
+        if "structured soap note" in normalized or "soap-заметка" in normalized:
+            return False
+        return True
+
+    @staticmethod
+    def _parse_headers_json(raw: str) -> dict[str, str]:
+        if not raw.strip():
+            return {}
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            logger.warning("Invalid FHIR_HEADERS_JSON, ignoring custom headers")
+            return {}
+        if not isinstance(parsed, dict):
+            return {}
+        return {str(key): str(value) for key, value in parsed.items() if isinstance(key, str)}
 
     @staticmethod
     def format_context_for_prompt(ctx: dict[str, Any]) -> str:

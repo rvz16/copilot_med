@@ -40,6 +40,7 @@ from app.schemas.session import (
     SessionDetailResponse,
     SessionSummaryResponse,
     StopRecordingResponse,
+    TranscriptDiarizationResponse,
     TranscriptEventResponse,
     TranscriptResponse,
     TranscriptUpdate,
@@ -62,6 +63,7 @@ logger = logging.getLogger(__name__)
 PUBLIC_SESSION_STATUS_ACTIVE = "active"
 PUBLIC_SESSION_STATUS_ANALYZING = "analyzing"
 PUBLIC_SESSION_STATUS_FINISHED = "finished"
+RECOMMENDATION_QUERY_MAX_CHARS = 220
 
 SUPPORTED_IMPORTED_AUDIO_MIME_TYPES = {
     "audio/mpeg": "audio/mpeg",
@@ -550,10 +552,6 @@ class SessionService:
         analysis: RealtimeAnalysisResponse,
         limit: int = 1,
     ) -> list[RecommendedDocumentResponse]:
-        query = (session.stable_transcript or session.current_transcript or "").strip()
-        if not query:
-            return []
-
         diagnosis_candidates = [
             suggestion
             for suggestion in analysis.suggestions
@@ -564,6 +562,15 @@ class SessionService:
             if diagnosis_candidates
             else None
         )
+        chief_complaint = session.profile.chief_complaint if session.profile else None
+        query = self._build_recommendation_search_query(
+            transcript=session.stable_transcript or session.current_transcript or "",
+            diagnosis=top_diagnosis.text if top_diagnosis is not None else None,
+            chief_complaint=chief_complaint,
+        )
+        if not query:
+            return []
+
         matched_query = self._recommendation_matched_query_label(
             query=query,
             diagnosis=top_diagnosis.text if top_diagnosis is not None else None,
@@ -720,6 +727,7 @@ class SessionService:
             .where(TranscriptEvent.session_db_id == session.id)
             .order_by(TranscriptEvent.created_at.asc(), TranscriptEvent.id.asc())
         ).all()
+        diarization = self._extract_transcript_diarization(self._build_post_analytics_snapshot(session))
         return TranscriptResponse(
             session_id=session.session_id,
             stable_text=session.stable_transcript or "",
@@ -734,6 +742,11 @@ class SessionService:
                 )
                 for event in events
             ],
+            diarization=(
+                TranscriptDiarizationResponse.model_validate(diarization)
+                if isinstance(diarization, dict)
+                else None
+            ),
         )
 
     def get_hints(self, session_id: str) -> HintsResponse:
@@ -1046,6 +1059,7 @@ class SessionService:
                 ("post_analytics_insights", "critical_insights"),
                 ("post_analytics_recommendations", "follow_up_recommendations"),
                 ("post_analytics_quality", "quality_assessment"),
+                ("post_analytics_diarization", "diarization"),
             ):
                 if key in response:
                     self.db.add(
@@ -1097,9 +1111,6 @@ class SessionService:
             summary = {}
 
         candidates: list[tuple[str, str]] = []
-        transcript_query = (session.stable_transcript or session.current_transcript or "").strip()
-        if transcript_query:
-            candidates.append((transcript_query, "транскрипт консультации"))
         for key in ("primary_impressions", "differential_diagnoses"):
             values = summary.get(key, [])
             if not isinstance(values, list):
@@ -1109,6 +1120,12 @@ class SessionService:
                     normalized = value.strip()
                     if normalized and all(normalized != query for query, _ in candidates):
                         candidates.append((normalized, normalized))
+        transcript_query = self._build_recommendation_search_query(
+            transcript=session.stable_transcript or session.current_transcript or "",
+            chief_complaint=session.profile.chief_complaint if session.profile else None,
+        )
+        if transcript_query and all(transcript_query != query for query, _ in candidates):
+            candidates.append((transcript_query, "транскрипт консультации"))
 
         if not candidates:
             return []
@@ -1183,6 +1200,34 @@ class SessionService:
 
         return results
 
+    @staticmethod
+    def _build_recommendation_search_query(
+        *,
+        transcript: str,
+        diagnosis: str | None = None,
+        chief_complaint: str | None = None,
+        max_chars: int = RECOMMENDATION_QUERY_MAX_CHARS,
+    ) -> str:
+        for candidate in (diagnosis, chief_complaint):
+            normalized = " ".join((candidate or "").split())
+            if normalized:
+                return normalized
+
+        normalized_transcript = " ".join((transcript or "").split())
+        if not normalized_transcript:
+            return ""
+        if len(normalized_transcript) <= max_chars:
+            return normalized_transcript
+
+        clipped = normalized_transcript[:max_chars]
+        sentence_break = max(clipped.rfind(". "), clipped.rfind("! "), clipped.rfind("? "), clipped.rfind("; "))
+        if sentence_break >= int(max_chars * 0.5):
+            return clipped[: sentence_break + 1].strip()
+        word_break = clipped.rfind(" ")
+        if word_break >= int(max_chars * 0.6):
+            return clipped[:word_break].strip()
+        return clipped.strip()
+
     def _find_recording_path(self, session_id: str):
         session_dir = self._session_storage_dir(session_id)
         if not session_dir.exists():
@@ -1254,6 +1299,13 @@ class SessionService:
         if not isinstance(full_text, str) or not full_text.strip():
             return None
         return full_text
+
+    @staticmethod
+    def _extract_transcript_diarization(post_analytics_snapshot: dict | None) -> dict | None:
+        if not isinstance(post_analytics_snapshot, dict):
+            return None
+        diarization = post_analytics_snapshot.get("diarization")
+        return diarization if isinstance(diarization, dict) else None
 
     def _build_performance_metrics_snapshot(self, session: SessionRecord) -> dict | None:
         self.db.flush()

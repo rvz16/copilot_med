@@ -130,7 +130,8 @@ def print_synthetic_summary(result: dict[str, Any]) -> None:
     print(
         f"synthetic fallback saved {len(result['patient_summaries'])} patients and "
         f"{result.get('condition_bundle', {}).get('total', 0)} conditions and "
-        f"{result['observation_bundle'].get('total', 0)} observations"
+        f"{result['observation_bundle'].get('total', 0)} observations and "
+        f"{result.get('medication_bundle', {}).get('total', 0)} medications"
     )
     print(f"selected patient id: {result['selected_patient_id']}")
 
@@ -181,6 +182,16 @@ def fetch_live_data(base_url: str, output_dir: Path) -> dict[str, Any]:
     save_json(
         output_dir / f"observations_{selected_patient_id}.json", observation_bundle
     )
+    medication_bundle = request_json(
+        session,
+        resource_url(base_url, f"MedicationStatement?patient={selected_patient_id}&_count=10"),
+    )
+    save_json(output_dir / f"medications_{selected_patient_id}.json", medication_bundle)
+    allergy_bundle = request_json(
+        session,
+        resource_url(base_url, f"AllergyIntolerance?patient={selected_patient_id}&_count=10"),
+    )
+    save_json(output_dir / f"allergies_{selected_patient_id}.json", allergy_bundle)
 
     return {
         "mode": "live",
@@ -190,6 +201,8 @@ def fetch_live_data(base_url: str, output_dir: Path) -> dict[str, Any]:
         "selected_patient": selected_patient,
         "condition_bundle": condition_bundle,
         "observation_bundle": observation_bundle,
+        "medication_bundle": medication_bundle,
+        "allergy_bundle": allergy_bundle,
     }
 
 
@@ -223,6 +236,18 @@ def collect_resources_for_import(result: dict[str, Any]) -> list[dict[str, Any]]
             resource_type = resource.get("resourceType")
             resource_id = resource.get("id")
             if resource_type and resource_id:
+                by_identity[(resource_type, resource_id)] = resource
+
+    for bundle_key, resource_type in (
+        ("medication_bundle", "MedicationStatement"),
+        ("allergy_bundle", "AllergyIntolerance"),
+    ):
+        bundle = result.get(bundle_key)
+        if not isinstance(bundle, dict):
+            continue
+        for resource in extract_bundle_resources(bundle, resource_type):
+            resource_id = resource.get("id")
+            if resource_id:
                 by_identity[(resource_type, resource_id)] = resource
 
     return list(by_identity.values())
@@ -278,7 +303,8 @@ def main() -> int:
             print(
                 f"live fetch saved {len(result['patient_summaries'])} patients and "
                 f"{result.get('condition_bundle', {}).get('total', 0)} conditions and "
-                f"{result['observation_bundle'].get('total', 0)} observations"
+                f"{result['observation_bundle'].get('total', 0)} observations and "
+                f"{result.get('medication_bundle', {}).get('total', 0)} medications"
             )
         except FHIRFetchError as exc:
             print(f"live fetch failed: {exc}")

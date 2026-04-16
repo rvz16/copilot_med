@@ -60,6 +60,32 @@ or speculative findings. An empty list is acceptable if the live session was tho
 """
 
 
+DIARIZATION_SYSTEM_PROMPT = """\
+You diarize a medical consultation transcript after the visit is finished.
+The conversation is between exactly two roles: "Доктор" and "Пациент".
+
+Return ONLY valid JSON with this schema:
+{
+  "segments": [
+    {
+      "speaker": "<Доктор | Пациент>",
+      "text": "<single speaker turn in Russian>"
+    }
+  ]
+}
+
+Rules:
+- Use only two speaker labels: "Доктор" and "Пациент".
+- Preserve the original order of statements.
+- Merge adjacent statements if they belong to the same speaker.
+- Do not invent timestamps.
+- Do not omit clinically meaningful text.
+- If the transcript is ambiguous, make the most plausible doctor/patient assignment from context.
+- Keep text in Russian.
+- Do not add markdown or commentary.
+"""
+
+
 def build_user_prompt(
     full_transcript: str,
     chief_complaint: str | None = None,
@@ -118,4 +144,18 @@ def build_user_prompt(
                 + "\n".join(recommendation_lines)
             )
 
+    return "\n".join(parts)
+
+
+def build_diarization_user_prompt(
+    full_transcript: str,
+    chief_complaint: str | None = None,
+) -> str:
+    parts = [
+        "Ниже полная расшифровка завершённой консультации между доктором и пациентом.",
+        "Определи, какие реплики вероятнее принадлежат доктору, а какие пациенту, и верни JSON.",
+    ]
+    if chief_complaint:
+        parts.append(f"Основная жалоба пациента: {chief_complaint}")
+    parts.append(f"\n--- Полная транскрипция ---\n{full_transcript.strip()}")
     return "\n".join(parts)

@@ -69,6 +69,17 @@ class FollowUpRecommendation(ApiBaseModel):
     rationale: str
 
 
+class DiarizationSegment(ApiBaseModel):
+    speaker: str
+    text: str
+
+
+class TranscriptDiarization(ApiBaseModel):
+    model_used: str
+    formatted_text: str
+    segments: list[DiarizationSegment] = Field(default_factory=list)
+
+
 class AnalyticsResponse(ApiBaseModel):
     status: str = "ok"
     session_id: str
@@ -78,3 +89,4 @@ class AnalyticsResponse(ApiBaseModel):
     critical_insights: list[CriticalInsight] = Field(default_factory=list)
     follow_up_recommendations: list[FollowUpRecommendation] = Field(default_factory=list)
     quality_assessment: QualityAssessment
+    diarization: TranscriptDiarization | None = None

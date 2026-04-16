@@ -14,6 +14,8 @@ class Settings(BaseSettings):
         default="http://158.160.84.63:8092/hapi-fhir-jpaserver/fhir",
         alias="FHIR_BASE_URL",
     )
+    fhir_headers_json: str = Field(default="", alias="FHIR_HEADERS_JSON")
+    fhir_verify_ssl: bool = Field(default=True, alias="FHIR_VERIFY_SSL")
     ollama_base_url: str = Field(default="http://localhost:11434", alias="OLLAMA_BASE_URL")
     ollama_model: str = Field(
         default="qwen3:4b-q4_K_M",

@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 
 from app.config import (
+    DIARIZATION_MODEL_NAME,
     FALLBACK_MODEL_NAMES,
     LLM_API_KEY,
     LLM_BASE_URL,
@@ -45,20 +46,28 @@ class PostAnalyticsLLMClient:
         self.max_tokens = MAX_TOKENS
         self.temperature = TEMPERATURE
         self.timeout = LLM_TIMEOUT
+        self.diarization_model_name = DIARIZATION_MODEL_NAME
         self.extra_headers = self._load_extra_headers(LLM_EXTRA_HEADERS_JSON)
         logger.info(
-            "PostAnalyticsLLMClient: base_url=%s model=%s fallbacks=%s max_tokens=%d temperature=%.2f timeout=%.1fs",
+            "PostAnalyticsLLMClient: base_url=%s model=%s diarization_model=%s fallbacks=%s max_tokens=%d temperature=%.2f timeout=%.1fs",
             self.base_url,
             self.model_name,
+            self.diarization_model_name,
             self.fallback_model_names,
             self.max_tokens,
             self.temperature,
             self.timeout,
         )
 
-    def generate(self, system_prompt: str, user_prompt: str) -> LLMGenerationResult:
+    def generate(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        preferred_model_name: str | None = None,
+    ) -> LLMGenerationResult:
         last_error: Exception | None = None
-        candidate_models = self._candidate_model_names()
+        candidate_models = self._candidate_model_names(preferred_model_name)
         for index, model_name in enumerate(candidate_models):
             try:
                 payload = self._generate_with_model(
@@ -82,9 +91,11 @@ class PostAnalyticsLLMClient:
             raise last_error
         raise RuntimeError("No post-session LLM models are configured.")
 
-    def _candidate_model_names(self) -> list[str]:
+    def _candidate_model_names(self, preferred_model_name: str | None = None) -> list[str]:
         candidates: list[str] = []
-        for model_name in [self.model_name, *self.fallback_model_names]:
+        for model_name in [preferred_model_name, self.model_name, *self.fallback_model_names]:
+            if not model_name:
+                continue
             normalized = model_name.strip()
             if normalized and normalized not in candidates:
                 candidates.append(normalized)

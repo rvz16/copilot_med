@@ -108,6 +108,7 @@ def _build_reportlab_pdf(session: dict[str, Any]) -> bytes:
     knowledge = _dict(snapshot.get("knowledge_extraction"))
     summary = _dict(analytics.get("summary"))
     full_transcript = _dict(analytics.get("full_transcript"))
+    diarization = _dict(analytics.get("diarization"))
     quality = _dict(analytics.get("quality"))
     performance_metrics = _dict(snapshot.get("performance_metrics"))
     extracted_facts = _dict(knowledge.get("extracted_facts"))
@@ -342,9 +343,16 @@ def _build_reportlab_pdf(session: dict[str, Any]) -> bytes:
                     muted=True,
                 )
 
+    diarized_transcript = _stringify(diarization.get("formatted_text"))
+    if diarized_transcript:
+        story.append(PageBreak())
+        add_heading("Диаризация консультации")
+        add_text(diarized_transcript)
+
     transcript = _stringify(full_transcript.get("full_text")) or _stringify(snapshot.get("transcript"))
     if transcript:
-        story.append(PageBreak())
+        if not diarized_transcript:
+            story.append(PageBreak())
         add_heading("Финальная расшифровка")
         add_text(transcript)
 
@@ -477,7 +485,13 @@ def _collect_report_lines(session: dict[str, Any]) -> list[str]:
             lines.append(label)
             for value in values:
                 lines.extend(_wrapped_lines(f"- {value}"))
+    diarization = _dict(analytics.get("diarization"))
+    diarized_transcript = _stringify(diarization.get("formatted_text"))
     lines.append("")
+    if diarized_transcript:
+        lines.append("Диаризация консультации")
+        lines.extend(_wrapped_lines(diarized_transcript))
+        lines.append("")
     lines.append("Финальная расшифровка")
     lines.extend(_wrapped_lines(snapshot.get("transcript")))
     return lines

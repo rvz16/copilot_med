@@ -166,6 +166,24 @@ export function PostSessionAnalyticsPanel({
         </div>
       )}
 
+      {analytics.diarization && (
+        <div className="psa-section">
+          <h3 className="psa-section-title">Диаризация консультации</h3>
+          <div className="psa-diarization-list">
+            {analytics.diarization.segments.length > 0 ? (
+              analytics.diarization.segments.map((segment, index) => (
+                <div key={`${segment.speaker}-${index}`} className="psa-diarization-item">
+                  <span className="psa-diarization-speaker">{segment.speaker}</span>
+                  <p className="psa-diarization-text">{segment.text}</p>
+                </div>
+              ))
+            ) : (
+              <p className="psa-diarization-text">{analytics.diarization.formatted_text}</p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Critical insights. */}
       {insights && insights.length > 0 && (
         <div className="psa-section">

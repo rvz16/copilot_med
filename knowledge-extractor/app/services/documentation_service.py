@@ -79,6 +79,8 @@ class DocumentationService:
             base_url=settings.fhir_base_url,
             timeout_seconds=settings.http_timeout_seconds,
             max_retries=settings.fhir_max_retries,
+            headers_json=settings.fhir_headers_json,
+            verify_ssl=settings.fhir_verify_ssl,
         )
 
     def build_documentation(self, request: ExtractionRequest) -> ExtractionResponse:

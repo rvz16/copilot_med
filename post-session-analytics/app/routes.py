@@ -1,19 +1,28 @@
+from concurrent.futures import ThreadPoolExecutor
 import logging
+import re
 import time
 
 from fastapi import APIRouter
 import httpx
 
 from app.llm_client import LLMGenerationResult, PostAnalyticsLLMClient
-from app.prompts import SYSTEM_PROMPT, build_user_prompt
+from app.prompts import (
+    DIARIZATION_SYSTEM_PROMPT,
+    SYSTEM_PROMPT,
+    build_diarization_user_prompt,
+    build_user_prompt,
+)
 from app.schemas import (
     AnalyticsRequest,
     AnalyticsResponse,
     CriticalInsight,
+    DiarizationSegment,
     FollowUpRecommendation,
     MedicalSummary,
     QualityAssessment,
     QualityMetric,
+    TranscriptDiarization,
 )
 
 logger = logging.getLogger("medcopilot.post_analytics")
@@ -84,6 +93,157 @@ def _extract_fact_texts(realtime_analysis: dict[str, object], key: str) -> list[
     if not isinstance(values, list):
         return []
     return _unique_texts([_safe_str(value) for value in values])
+
+
+def _normalize_speaker_label(value: str) -> str:
+    normalized = _safe_str(value).casefold()
+    if normalized in {"доктор", "врач", "doctor", "clinician", "provider"}:
+        return "Доктор"
+    return "Пациент"
+
+
+def _clean_turn_text(value: str) -> str:
+    text = re.sub(r"\s+", " ", _safe_str(value)).strip(" \t\r\n-:")
+    return text
+
+
+def _render_diarization_text(segments: list[DiarizationSegment]) -> str:
+    return "\n\n".join(f"{segment.speaker}: {segment.text}" for segment in segments if segment.text)
+
+
+def _guess_speaker(sentence: str) -> str:
+    normalized = sentence.casefold()
+    doctor_markers = (
+        "?",
+        "опишите",
+        "расскажите",
+        "уточните",
+        "скажите",
+        "как давно",
+        "как именно",
+        "есть ли",
+        "давайте",
+        "принимайте",
+        "назначаю",
+        "назначен",
+        "повторный визит",
+        "контроль через",
+    )
+    patient_markers = (
+        "болит",
+        "жалуюсь",
+        "жалобы",
+        "беспокоит",
+        "чувствую",
+        "появилась",
+        "началась",
+        "слабость",
+        "сонливость",
+        "сухость",
+        "одышка",
+    )
+    if any(marker in normalized for marker in doctor_markers):
+        return "Доктор"
+    if any(marker in normalized for marker in patient_markers):
+        return "Пациент"
+    return "Пациент"
+
+
+def _fallback_diarization(request: AnalyticsRequest) -> TranscriptDiarization:
+    raw_parts = re.split(r"[\n\r]+|(?<=[.!?…])\s+", request.full_transcript.strip())
+    segments: list[DiarizationSegment] = []
+    current_speaker: str | None = None
+    current_lines: list[str] = []
+
+    def flush() -> None:
+        nonlocal current_speaker, current_lines
+        text = _clean_turn_text(" ".join(current_lines))
+        if current_speaker and text:
+            segments.append(DiarizationSegment(speaker=current_speaker, text=text))
+        current_speaker = None
+        current_lines = []
+
+    for part in raw_parts:
+        sentence = _clean_turn_text(part)
+        if not sentence:
+            continue
+        speaker = _guess_speaker(sentence)
+        if current_speaker is None:
+            current_speaker = speaker
+            current_lines = [sentence]
+            continue
+        if speaker == current_speaker:
+            current_lines.append(sentence)
+            continue
+        flush()
+        current_speaker = speaker
+        current_lines = [sentence]
+
+    flush()
+    if not segments and request.full_transcript.strip():
+        segments = [DiarizationSegment(speaker="Пациент", text=request.full_transcript.strip())]
+
+    return TranscriptDiarization(
+        model_used="fallback-diarization",
+        formatted_text=_render_diarization_text(segments),
+        segments=segments,
+    )
+
+
+def _parse_diarization_payload(raw: dict, model_used: str) -> TranscriptDiarization | None:
+    raw_segments = raw.get("segments", [])
+    if not isinstance(raw_segments, list):
+        return None
+
+    segments: list[DiarizationSegment] = []
+    for item in raw_segments:
+        if not isinstance(item, dict):
+            continue
+        text = _clean_turn_text(item.get("text", ""))
+        if not text:
+            continue
+        speaker = _normalize_speaker_label(item.get("speaker", "Пациент"))
+        if segments and segments[-1].speaker == speaker:
+            segments[-1] = DiarizationSegment(
+                speaker=speaker,
+                text=f"{segments[-1].text} {text}".strip(),
+            )
+            continue
+        segments.append(DiarizationSegment(speaker=speaker, text=text))
+
+    if not segments:
+        return None
+
+    return TranscriptDiarization(
+        model_used=model_used,
+        formatted_text=_render_diarization_text(segments),
+        segments=segments,
+    )
+
+
+def _build_diarization(
+    request: AnalyticsRequest,
+    client: PostAnalyticsLLMClient | None,
+) -> TranscriptDiarization:
+    if client is None:
+        return _fallback_diarization(request)
+
+    try:
+        result = client.generate(
+            DIARIZATION_SYSTEM_PROMPT,
+            build_diarization_user_prompt(
+                full_transcript=request.full_transcript,
+                chief_complaint=request.chief_complaint,
+            ),
+            preferred_model_name=client.diarization_model_name,
+        )
+        parsed = _parse_diarization_payload(result.payload, result.model_name)
+        if parsed is not None:
+            return parsed
+    except Exception as exc:
+        logger.warning("Diarization failed for session %s: %s", request.session_id, exc)
+
+    return _fallback_diarization(request)
 
 
 def _compose_fallback_response(
@@ -423,34 +583,44 @@ def analyze(request: AnalyticsRequest) -> AnalyticsResponse:
     )
 
     start = time.perf_counter()
+    client: PostAnalyticsLLMClient | None = None
     try:
         client = get_llm_client()
-        result: LLMGenerationResult = client.generate(SYSTEM_PROMPT, user_prompt)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            analytics_future = executor.submit(client.generate, SYSTEM_PROMPT, user_prompt)
+            diarization_future = executor.submit(_build_diarization, request, client)
+            result: LLMGenerationResult = analytics_future.result()
+            diarization = diarization_future.result()
+
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        raw_payload = result.payload if isinstance(result, LLMGenerationResult) else result
+        model_used = result.model_name if isinstance(result, LLMGenerationResult) else "unknown-model"
+        response = _parse_response(raw_payload, request.session_id, elapsed_ms, model_used)
+        response = _enrich_sparse_response(request, response, elapsed_ms=elapsed_ms)
+        response = response.model_copy(update={"diarization": diarization})
     except ValueError as exc:
         elapsed_ms = int((time.perf_counter() - start) * 1000)
         logger.error("LLM returned invalid JSON for session %s: %s", request.session_id, exc)
-        return _build_fallback_response(request, elapsed_ms=elapsed_ms, error_message=str(exc))
+        response = _build_fallback_response(request, elapsed_ms=elapsed_ms, error_message=str(exc))
     except httpx.HTTPError as exc:
         elapsed_ms = int((time.perf_counter() - start) * 1000)
         logger.error("LLM upstream request failed for session %s: %s", request.session_id, exc)
-        return _build_fallback_response(request, elapsed_ms=elapsed_ms, error_message=str(exc))
+        response = _build_fallback_response(request, elapsed_ms=elapsed_ms, error_message=str(exc))
     except Exception as exc:
         elapsed_ms = int((time.perf_counter() - start) * 1000)
         logger.error("LLM call failed for session %s: %s", request.session_id, exc)
-        return _build_fallback_response(request, elapsed_ms=elapsed_ms, error_message=str(exc))
+        response = _build_fallback_response(request, elapsed_ms=elapsed_ms, error_message=str(exc))
 
-    elapsed_ms = int((time.perf_counter() - start) * 1000)
-    raw_payload = result.payload if isinstance(result, LLMGenerationResult) else result
-    model_used = result.model_name if isinstance(result, LLMGenerationResult) else "unknown-model"
-    response = _parse_response(raw_payload, request.session_id, elapsed_ms, model_used)
-    response = _enrich_sparse_response(request, response, elapsed_ms=elapsed_ms)
+    if response.diarization is None:
+        response = response.model_copy(update={"diarization": _build_diarization(request, client)})
     logger.info(
-        "analyze_request_completed session_id=%s processing_time_ms=%d model=%s insights=%d recommendations=%d quality_metrics=%d",
+        "analyze_request_completed session_id=%s processing_time_ms=%d model=%s insights=%d recommendations=%d quality_metrics=%d diarization_segments=%d",
         request.session_id,
-        elapsed_ms,
+        response.processing_time_ms,
         response.model_used,
         len(response.critical_insights),
         len(response.follow_up_recommendations),
         len(response.quality_assessment.metrics),
+        len(response.diarization.segments) if response.diarization else 0,
     )
     return response

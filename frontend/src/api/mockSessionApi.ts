@@ -346,6 +346,17 @@ function buildPostSessionAnalytics(transcript: string): PostSessionAnalytics {
         },
       ],
     },
+    diarization: {
+      model_used: 'mock-diarization',
+      formatted_text: `Доктор: Расскажите, что вас беспокоит.\n\nПациент: ${transcript || 'Полный текст появится после завершения консультации.'}`,
+      segments: [
+        { speaker: 'Доктор', text: 'Расскажите, что вас беспокоит.' },
+        {
+          speaker: 'Пациент',
+          text: transcript || 'Полный текст появится после завершения консультации.',
+        },
+      ],
+    },
     full_transcript: {
       full_text: transcript,
       source: 'mock-post-session-analytics',

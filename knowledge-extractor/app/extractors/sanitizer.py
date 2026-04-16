@@ -59,6 +59,18 @@ class ClinicalExtractionSanitizer:
     )
     _short_fillers = {"да", "нет", "угу", "ага", "ok", "okay", "понятно", "ясно"}
     _clinician_speakers = {"doctor", "clinician", "provider", "nurse", "врач", "доктор", "клиницист", "медсестра"}
+    _diagnosis_noise_prefixes = (
+        "понимаю",
+        "давайте",
+        "опишите",
+        "расскажите",
+        "скажите",
+        "это ",
+        "скорее",
+        "и началась",
+        "прямая",
+        "примая",
+    )
 
     def sanitize(self, extraction: CanonicalExtraction) -> CanonicalExtraction:
         return CanonicalExtraction(
@@ -110,6 +122,12 @@ class ClinicalExtractionSanitizer:
         ):
             return True
         if speaker in self._clinician_speakers and field_name in {"symptoms", "concerns"}:
+            return True
+        if field_name == "diagnoses" and any(
+            normalized.startswith(prefix) for prefix in self._diagnosis_noise_prefixes
+        ):
+            return True
+        if field_name == "diagnoses" and len(normalized.split()) > 12:
             return True
         return False
 

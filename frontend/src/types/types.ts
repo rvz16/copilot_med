@@ -225,11 +225,23 @@ export interface PostAnalyticsQuality {
   metrics: PostAnalyticsQualityMetric[];
 }
 
+export interface PostAnalyticsDiarizationSegment {
+  speaker: string;
+  text: string;
+}
+
+export interface PostAnalyticsDiarization {
+  model_used: string;
+  formatted_text: string;
+  segments: PostAnalyticsDiarizationSegment[];
+}
+
 export interface PostSessionAnalytics {
   summary: PostAnalyticsSummary;
   insights: PostAnalyticsCriticalInsight[];
   recommendations: PostAnalyticsFollowUp[];
   quality: PostAnalyticsQuality;
+  diarization?: PostAnalyticsDiarization | null;
   clinical_recommendations?: RecommendedDocument[];
   full_transcript?: {
     full_text: string;

@@ -180,6 +180,7 @@ export function ConsultationWorkspace({
                 : 'Для этой консультации не было сохранено текста.'
             }
             transcript={mode === 'archive' ? archiveTranscript : transcript}
+            diarization={mode === 'archive' ? postSessionAnalytics?.diarization ?? null : null}
           />
           <HintsPanel
             hints={hints}

@@ -5,7 +5,8 @@ MedCoPilot is a Docker-based demo of a medical consultation assistant. It can:
 - record a consultation in the browser
 - transcribe speech to text
 - show live clinical hints
-- generate extraction and post-session analysis
+- generate structured extraction and post-session analysis
+- build a final post-session transcript with speaker diarization and include it in the PDF report
 
 ## What Is In This Repository?
 
@@ -180,6 +181,7 @@ Change in `.env`:
 
 - `POST_ANALYTICS_LLM_BASE_URL` - OpenAI-compatible endpoint
 - `POST_ANALYTICS_MODEL_NAME` - model name
+- `POST_ANALYTICS_DIARIZATION_MODEL_NAME` - model used specifically for transcript diarization, default `openai/gpt-oss-20b`
 - `POST_ANALYTICS_LLM_API_KEY` - API key
 - `POST_ANALYTICS_MAX_TOKENS` - max response size
 - `POST_ANALYTICS_TEMPERATURE` - generation temperature
@@ -212,6 +214,66 @@ Useful clinical-recommendations settings in [`clinical-recommendations-service/a
 - `CLINICAL_RECOMMENDATIONS_EMBEDDING_TOKEN_LIMIT` - max PDF/transcript tokens embedded, default 512
 - `CORS_ORIGINS` - allowed frontend origins
 - `PORT` - service port
+
+## External FHIR / EHR Integration
+
+The stack can run against the bundled local HAPI FHIR server or against an external customer FHIR.
+
+### Recommended shared variables
+
+Add these variables to `.env`:
+
+```bash
+MEDCOPILOT_FHIR_BASE_URL=http://158.160.84.63:8092/hapi-fhir-jpaserver/fhir
+MEDCOPILOT_FHIR_HEADERS_JSON=
+MEDCOPILOT_FHIR_VERIFY_SSL=true
+```
+
+What they do:
+
+- `MEDCOPILOT_FHIR_BASE_URL` is the common default for both read access in `realtime-analysis` and write access in `knowledge-extractor`
+- `MEDCOPILOT_FHIR_HEADERS_JSON` lets you pass auth or gateway headers as JSON, for example `{"Authorization":"Bearer <token>"}`
+- `MEDCOPILOT_FHIR_VERIFY_SSL` controls TLS verification for customer environments with custom certificates
+
+You can still override per service if needed:
+
+- `REALTIME_ANALYSIS_FHIR_BASE_URL`
+- `REALTIME_ANALYSIS_FHIR_HEADERS_JSON`
+- `REALTIME_ANALYSIS_FHIR_VERIFY_SSL`
+- `KNOWLEDGE_EXTRACTOR_FHIR_BASE_URL`
+- `KNOWLEDGE_EXTRACTOR_FHIR_HEADERS_JSON`
+- `KNOWLEDGE_EXTRACTOR_FHIR_VERIFY_SSL`
+
+### Minimal customer onboarding flow
+
+1. Verify the customer FHIR base URL responds on `/metadata`.
+2. Put the customer base URL into `MEDCOPILOT_FHIR_BASE_URL`.
+3. If auth is required, set `MEDCOPILOT_FHIR_HEADERS_JSON`.
+4. Restart the stack with `docker compose up --build -d`.
+5. Start sessions with `patient_id` values that already exist in the customer FHIR.
+
+Current reference endpoint used for validation:
+
+- [HAPI FHIR example endpoint](http://158.160.84.63:8092/hapi-fhir-jpaserver/fhir)
+
+### What MedCoPilot reads and writes
+
+- `realtime-analysis` reads `Patient`, `Condition`, `MedicationRequest`, `MedicationStatement`, `AllergyIntolerance`, and `Observation`
+- `knowledge-extractor` writes compact `Condition`, `Observation`, `MedicationStatement`, `AllergyIntolerance`, and `DocumentReference` resources
+- generated write-back resources are tagged and identified as MedCoPilot-generated so they can be cleaned safely later
+
+### Cleaning legacy generated data
+
+If an older demo run already wrote noisy conversational data into FHIR, use:
+
+```bash
+python3 fhir/cleanup_generated_resources.py --base-url http://localhost:8092/fhir --patient-id synthetic-patient-001 --apply
+```
+
+This removes:
+
+- conversational `Condition` resources that clearly look like doctor prompts or patient replies
+- generated SOAP `DocumentReference` records from older runs
 
 ## Notes
 

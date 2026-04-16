@@ -145,6 +145,33 @@ def build_observation_resource(
     return resource
 
 
+def build_medication_statement_resource(
+    medication_id: str,
+    patient_id: str,
+    medication_text: str,
+) -> dict[str, Any]:
+    return {
+        "resourceType": "MedicationStatement",
+        "id": medication_id,
+        "status": "active",
+        "subject": {"reference": f"Patient/{patient_id}"},
+        "medicationCodeableConcept": {"text": medication_text},
+    }
+
+
+def build_allergy_intolerance_resource(
+    allergy_id: str,
+    patient_id: str,
+    allergy_text: str,
+) -> dict[str, Any]:
+    return {
+        "resourceType": "AllergyIntolerance",
+        "id": allergy_id,
+        "patient": {"reference": f"Patient/{patient_id}"},
+        "code": {"text": allergy_text},
+    }
+
+
 def make_bundle(
     bundle_id: str, bundle_type: str, resources: list[dict[str, Any]]
 ) -> dict[str, Any]:
@@ -208,7 +235,7 @@ def build_patient_seed_data() -> list[dict[str, Any]]:
                     "synthetic-observation-001-bp",
                     "synthetic-patient-001",
                     "85354-9",
-                    "Blood pressure panel with all children optional",
+                    "Артериальное давление",
                     "2026-04-10T08:15:00Z",
                     "Blood pressure 128/82 mmHg",
                 ),
@@ -216,10 +243,34 @@ def build_patient_seed_data() -> list[dict[str, Any]]:
                     "synthetic-observation-001-glucose",
                     "synthetic-patient-001",
                     "2345-7",
-                    "Glucose [Mass/volume] in Serum or Plasma",
+                    "Глюкоза натощак",
                     "2026-02-18T09:00:00Z",
-                    "Fasting glucose 96 mg/dL",
+                    5.4,
+                    "mmol/L",
+                    "mmol/L",
                 ),
+                build_observation_resource(
+                    "synthetic-observation-001-symptom",
+                    "synthetic-patient-001",
+                    "75326-9",
+                    "Жалоба на утомляемость",
+                    "2026-04-11T09:30:00Z",
+                    "На прошлом визите сообщала о дневной сонливости и сухости во рту по утрам",
+                ),
+            ],
+            "medications": [
+                build_medication_statement_resource(
+                    "synthetic-medication-001",
+                    "synthetic-patient-001",
+                    "лозартан 50 мг 1 раз в день",
+                )
+            ],
+            "allergies": [
+                build_allergy_intolerance_resource(
+                    "synthetic-allergy-001",
+                    "synthetic-patient-001",
+                    "аллергия на пенициллин",
+                )
             ],
         },
         {
@@ -245,18 +296,29 @@ def build_patient_seed_data() -> list[dict[str, Any]]:
                     "synthetic-observation-002-a1c",
                     "synthetic-patient-002",
                     "4548-4",
-                    "Hemoglobin A1c/Hemoglobin.total in Blood",
+                    "Гликированный гемоглобин",
                     "2026-03-14T07:45:00Z",
-                    "HbA1c 7.1%",
+                    7.1,
+                    "%",
+                    "%",
                 ),
                 build_observation_resource(
                     "synthetic-observation-002-ldl",
                     "synthetic-patient-002",
                     "13457-7",
-                    "Cholesterol in LDL [Mass/volume] in Serum or Plasma by calculation",
+                    "ЛПНП",
                     "2026-01-20T07:45:00Z",
-                    "LDL cholesterol 142 mg/dL",
+                    3.7,
+                    "mmol/L",
+                    "mmol/L",
                 ),
+            ],
+            "medications": [
+                build_medication_statement_resource(
+                    "synthetic-medication-002",
+                    "synthetic-patient-002",
+                    "метформин 1000 мг 2 раза в день",
+                )
             ],
         },
         {
@@ -282,15 +344,15 @@ def build_patient_seed_data() -> list[dict[str, Any]]:
                     "synthetic-observation-003-headache",
                     "synthetic-patient-003",
                     "75325-1",
-                    "Headache severity",
+                    "Частота головной боли",
                     "2026-04-01T18:00:00Z",
-                    "Reported headaches 3 times in the last month",
+                    "За последний месяц сообщала о трёх эпизодах головной боли",
                 ),
                 build_observation_resource(
                     "synthetic-observation-003-bp",
                     "synthetic-patient-003",
                     "85354-9",
-                    "Blood pressure panel with all children optional",
+                    "Артериальное давление",
                     "2026-01-08T08:40:00Z",
                     "Blood pressure 114/72 mmHg",
                 ),
@@ -319,17 +381,21 @@ def build_patient_seed_data() -> list[dict[str, Any]]:
                     "synthetic-observation-004-pef",
                     "synthetic-patient-004",
                     "33453-9",
-                    "Expiratory flow peak",
+                    "Пиковая скорость выдоха",
                     "2026-03-28T11:10:00Z",
-                    "Peak expiratory flow 410 L/min",
+                    410,
+                    "L/min",
+                    "L/min",
                 ),
                 build_observation_resource(
                     "synthetic-observation-004-oxygen",
                     "synthetic-patient-004",
                     "59408-5",
-                    "Oxygen saturation in Arterial blood by Pulse oximetry",
+                    "Сатурация кислорода",
                     "2026-03-28T11:10:00Z",
-                    "Oxygen saturation 98% on room air",
+                    98,
+                    "%",
+                    "%",
                 ),
             ],
         },
@@ -356,15 +422,17 @@ def build_patient_seed_data() -> list[dict[str, Any]]:
                     "synthetic-observation-005-weight",
                     "synthetic-patient-005",
                     "29463-7",
-                    "Body weight",
+                    "Масса тела",
                     "2026-02-09T10:20:00Z",
-                    "Body weight 82 kg",
+                    82,
+                    "kg",
+                    "kg",
                 ),
                 build_observation_resource(
                     "synthetic-observation-005-bp",
                     "synthetic-patient-005",
                     "85354-9",
-                    "Blood pressure panel with all children optional",
+                    "Артериальное давление",
                     "2026-02-09T10:20:00Z",
                     "Blood pressure 134/84 mmHg",
                 ),
@@ -383,9 +451,17 @@ def generate_synthetic_data(output_dir: Path = OUTPUT_DIR) -> dict[str, Any]:
     observations = [
         resource for entry in seed_data for resource in entry.get("observations", [])
     ]
+    medications = [
+        resource for entry in seed_data for resource in entry.get("medications", [])
+    ]
+    allergies = [
+        resource for entry in seed_data for resource in entry.get("allergies", [])
+    ]
     patient_bundle = make_bundle("synthetic-patients", "collection", patients)
     condition_bundle = make_bundle("synthetic-conditions", "collection", conditions)
     observation_bundle = make_bundle("synthetic-observations", "collection", observations)
+    medication_bundle = make_bundle("synthetic-medications", "collection", medications)
+    allergy_bundle = make_bundle("synthetic-allergies", "collection", allergies)
 
     selected_patient = patients[0]
     selected_patient_id = selected_patient["id"]
@@ -395,6 +471,10 @@ def generate_synthetic_data(output_dir: Path = OUTPUT_DIR) -> dict[str, Any]:
     save_json(output_dir / "patients_bundle.json", patient_bundle)
     save_json(output_dir / "synthetic_conditions_bundle.json", condition_bundle)
     save_json(output_dir / "conditions_bundle.json", condition_bundle)
+    save_json(output_dir / "synthetic_medications_bundle.json", medication_bundle)
+    save_json(output_dir / "medications_bundle.json", medication_bundle)
+    save_json(output_dir / "synthetic_allergies_bundle.json", allergy_bundle)
+    save_json(output_dir / "allergies_bundle.json", allergy_bundle)
     save_json(output_dir / "patient_summaries.json", patient_summaries)
 
     for entry in seed_data:
@@ -410,6 +490,16 @@ def generate_synthetic_data(output_dir: Path = OUTPUT_DIR) -> dict[str, Any]:
             "collection",
             entry.get("conditions", []),
         )
+        patient_medication_bundle = make_bundle(
+            f"synthetic-medications-{patient_id}",
+            "collection",
+            entry.get("medications", []),
+        )
+        patient_allergy_bundle = make_bundle(
+            f"synthetic-allergies-{patient_id}",
+            "collection",
+            entry.get("allergies", []),
+        )
         save_json(output_dir / f"patient_{patient_id}.json", patient)
         save_json(
             output_dir / f"synthetic_observations_{patient_id}.json",
@@ -423,6 +513,16 @@ def generate_synthetic_data(output_dir: Path = OUTPUT_DIR) -> dict[str, Any]:
             patient_condition_bundle,
         )
         save_json(output_dir / f"conditions_{patient_id}.json", patient_condition_bundle)
+        save_json(
+            output_dir / f"synthetic_medications_{patient_id}.json",
+            patient_medication_bundle,
+        )
+        save_json(output_dir / f"medications_{patient_id}.json", patient_medication_bundle)
+        save_json(
+            output_dir / f"synthetic_allergies_{patient_id}.json",
+            patient_allergy_bundle,
+        )
+        save_json(output_dir / f"allergies_{patient_id}.json", patient_allergy_bundle)
 
     return {
         "mode": "synthetic",
@@ -432,6 +532,8 @@ def generate_synthetic_data(output_dir: Path = OUTPUT_DIR) -> dict[str, Any]:
         "selected_patient": selected_patient,
         "observation_bundle": observation_bundle,
         "condition_bundle": condition_bundle,
+        "medication_bundle": medication_bundle,
+        "allergy_bundle": allergy_bundle,
     }
 
 

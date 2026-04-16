@@ -54,6 +54,9 @@ Browser
 - `knowledge-extractor` can prepare or persist FHIR resources
 - `realtime-analysis` can read patient context from FHIR
 - the `fhir` service is a standard HAPI FHIR server exposed at `/fhir`
+- both services can now share one external FHIR endpoint via `MEDCOPILOT_FHIR_BASE_URL`
+- auth headers can be passed via `MEDCOPILOT_FHIR_HEADERS_JSON`
+- TLS verification can be controlled via `MEDCOPILOT_FHIR_VERIFY_SSL`
 
 ## Recommended Deployment Sequence
 
@@ -105,9 +108,37 @@ Important integration variables:
 - `CLINICAL_RECOMMENDATIONS_URL`
 - `KNOWLEDGE_EXTRACTOR_URL`
 - `POST_SESSION_ANALYTICS_URL`
+- `MEDCOPILOT_FHIR_BASE_URL`
+- `MEDCOPILOT_FHIR_HEADERS_JSON`
+- `MEDCOPILOT_FHIR_VERIFY_SSL`
 - `REALTIME_ANALYSIS_FHIR_BASE_URL`
+- `REALTIME_ANALYSIS_FHIR_HEADERS_JSON`
+- `REALTIME_ANALYSIS_FHIR_VERIFY_SSL`
 - `KNOWLEDGE_EXTRACTOR_FHIR_BASE_URL`
+- `KNOWLEDGE_EXTRACTOR_FHIR_HEADERS_JSON`
+- `KNOWLEDGE_EXTRACTOR_FHIR_VERIFY_SSL`
 - `POST_ANALYTICS_CORS_ORIGINS`
+
+## External Customer FHIR Checklist
+
+Use this sequence when deploying the stack into a customer environment.
+
+1. Confirm the customer FHIR base URL returns a valid CapabilityStatement on `/metadata`.
+2. Confirm the session `patient_id` values used by the UI map to real `Patient/{id}` resources in that FHIR.
+3. Set `MEDCOPILOT_FHIR_BASE_URL` to the customer endpoint.
+4. If the gateway requires auth or tenant headers, pass them in `MEDCOPILOT_FHIR_HEADERS_JSON`.
+5. If the customer FHIR uses an internal CA, either trust that CA in the container image or temporarily set `MEDCOPILOT_FHIR_VERIFY_SSL=false`.
+6. Restart the stack and validate one read path in `realtime-analysis` and one write path in `knowledge-extractor`.
+
+Example shared configuration:
+
+```bash
+MEDCOPILOT_FHIR_BASE_URL=http://158.160.84.63:8092/hapi-fhir-jpaserver/fhir
+MEDCOPILOT_FHIR_HEADERS_JSON=
+MEDCOPILOT_FHIR_VERIFY_SSL=true
+```
+
+Service-specific overrides remain available if read and write targets must differ.
 
 ## Failure Modes
 
