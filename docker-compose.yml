@@ -11,19 +11,26 @@ services:
       PORT: 8002
       CORS_ORIGINS: http://localhost:3000,http://localhost:5173
       CLINICAL_RECOMMENDATIONS_CSV_PATH: /app/clinical_recommendations/clinical_recommendations.csv
-      CLINICAL_RECOMMENDATIONS_PDF_DIR: /app/clinical_recommendations/pdf_files
+      CLINICAL_RECOMMENDATIONS_PDF_DIR: /app/clinical_recommendations/generated/pdf_files
+      CLINICAL_RECOMMENDATIONS_PDF_ARCHIVE_PATH: /app/clinical_recommendations/generated/pdf_archive.zip
+      CLINICAL_RECOMMENDATIONS_EMBEDDINGS_PATH: /app/clinical_recommendations/recommendation_embeddings.parquet
+      CLINICAL_RECOMMENDATIONS_EMBEDDING_MODEL_NAME: ${CLINICAL_RECOMMENDATIONS_EMBEDDING_MODEL_NAME:-intfloat/multilingual-e5-small}
+      CLINICAL_RECOMMENDATIONS_EMBEDDING_QUERY_PREFIX: "${CLINICAL_RECOMMENDATIONS_EMBEDDING_QUERY_PREFIX:-query: }"
+      CLINICAL_RECOMMENDATIONS_EMBEDDING_PASSAGE_PREFIX: "${CLINICAL_RECOMMENDATIONS_EMBEDDING_PASSAGE_PREFIX:-passage: }"
+      CLINICAL_RECOMMENDATIONS_EMBEDDING_TOKEN_LIMIT: ${CLINICAL_RECOMMENDATIONS_EMBEDDING_TOKEN_LIMIT:-512}
+      CLINICAL_RECOMMENDATIONS_EMBEDDING_BATCH_SIZE: ${CLINICAL_RECOMMENDATIONS_EMBEDDING_BATCH_SIZE:-8}
     volumes:
-      - ./clinical_recommendations/pdf_files:/app/clinical_recommendations/pdf_files:ro
+      - clinical-recommendations-data:/app/clinical_recommendations/generated
     healthcheck:
       test:
         - CMD
         - python
         - -c
         - import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8002/health').status == 200 else 1)
-      interval: 10s
+      interval: 30s
       timeout: 5s
-      retries: 5
-      start_period: 10s
+      retries: 60
+      start_period: 30m
 
   transcribation:
     build:
@@ -190,7 +197,6 @@ services:
       CLINICAL_RECOMMENDATIONS_URL: http://clinical-recommendations:8002
       CLINICAL_RECOMMENDATIONS_PUBLIC_URL: http://localhost:8080
       CLINICAL_RECOMMENDATIONS_TIMEOUT_SECONDS: 5
-      CLINICAL_RECOMMENDATIONS_MIN_CONFIDENCE: 0.6
       KNOWLEDGE_EXTRACTOR_MODE: http
       KNOWLEDGE_EXTRACTOR_ENABLED: "true"
       KNOWLEDGE_EXTRACTOR_URL: http://knowledge-extractor:8000/extract
@@ -233,6 +239,7 @@ services:
       - "3000:80"
 
 volumes:
+  clinical-recommendations-data:
   fhir-data:
   session-manager-data:
   transcribation-model:

@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 *.pdf
+clinical_recommendations/pdf_archive.zip
 
 # Editor directories and files
 .vscode/*

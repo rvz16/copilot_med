@@ -481,19 +481,25 @@ class SessionService:
         analysis: RealtimeAnalysisResponse,
         limit: int = 1,
     ) -> list[RecommendedDocumentResponse]:
+        query = (session.stable_transcript or session.current_transcript or "").strip()
+        if not query:
+            return []
+
         diagnosis_candidates = [
             suggestion
             for suggestion in analysis.suggestions
             if suggestion.type == "diagnosis_suggestion" and suggestion.text.strip()
         ]
-        if not diagnosis_candidates:
-            return []
+        top_diagnosis = (
+            max(diagnosis_candidates, key=lambda suggestion: suggestion.confidence)
+            if diagnosis_candidates
+            else None
+        )
+        matched_query = self._recommendation_matched_query_label(
+            query=query,
+            diagnosis=top_diagnosis.text if top_diagnosis is not None else None,
+        )
 
-        top_diagnosis = max(diagnosis_candidates, key=lambda suggestion: suggestion.confidence)
-        if top_diagnosis.confidence < self.settings.clinical_recommendations_min_confidence:
-            return []
-
-        query = top_diagnosis.text.strip()
         request_payload = {"query": query, "limit": limit}
         try:
             response = self.clinical_recommendations.search(query=query, limit=limit)
@@ -536,7 +542,7 @@ class SessionService:
         for match in items:
             if not isinstance(match, dict):
                 continue
-            
+
             logger.info(
                 "Clinical recommendations search for '%s': match id=%s title=%s pdf_available=%s score=%s (session %s)",
                 query,
@@ -569,8 +575,12 @@ class SessionService:
                 RecommendedDocumentResponse(
                     recommendation_id=recommendation_id,
                     title=title.strip(),
-                    matched_query=query,
-                    diagnosis_confidence=top_diagnosis.confidence,
+                    matched_query=matched_query,
+                    diagnosis_confidence=(
+                        top_diagnosis.confidence
+                        if top_diagnosis is not None
+                        else float(match.get("score", 0.0))
+                    ),
                     search_score=float(match.get("score", 0.0)),
                     pdf_available=True,
                     pdf_url=pdf_url,
@@ -578,8 +588,17 @@ class SessionService:
             )
             if len(results) >= limit:
                 break
-        
+
         return results
+
+    @staticmethod
+    def _recommendation_matched_query_label(*, query: str, diagnosis: str | None = None) -> str:
+        if diagnosis and diagnosis.strip():
+            return diagnosis.strip()
+        normalized = " ".join(query.split())
+        if len(normalized) <= 160:
+            return normalized
+        return f"{normalized[:157]}..."
 
     def get_session(self, session_id: str) -> SessionDetailResponse:
         session = self._get_session(session_id)
@@ -986,9 +1005,12 @@ class SessionService:
     ) -> list[dict]:
         summary = analytics_response.get("medical_summary", {})
         if not isinstance(summary, dict):
-            return []
+            summary = {}
 
-        candidates: list[str] = []
+        candidates: list[tuple[str, str]] = []
+        transcript_query = (session.stable_transcript or session.current_transcript or "").strip()
+        if transcript_query:
+            candidates.append((transcript_query, "транскрипт консультации"))
         for key in ("primary_impressions", "differential_diagnoses"):
             values = summary.get(key, [])
             if not isinstance(values, list):
@@ -996,15 +1018,15 @@ class SessionService:
             for value in values:
                 if isinstance(value, str):
                     normalized = value.strip()
-                    if normalized and normalized not in candidates:
-                        candidates.append(normalized)
+                    if normalized and all(normalized != query for query, _ in candidates):
+                        candidates.append((normalized, normalized))
 
         if not candidates:
             return []
 
         results: list[dict] = []
         seen_ids: set[str] = set()
-        for query in candidates:
+        for query, matched_query in candidates:
             request_payload = {"query": query, "limit": limit, "source": "post_session_analytics"}
             try:
                 response = self.clinical_recommendations.search(query=query, limit=limit)
@@ -1059,7 +1081,7 @@ class SessionService:
                     {
                         "recommendation_id": recommendation_id,
                         "title": title.strip(),
-                        "matched_query": query,
+                        "matched_query": matched_query,
                         "diagnosis_confidence": 1.0,
                         "search_score": float(match.get("score", 0.0)),
                         "pdf_available": True,

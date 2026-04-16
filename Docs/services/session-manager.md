@@ -224,8 +224,9 @@ When full-recording transcription is available, the service prefers it over the 
 
 During live analysis:
 
-- only diagnosis suggestions are considered
-- only results above the configured confidence threshold are searched
+- the current stable transcript is sent to `clinical-recommendations`
+- the recommendations service retrieves PDFs by embedding cosine similarity
+- diagnosis suggestions, when available, are used only as the displayed matched query/confidence context
 - only results with an available local PDF are returned to the frontend
 
 ## Tests and Utilities

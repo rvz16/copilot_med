@@ -623,7 +623,7 @@ def test_upload_chunk_attaches_recommended_document_for_diagnosis_suggestion(app
 
     def fake_search(self, query: str, limit: int = 1) -> dict:
         del self
-        assert query == "рак легких"
+        assert query == FIRST_FRAGMENT
         assert limit == 1
         return {
             "query": query,
@@ -667,12 +667,26 @@ def test_upload_chunk_attaches_recommended_document_for_diagnosis_suggestion(app
         }
 
 
-def test_upload_chunk_skips_recommendation_lookup_without_diagnosis_suggestion(app_factory, monkeypatch):
-    def fail_search(self, query: str, limit: int = 1) -> dict:
-        del self, query, limit
-        raise AssertionError("clinical recommendations search should not be called")
+def test_upload_chunk_uses_transcript_for_recommendation_lookup_without_diagnosis(app_factory, monkeypatch):
+    def fake_search(self, query: str, limit: int = 1) -> dict:
+        del self
+        assert query == FIRST_FRAGMENT
+        assert limit == 1
+        return {
+            "query": query,
+            "items": [
+                {
+                    "id": "286_3",
+                    "title": "Головная боль напряжения",
+                    "pdf_number": 286,
+                    "pdf_filename": "КР286.pdf",
+                    "pdf_available": True,
+                    "score": 0.7342,
+                }
+            ],
+        }
 
-    monkeypatch.setattr(HttpClinicalRecommendationsClient, "search", fail_search)
+    monkeypatch.setattr(HttpClinicalRecommendationsClient, "search", fake_search)
 
     app = app_factory(
         REALTIME_ANALYSIS_ENABLED=True,
@@ -685,7 +699,15 @@ def test_upload_chunk_skips_recommendation_lookup_without_diagnosis_suggestion(a
         response = upload_chunk(client, session_id, seq=1)
 
         assert response.status_code == 200
-        assert response.json()["realtime_analysis"]["recommended_document"] is None
+        assert response.json()["realtime_analysis"]["recommended_document"] == {
+            "recommendation_id": "286_3",
+            "title": "Головная боль напряжения",
+            "matched_query": FIRST_FRAGMENT,
+            "diagnosis_confidence": 0.7342,
+            "search_score": 0.7342,
+            "pdf_available": True,
+            "pdf_url": "http://localhost:8002/api/v1/clinical-recommendations/286_3/pdf",
+        }
 
 
 def test_session_manager_proxies_clinical_recommendation_pdf(app_factory, monkeypatch):

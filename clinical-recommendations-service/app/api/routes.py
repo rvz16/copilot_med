@@ -6,6 +6,7 @@ from app.schemas import (
     ClinicalRecommendationEntryResponse,
     ClinicalRecommendationListResponse,
     ClinicalRecommendationSearchItemResponse,
+    ClinicalRecommendationSearchRequest,
     ClinicalRecommendationSearchResponse,
     HealthResponse,
 )
@@ -50,12 +51,33 @@ def list_recommendations(
 @router.get(
     "/api/v1/clinical-recommendations/search",
     response_model=ClinicalRecommendationSearchResponse,
-    summary="Search clinical recommendations by disease keywords",
+    summary="Search clinical recommendations by transcript or disease text",
 )
 def search_recommendations(
     query: str = Query(..., min_length=1),
     limit: int = Query(default=10, ge=1, le=50),
     service: ClinicalRecommendationsService = Depends(get_recommendations_service),
+) -> ClinicalRecommendationSearchResponse:
+    return _search_recommendations(query=query, limit=limit, service=service)
+
+
+@router.post(
+    "/api/v1/clinical-recommendations/search",
+    response_model=ClinicalRecommendationSearchResponse,
+    summary="Search clinical recommendations by transcript or disease text",
+)
+def search_recommendations_by_body(
+    payload: ClinicalRecommendationSearchRequest,
+    service: ClinicalRecommendationsService = Depends(get_recommendations_service),
+) -> ClinicalRecommendationSearchResponse:
+    return _search_recommendations(query=payload.query, limit=payload.limit, service=service)
+
+
+def _search_recommendations(
+    *,
+    query: str,
+    limit: int,
+    service: ClinicalRecommendationsService,
 ) -> ClinicalRecommendationSearchResponse:
     results = service.search(query=query, limit=limit)
     return ClinicalRecommendationSearchResponse(

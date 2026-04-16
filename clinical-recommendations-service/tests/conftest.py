@@ -46,6 +46,8 @@ def app_factory(sample_data: tuple[Path, Path]) -> Callable[..., object]:
             "CORS_ORIGINS": ["http://localhost:5173"],
             "CLINICAL_RECOMMENDATIONS_CSV_PATH": csv_path,
             "CLINICAL_RECOMMENDATIONS_PDF_DIR": pdf_dir,
+            "CLINICAL_RECOMMENDATIONS_PDF_DOWNLOAD_ENABLED": False,
+            "CLINICAL_RECOMMENDATIONS_EMBEDDINGS_ENABLED": False,
         }
         config.update(overrides)
         settings = Settings(**config)

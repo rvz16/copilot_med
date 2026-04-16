@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 
 from app.core.errors import ApiError
+from app.services.embeddings import ClinicalRecommendationEmbeddingIndex
 
 _STOPWORDS = {
     "а",
@@ -22,10 +23,22 @@ _STOPWORDS = {
     "о",
     "об",
     "от",
+    "боль",
+    "груди",
+    "день",
+    "дней",
+    "есть",
+    "жалоба",
+    "жалуется",
     "по",
+    "пациент",
+    "пациентка",
+    "подозрение",
+    "подозревается",
     "при",
     "с",
     "со",
+    "течение",
     "у",
 }
 
@@ -158,9 +171,18 @@ def _expand_query_tokens(tokens: set[str]) -> set[str]:
 class ClinicalRecommendationsService:
     """Load official recommendations from CSV and expose lookup and search helpers."""
 
-    def __init__(self, csv_path: Path, pdf_dir: Path) -> None:
+    def __init__(
+        self,
+        csv_path: Path,
+        pdf_dir: Path,
+        *,
+        embedding_index: ClinicalRecommendationEmbeddingIndex | None = None,
+        embeddings_enabled: bool = False,
+    ) -> None:
         self._csv_path = csv_path
         self._pdf_dir = pdf_dir
+        self._embedding_index = embedding_index
+        self._embeddings_enabled = embeddings_enabled and embedding_index is not None
         self._entries = self._load_entries(csv_path, pdf_dir)
         self._entries_by_id = {entry.id: entry for entry in self._entries}
 
@@ -200,6 +222,22 @@ class ClinicalRecommendationsService:
                 status_code=400,
             )
 
+        lexical_results = self._search_by_lexical(normalized_query=normalized_query, limit=None)
+        embedding_results = self._search_by_embeddings(query=query, limit=max(limit * 20, 100))
+        if embedding_results:
+            hybrid_results = self._merge_search_results(
+                embedding_results=embedding_results,
+                lexical_results=lexical_results,
+            )
+            if hybrid_results:
+                return hybrid_results[:limit]
+
+        return lexical_results[:limit]
+
+    def _search_by_lexical(self, *, normalized_query: str, limit: int | None) -> list[SearchResult]:
+        if not normalized_query:
+            return []
+
         query_tokens = set(_tokenize(normalized_query))
         if not query_tokens:
             query_tokens = {normalized_query}
@@ -223,7 +261,12 @@ class ClinicalRecommendationsService:
                 item.entry.id,
             ),
         )
-        return scored[:limit]
+        return scored[:limit] if limit is not None else scored
+
+    def ensure_embedding_index(self, *, force: bool = False) -> None:
+        if not self._embeddings_enabled or self._embedding_index is None:
+            return
+        self._embedding_index.ensure_current(self._entries, force=force)
 
     def get_pdf_path(self, recommendation_id: str) -> Path:
         entry = self.get_entry(recommendation_id)
@@ -234,6 +277,68 @@ class ClinicalRecommendationsService:
                 status_code=404,
             )
         return entry.pdf_path
+
+    def _search_by_embeddings(self, *, query: str, limit: int) -> list[SearchResult]:
+        if not self._embeddings_enabled or self._embedding_index is None:
+            return []
+
+        matches = self._embedding_index.search(query, limit=limit)
+        results: list[SearchResult] = []
+        for match in matches:
+            entry = self._entries_by_id.get(match.recommendation_id)
+            if entry is None:
+                continue
+            results.append(SearchResult(entry=entry, score=match.score))
+        return results
+
+    def _merge_search_results(
+        self,
+        *,
+        embedding_results: list[SearchResult],
+        lexical_results: list[SearchResult],
+    ) -> list[SearchResult]:
+        if not embedding_results:
+            return []
+
+        embedding_by_id = {result.entry.id: result for result in embedding_results}
+        lexical_by_id = {result.entry.id: result for result in lexical_results}
+        max_lexical_score = max((result.score for result in lexical_results), default=0.0)
+        candidate_ids = set(embedding_by_id) | set(lexical_by_id)
+
+        merged: list[SearchResult] = []
+        for recommendation_id in candidate_ids:
+            entry = self._entries_by_id.get(recommendation_id)
+            if entry is None:
+                continue
+
+            embedding_score = (
+                embedding_by_id.get(recommendation_id).score
+                if recommendation_id in embedding_by_id
+                else 0.0
+            )
+            lexical_score = (
+                lexical_by_id.get(recommendation_id).score
+                if recommendation_id in lexical_by_id
+                else 0.0
+            )
+            normalized_lexical_score = (
+                lexical_score / max_lexical_score if max_lexical_score > 0 else 0.0
+            )
+            if max_lexical_score > 0:
+                score = (0.15 * embedding_score) + (0.85 * normalized_lexical_score)
+            else:
+                score = embedding_score
+            if score > 0:
+                merged.append(SearchResult(entry=entry, score=round(score, 4)))
+
+        merged.sort(
+            key=lambda item: (
+                -item.score,
+                item.entry.title.lower(),
+                item.entry.id,
+            ),
+        )
+        return merged
 
     def _score_entry(
         self,
@@ -280,6 +385,14 @@ class ClinicalRecommendationsService:
         synonym_matches = _TOKEN_SYNONYMS.get(query_token, set()) & entry_tokens
         if synonym_matches:
             return 0.92
+
+        synonyms = _TOKEN_SYNONYMS.get(query_token, set())
+        if any(
+            entry_token.startswith(synonym) or synonym.startswith(entry_token)
+            for synonym in synonyms
+            for entry_token in entry_tokens
+        ):
+            return 0.9
 
         if any(token.startswith(query_token) or query_token.startswith(token) for token in entry_tokens):
             return 0.65

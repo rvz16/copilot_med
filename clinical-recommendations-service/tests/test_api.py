@@ -1,5 +1,8 @@
 from fastapi.testclient import TestClient
 
+from app.services.embeddings import EmbeddingSearchMatch
+from app.services.recommendations import ClinicalRecommendationsService
+
 
 def test_health_check_returns_200(client: TestClient):
     response = client.get("/health")
@@ -58,6 +61,39 @@ def test_search_returns_best_matching_disease_id(client: TestClient):
     assert body["items"][0]["id"] == "30_5"
     assert body["items"][0]["pdf_available"] is True
     assert body["items"][0]["score"] > body["items"][1]["score"]
+
+
+def test_post_search_accepts_transcript_body(client: TestClient):
+    response = client.post(
+        "/api/v1/clinical-recommendations/search",
+        json={"query": "Пациент кашляет, есть подозрение на рак легких.", "limit": 3},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["items"][0]["id"] == "30_5"
+
+
+def test_search_uses_embedding_index_when_available(sample_data):
+    csv_path, pdf_dir = sample_data
+
+    class FakeEmbeddingIndex:
+        def search(self, query: str, *, limit: int):
+            assert query == "текст консультации"
+            assert limit == 100
+            return [EmbeddingSearchMatch(recommendation_id="379_4", score=0.9123)]
+
+    service = ClinicalRecommendationsService(
+        csv_path=csv_path,
+        pdf_dir=pdf_dir,
+        embedding_index=FakeEmbeddingIndex(),
+        embeddings_enabled=True,
+    )
+
+    results = service.search(query="текст консультации", limit=2)
+
+    assert [result.entry.id for result in results] == ["379_4"]
+    assert results[0].score == 0.9123
 
 
 def test_blank_search_query_returns_400(client: TestClient):

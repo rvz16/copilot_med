@@ -55,10 +55,6 @@ class Settings(BaseSettings):
         default=5,
         alias="CLINICAL_RECOMMENDATIONS_TIMEOUT_SECONDS",
     )
-    clinical_recommendations_min_confidence: float = Field(
-        default=0.6,
-        alias="CLINICAL_RECOMMENDATIONS_MIN_CONFIDENCE",
-    )
     knowledge_extractor_enabled: bool = Field(default=True, alias="KNOWLEDGE_EXTRACTOR_ENABLED")
     knowledge_extractor_mode: str = Field(default="mock", alias="KNOWLEDGE_EXTRACTOR_MODE")
     knowledge_extractor_url: str = Field(

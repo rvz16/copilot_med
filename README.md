@@ -199,19 +199,24 @@ Useful session-manager settings are defined in [`backend-session-manager/app/cor
 - `HTTP_TIMEOUT_SECONDS` - shared outbound timeout
 - `DEFAULT_CHUNK_MS` - suggested chunk size for uploads
 - `MAX_IN_FLIGHT_REQUESTS` - upload concurrency hint
-- `CLINICAL_RECOMMENDATIONS_MIN_CONFIDENCE` - confidence threshold for recommendations
 
 Useful clinical-recommendations settings in [`clinical-recommendations-service/app/core/config.py`](./clinical-recommendations-service/app/core/config.py):
 
 - `CLINICAL_RECOMMENDATIONS_CSV_PATH` - CSV file with recommendation metadata
 - `CLINICAL_RECOMMENDATIONS_PDF_DIR` - directory with PDFs
+- `CLINICAL_RECOMMENDATIONS_PDF_ARCHIVE_URL` - Google Drive archive used when PDFs are missing
+- `CLINICAL_RECOMMENDATIONS_EMBEDDINGS_PATH` - tracked parquet embedding index
+- `CLINICAL_RECOMMENDATIONS_EMBEDDING_MODEL_NAME` - Hugging Face encoder for PDF/transcript embeddings
+- `CLINICAL_RECOMMENDATIONS_EMBEDDING_QUERY_PREFIX` - query prefix for embedding models that require one
+- `CLINICAL_RECOMMENDATIONS_EMBEDDING_PASSAGE_PREFIX` - document prefix for embedding models that require one
+- `CLINICAL_RECOMMENDATIONS_EMBEDDING_TOKEN_LIMIT` - max PDF/transcript tokens embedded, default 512
 - `CORS_ORIGINS` - allowed frontend origins
 - `PORT` - service port
 
 ## Notes
 
 - The app is designed for a multi-service Docker setup. The root `docker-compose.yml` is the main entry point.
-- The first startup can take a few minutes, especially when models are being downloaded.
+- The first startup can take a few minutes, especially when models or clinical recommendation PDFs are being downloaded and indexed.
 - If Ollama is not running, the system still starts, but live AI suggestions are more limited.
 - If `POST_ANALYTICS_LLM_API_KEY` is missing, the live session can still work, but post-session analysis may fail.
 

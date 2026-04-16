@@ -37,7 +37,6 @@ def app_factory(tmp_path_factory: pytest.TempPathFactory) -> Callable[..., objec
             "CLINICAL_RECOMMENDATIONS_URL": "http://localhost:8002",
             "CLINICAL_RECOMMENDATIONS_PUBLIC_URL": "http://localhost:8002",
             "CLINICAL_RECOMMENDATIONS_TIMEOUT_SECONDS": 1,
-            "CLINICAL_RECOMMENDATIONS_MIN_CONFIDENCE": 0.6,
             "KNOWLEDGE_EXTRACTOR_ENABLED": True,
             "KNOWLEDGE_EXTRACTOR_MODE": "mock",
             "KNOWLEDGE_EXTRACTOR_URL": "http://localhost:8000/extract",

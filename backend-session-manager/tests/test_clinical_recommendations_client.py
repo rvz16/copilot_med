@@ -17,7 +17,7 @@ class DummyResponse:
 def test_clinical_recommendations_client_gets_search_results(monkeypatch):
     captured: dict = {}
 
-    def fake_get(self, url: str, **kwargs):
+    def fake_post(self, url: str, **kwargs):
         del self
         captured["url"] = url
         captured["kwargs"] = kwargs
@@ -37,11 +37,11 @@ def test_clinical_recommendations_client_gets_search_results(monkeypatch):
             }
         )
 
-    monkeypatch.setattr(httpx.Client, "get", fake_get)
+    monkeypatch.setattr(httpx.Client, "post", fake_post)
 
     client = HttpClinicalRecommendationsClient("http://recommendations.local", timeout_seconds=5)
     result = client.search("рак легких", limit=1)
 
     assert captured["url"] == "http://recommendations.local/api/v1/clinical-recommendations/search"
-    assert captured["kwargs"]["params"] == {"query": "рак легких", "limit": 1}
+    assert captured["kwargs"]["json"] == {"query": "рак легких", "limit": 1}
     assert result["items"][0]["id"] == "30_5"

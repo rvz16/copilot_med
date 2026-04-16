@@ -7,7 +7,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     HOST=0.0.0.0 \
     PORT=8002 \
     CLINICAL_RECOMMENDATIONS_CSV_PATH=/app/clinical_recommendations/clinical_recommendations.csv \
-    CLINICAL_RECOMMENDATIONS_PDF_DIR=/app/clinical_recommendations/pdf_files
+    CLINICAL_RECOMMENDATIONS_PDF_DIR=/app/clinical_recommendations/generated/pdf_files \
+    CLINICAL_RECOMMENDATIONS_PDF_ARCHIVE_PATH=/app/clinical_recommendations/generated/pdf_archive.zip \
+    CLINICAL_RECOMMENDATIONS_EMBEDDINGS_PATH=/app/clinical_recommendations/recommendation_embeddings.parquet \
+    CLINICAL_RECOMMENDATIONS_EMBEDDING_MODEL_NAME=intfloat/multilingual-e5-small \
+    CLINICAL_RECOMMENDATIONS_EMBEDDING_QUERY_PREFIX="query: " \
+    CLINICAL_RECOMMENDATIONS_EMBEDDING_PASSAGE_PREFIX="passage: "
 
 WORKDIR /app
 
@@ -17,7 +22,8 @@ RUN pip install -r requirements.txt
 
 COPY clinical-recommendations-service/app ./app
 COPY clinical_recommendations/clinical_recommendations.csv ./clinical_recommendations/clinical_recommendations.csv
-RUN mkdir -p ./clinical_recommendations/pdf_files
+COPY clinical_recommendations/recommendation_embeddings.parquet ./clinical_recommendations/recommendation_embeddings.parquet
+RUN mkdir -p ./clinical_recommendations/generated/pdf_files
 
 RUN adduser --disabled-password --gecos "" appuser \
     && chown -R appuser:appuser /app
