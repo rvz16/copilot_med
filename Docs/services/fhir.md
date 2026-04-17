@@ -1,123 +1,99 @@
-# FHIR Utilities and Local FHIR Server
+# FHIR
 
 ## Purpose
 
-The `fhir/` folder serves two roles:
+The `fhir/` directory contains:
 
-1. it defines the local HAPI FHIR container used by the integrated stack
-2. it provides helper scripts to fetch live data or generate synthetic fallback data
+1. the bundled HAPI FHIR server used by the root Docker Compose stack
+2. helper scripts for importing live or synthetic data
+3. cleanup tooling for MedCoPilot-generated demo artifacts
 
-## What Uses FHIR in This Repository
+## Runtime Role
 
-- `real_time_analysis` reads patient context from FHIR
-- `knowledge-extractor` optionally writes extracted artifacts back to FHIR
-- the local helper scripts populate the HAPI FHIR instance used by those services
+- `realtime-analysis` reads patient context from FHIR
+- `knowledge-extractor` can write extracted artifacts back to FHIR
+- the root stack defaults both services to the bundled local FHIR unless overridden
 
-## Main Files
+## Host Access
 
-| File | Role |
-| --- | --- |
-| `Dockerfile` | local HAPI FHIR container image |
-| `application.yaml` | HAPI FHIR configuration |
-| `fetch_fhir_data.py` | live fetch with synthetic fallback |
-| `generate_synthetic_fhir.py` | standalone synthetic patient/condition/observation/medication/allergy generation |
-| `cleanup_generated_resources.py` | removes legacy conversational `Condition` resources and generated SOAP documents |
-| `retrieve_and_import.sh` | end-to-end bootstrap and import helper |
-| `output/` | generated/fetched JSON artifacts |
+In the shipped root stack:
 
-## Local FHIR Container
+- FHIR base URL: `http://localhost:8092/fhir`
+- Capability statement: `http://localhost:8092/fhir/metadata`
 
-The root `docker-compose.yml` exposes:
-
-- UI: `http://localhost:8092/`
-- FHIR base: `http://localhost:8092/fhir`
-
-Other containers use:
+Inside Docker Compose, other containers use:
 
 - `http://fhir:8092/fhir`
 
-## Data Bootstrap Options
+## Important Files
 
-### Live fetch
+| File | Role |
+| --- | --- |
+| `Dockerfile` | HAPI FHIR image |
+| `application.yaml` | HAPI configuration |
+| `fetch_fhir_data.py` | fetch live data with synthetic fallback |
+| `generate_synthetic_fhir.py` | generate synthetic demo resources |
+| `retrieve_and_import.sh` | start local FHIR and import live or synthetic data |
+| `cleanup_generated_resources.py` | remove MedCoPilot-generated legacy data |
+| `output/` | saved JSON artifacts |
 
-`fetch_fhir_data.py` tries to:
+## Import Synthetic Demo Data
 
-- call a live FHIR server
-- save patient bundles and observations under `fhir/output/`
+The bundled local FHIR starts empty. To preload synthetic sample patients:
 
-### Synthetic fallback
+```bash
+python3 -m pip install -r fhir/requirements.txt
+./fhir/retrieve_and_import.sh --force-synthetic
+```
 
-If live fetch fails, the script can generate:
+After import, sample patient IDs include:
 
-- synthetic patients
-- synthetic conditions
-- synthetic observations
-- synthetic medications
-- synthetic allergies
+- `synthetic-patient-001`
+- `synthetic-patient-002`
+- `synthetic-patient-003`
+- `synthetic-patient-004`
+- `synthetic-patient-005`
 
-This makes the rest of the stack testable even when the original lab server is unavailable.
+## Import From A Live FHIR
 
-### Import into local FHIR
+To fetch from a live endpoint first and fall back to synthetic data only if that fetch fails:
 
-`retrieve_and_import.sh`:
+```bash
+python3 fhir/fetch_fhir_data.py --base-url https://example.org/fhir
+```
 
-1. starts the local container
-2. waits for `/metadata`
-3. runs the fetch/generate step
-4. imports resources with `PUT` so resource IDs are preserved
+To import fetched data into the bundled local FHIR:
 
-## Output Files
+```bash
+python3 fhir/fetch_fhir_data.py \
+  --base-url https://example.org/fhir \
+  --import-base-url http://localhost:8092/fhir
+```
 
-Typical generated artifacts:
+## Switch The Application To An External FHIR
 
-- `patients_bundle.json`
-- `patient_summaries.json`
-- `patient_<id>.json`
-- `observations_<id>.json`
-- `conditions_<id>.json`
-- `medications_<id>.json`
-- `allergies_<id>.json`
-- `synthetic_patients_bundle.json`
-- `synthetic_observations_<id>.json`
+Set these root `.env` variables:
 
-## External FHIR Configuration
+```bash
+MEDCOPILOT_FHIR_BASE_URL=https://example.org/fhir
+MEDCOPILOT_FHIR_HEADERS_JSON='{"Authorization":"Bearer <token>"}'
+MEDCOPILOT_FHIR_VERIFY_SSL=true
+```
 
-For the root stack, the preferred integration variables are:
-
-- `MEDCOPILOT_FHIR_BASE_URL`
-- `MEDCOPILOT_FHIR_HEADERS_JSON`
-- `MEDCOPILOT_FHIR_VERIFY_SSL`
-
-These are consumed by:
-
-- `realtime-analysis` for patient context reads
-- `knowledge-extractor` for FHIR write-back
-
-Per-service overrides still exist if needed:
+If only one service should be redirected, use the per-service overrides instead:
 
 - `REALTIME_ANALYSIS_FHIR_*`
 - `KNOWLEDGE_EXTRACTOR_FHIR_*`
 
-## Cleaning Legacy Demo Data
+## Clean Generated Demo Resources
 
-If older demo runs wrote conversational garbage into the local HAPI server, run:
+If an earlier demo run wrote noisy generated content, clean it with:
 
 ```bash
-python3 fhir/cleanup_generated_resources.py --base-url http://localhost:8092/fhir --patient-id synthetic-patient-001 --apply
+python3 fhir/cleanup_generated_resources.py \
+  --base-url http://localhost:8092/fhir \
+  --patient-id synthetic-patient-001 \
+  --apply
 ```
 
-The cleanup script is intentionally conservative:
-
-- it deletes obvious conversational `Condition` resources
-- it removes generated SOAP `DocumentReference` resources from prior MedCoPilot runs
-- it leaves normal clinical resources untouched unless they clearly match cleanup rules
-
-## Repository Role
-
-This folder is not the core application logic, but it is important because it gives the stack a local interoperability target for:
-
-- patient context retrieval
-- resource persistence
-- offline demos
-
-Without it, the realtime and extraction services can still run, but the FHIR-backed features become limited or unavailable.
+The cleanup tool targets MedCoPilot-generated conversational artifacts and older generated SOAP documents.

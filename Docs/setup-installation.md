@@ -1,133 +1,97 @@
 # Setup and Installation
 
-## Purpose
+## Scope
 
-This document explains how to prepare and run the full MedCoPilot stack locally with Docker Compose.
+This is the operator guide for starting the full repository with the root `docker-compose.yml`.
 
 ## Prerequisites
 
-- Docker Desktop or a compatible Docker Engine with Compose
-- Python is only required when running service-level tests outside containers
-- Kaggle credentials for the Whisper model bootstrap used by `transcribation`
-- Recommended: Ollama running on the host at `http://localhost:11434`
+- Docker Desktop or Docker Engine with Compose
+- Browser microphone permission
+- One transcription path:
+  - Groq API key, or
+  - Kaggle credentials for local Whisper bootstrap
+- A realtime-analysis LLM endpoint
+- A post-session OpenAI-compatible API key if session close must complete the analytics step
 
-## Required External Assets
-
-### 1. Whisper model access
-
-The `transcribation` container downloads the model declared by:
-
-- `MODEL_KAGGLE_DATASET=danchik575/whisper-ct2-ru`
-
-Supported credential sources:
-
-- `~/.kaggle/kaggle.json`
-- `~/.kaggle/access_token`
-- `KAGGLE_API_TOKEN`
-- `KAGGLE_USERNAME` and `KAGGLE_KEY`
-
-### 2. Clinical recommendation PDFs
-
-Download the clinical recommendation PDFs from:
-
-- [Google Drive folder](https://drive.google.com/drive/folders/1m0AiEByrTHS7VP8iqhYoppIbBisRsARw?usp=sharing)
-
-Place the files into:
-
-```text
-clinical_recommendations/pdf_files/
-```
-
-This directory is mounted read-only into the `clinical-recommendations` container:
-
-```yaml
-volumes:
-  - ./clinical_recommendations/pdf_files:/app/clinical_recommendations/pdf_files:ro
-```
-
-## Recommended Host Preparation
-
-### Ollama
-
-For richer realtime suggestions:
+## 1. Prepare `.env`
 
 ```bash
-ollama pull qwen3:4b
-ollama serve
+cp .env.example .env
 ```
 
-### Environment variables
+Minimum settings:
 
-The root `docker-compose.yml` already contains usable defaults, but the most important overrides are:
+- `TRANSCRIBATION_GROQ_API_KEY`, or
+- `TRANSCRIBATION_USE_GROQ_API=false` with `KAGGLE_USERNAME` and `KAGGLE_KEY`
+- `POST_ANALYTICS_LLM_API_KEY` if post-session analysis must succeed on session close
 
-- `KAGGLE_API_TOKEN`
-- `KAGGLE_USERNAME`
-- `KAGGLE_KEY`
-- `REALTIME_ANALYSIS_LLM_PROVIDER`
-- `REALTIME_ANALYSIS_MODEL_NAME`
-- `REALTIME_ANALYSIS_LLM_BASE_URL`
-- `REALTIME_ANALYSIS_LLM_API_KEY`
-- `POST_ANALYTICS_LLM_API_KEY`
+For provider, model, and FHIR changes, use [Configuration Reference](./configuration.md).
 
-## Start the Stack
-
-From the repository root:
+## 2. Start the stack
 
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
-Published endpoints:
+The root stack publishes these host endpoints:
 
-- Frontend: `http://localhost:3000`
-- Session Manager: `http://localhost:8080`
-- Transcribation: `http://localhost:8000`
-- Realtime Analysis: `http://localhost:8001`
-- Clinical Recommendations: `http://localhost:8002`
-- Post-Session Analytics: `http://localhost:8003`
-- Knowledge Extractor: `http://localhost:8004`
-- FHIR server: `http://localhost:8092`
+- `http://localhost:3000` - frontend
+- `http://localhost:8080` - session manager API
+- `http://localhost:8092/fhir` - bundled local FHIR
 
-## First-Run Notes
+Other services stay on the internal Docker network and are reached by service name.
 
-- `transcribation` may take several minutes on first boot because it downloads and caches the Whisper model
-- `frontend` proxies `/api` and `/health` to `session-manager`
-- `session-manager` waits for dependent services to become healthy before the UI becomes usable
-- if the PDF directory is empty, PDF metadata endpoints still work but PDF download endpoints do not
-
-## Health Checks
-
-Verify each container after startup:
+## 3. Verify readiness
 
 ```bash
+docker compose ps
 curl http://localhost:3000/health
 curl http://localhost:8080/health
-curl http://localhost:8000/health
-curl http://localhost:8001/health
-curl http://localhost:8002/health
-curl http://localhost:8003/health
-curl http://localhost:8004/health
+curl http://localhost:8092/fhir/metadata
 ```
 
-## Stop or Reset
+Useful logs:
 
-Stop services:
+```bash
+docker compose logs -f session-manager
+docker compose logs -f transcribation
+docker compose logs -f realtime-analysis
+```
+
+## 4. Run the product
+
+1. Open `http://localhost:3000`.
+2. Create a session with any doctor ID and patient ID.
+3. Start recording, speak, stop, and close the session.
+4. Check the session detail page for the final transcript and extracted outputs.
+
+## FHIR-backed demo data
+
+The bundled local FHIR server starts empty. If you want patient context in realtime analysis without pointing at an external FHIR, import synthetic sample data:
+
+```bash
+python3 -m pip install -r fhir/requirements.txt
+./fhir/retrieve_and_import.sh --force-synthetic
+```
+
+After import, sample patient IDs include:
+
+- `synthetic-patient-001`
+- `synthetic-patient-002`
+- `synthetic-patient-003`
+
+## First-start behavior
+
+- `transcribation` may take time on first boot if it has to download the local Whisper model
+- `clinical-recommendations` may take time on first boot if it has to download and extract the PDF archive
+- `session-manager` waits for dependent services to become healthy before the frontend becomes usable
+
+## Stop or reset
 
 ```bash
 docker compose down
-```
-
-Stop and delete named volumes:
-
-```bash
 docker compose down -v
 ```
 
-## Focused Test Commands
-
-The repository contains service-level tests. Examples:
-
-```bash
-cd knowledge-extractor && PYTHONPATH=. uv run --python 3.12 --with-requirements requirements.txt pytest tests/test_api.py
-cd post-session-analytics && PYTHONPATH=. uv run --python 3.12 --with pytest --with-requirements requirements.txt pytest tests/test_api.py
-```
+`docker compose down -v` removes persisted data, including session state, cached ASR model files, downloaded recommendation assets, and local FHIR data.

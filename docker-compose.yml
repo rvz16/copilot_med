@@ -64,6 +64,8 @@ services:
     build:
       context: ./fhir
     user: "0:0"
+    ports:
+      - "8092:8092"
     volumes:
       - fhir-data:/data/hapi
 

@@ -132,11 +132,8 @@ This gives the repository a lightweight audit and troubleshooting trail even wit
 ```bash
 curl http://localhost:3000/health
 curl http://localhost:8080/health
-curl http://localhost:8000/health
-curl http://localhost:8001/health
-curl http://localhost:8002/health
-curl http://localhost:8003/health
-curl http://localhost:8004/health
+curl http://localhost:8092/fhir/metadata
+docker compose ps
 ```
 
 ### Container logs

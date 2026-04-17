@@ -1,6 +1,14 @@
 # API Specifications
 
-This document summarizes the HTTP contracts exposed by each container in the integrated stack.
+This document summarizes the HTTP contracts exposed by each container.
+
+In the shipped root Docker Compose stack, only these services are published on the host:
+
+- `frontend` at `http://localhost:3000`
+- `session-manager` at `http://localhost:8080`
+- `fhir` at `http://localhost:8092/fhir`
+
+Other services below are documented by their standalone or container-internal base URLs.
 
 ## Error Envelope
 
@@ -109,7 +117,7 @@ Response fields:
 
 ## 3. Transcribation
 
-Base URL: `http://localhost:8000`
+Base URL: `http://transcribation:8000` inside Docker, or `http://localhost:8000` when run standalone
 
 | Method | Path | Description |
 | --- | --- | --- |
@@ -161,7 +169,7 @@ New validation and failure cases:
 
 ## 4. Realtime Analysis
 
-Base URL: `http://localhost:8001`
+Base URL: `http://realtime-analysis:8000` inside Docker, or `http://localhost:8000` when run standalone
 
 | Method | Path | Description |
 | --- | --- | --- |
@@ -198,7 +206,7 @@ Core response fields:
 
 ## 5. Clinical Recommendations Service
 
-Base URL: `http://localhost:8002`
+Base URL: `http://clinical-recommendations:8002` inside Docker, or `http://localhost:8002` when run standalone
 
 | Method | Path | Description |
 | --- | --- | --- |
@@ -230,7 +238,7 @@ Typical error codes:
 
 ## 6. Knowledge Extractor
 
-Base URL: `http://localhost:8004`
+Base URL: `http://knowledge-extractor:8000` inside Docker, or `http://localhost:8000` when run standalone
 
 | Method | Path | Description |
 | --- | --- | --- |
@@ -274,7 +282,7 @@ Validation behavior:
 
 ## 7. Post-Session Analytics
 
-Base URL: `http://localhost:8003`
+Base URL: `http://post-session-analytics:8000` inside Docker, or `http://localhost:8000` when run standalone
 
 | Method | Path | Description |
 | --- | --- | --- |
