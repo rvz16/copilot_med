@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.config import MODEL_KAGGLE_DATASET, MODEL_PATH
+from app.config import MODEL_KAGGLE_DATASET, MODEL_PATH, USE_GROQ_API
 
 MODEL_MARKERS = ("model.bin", "config.json")
 
@@ -75,6 +75,9 @@ def find_model_dir(search_root: Path) -> Path | None:
 
 
 def download_model() -> None:
+    if USE_GROQ_API:
+        return
+
     if is_model_dir(MODEL_PATH):
         print(f"Model already present at {MODEL_PATH}.")
         return
