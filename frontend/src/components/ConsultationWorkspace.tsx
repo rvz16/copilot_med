@@ -7,6 +7,7 @@ import { SessionOverviewPanel } from './SessionOverviewPanel';
 import { StatusPanel } from './StatusPanel';
 import { TranscriptPanel } from './TranscriptPanel';
 import type { AnalysisModelOption } from '../data/analysisModels';
+import { useUiLanguage } from '../i18n';
 import type {
   Hint,
   KnowledgeExtraction,
@@ -89,20 +90,48 @@ export function ConsultationWorkspace({
   onCloseSession,
   onBackToDashboard,
 }: Props) {
+  const { language } = useUiLanguage();
   const patientContext = analysis?.patient_context ?? null;
   const recommendedDocuments = analysis?.recommended_documents ?? [];
   const finalizedTranscript = postSessionAnalytics?.full_transcript?.full_text ?? '';
   const archiveTranscript =
     finalizedTranscript.trim().length >= transcript.trim().length ? finalizedTranscript : transcript;
+  const copy = language === 'en'
+    ? {
+        live: 'Consultation in progress',
+        archive: 'Consultation archive',
+        liveState: 'active workspace',
+        archiveState: 'saved final state',
+        archiveTitle: 'Archived recording',
+        archiveText:
+          'This consultation is open in read-only mode. The panels on the right show the visit exactly as it was saved when the session ended.',
+        liveTranscript: 'Transcript',
+        archiveTranscript: 'Final full-recording transcript',
+        livePlaceholder: 'The transcript will appear here after recording starts…',
+        archivePlaceholder: 'No text was saved for this consultation.',
+      }
+    : {
+        live: 'Консультация в работе',
+        archive: 'Архив консультации',
+        liveState: 'активное рабочее пространство',
+        archiveState: 'сохранённое итоговое состояние',
+        archiveTitle: 'Архивная запись',
+        archiveText:
+          'Эта консультация открыта в режиме просмотра. Панели справа показывают состояние встречи таким, каким оно было сохранено при завершении сессии.',
+        liveTranscript: 'Транскрипция',
+        archiveTranscript: 'Финальная транскрипция всей записи',
+        livePlaceholder: 'Транскрипция появится здесь после начала записи…',
+        archivePlaceholder: 'Для этой консультации не было сохранено текста.',
+      };
 
   return (
     <main className="workspace-page">
       <div className="workspace-header">
         <div>
-          <p className="eyebrow">{mode === 'live' ? 'Консультация в работе' : 'Архив консультации'}</p>
+          <p className="eyebrow">{mode === 'live' ? copy.live : copy.archive}</p>
           <h1>
             {patientName}
-            <span>{mode === 'live' ? ' активное рабочее пространство' : ' сохранённое итоговое состояние'}</span>
+            <span>{mode === 'live' ? ` ${copy.liveState}` : ` ${copy.archiveState}`}</span>
           </h1>
         </div>
       </div>
@@ -146,11 +175,8 @@ export function ConsultationWorkspace({
             />
           ) : (
             <section className="panel archive-note-panel">
-              <h2>Архивная запись</h2>
-              <p>
-                Эта консультация открыта в режиме просмотра. Панели справа показывают состояние
-                встречи таким, каким оно было сохранено при завершении сессии.
-              </p>
+              <h2>{copy.archiveTitle}</h2>
+              <p>{copy.archiveText}</p>
             </section>
           )}
 
@@ -173,11 +199,11 @@ export function ConsultationWorkspace({
             />
           )}
           <TranscriptPanel
-            title={mode === 'live' ? 'Транскрипция' : 'Финальная транскрипция всей записи'}
+            title={mode === 'live' ? copy.liveTranscript : copy.archiveTranscript}
             placeholder={
               mode === 'live'
-                ? 'Транскрипция появится здесь после начала записи…'
-                : 'Для этой консультации не было сохранено текста.'
+                ? copy.livePlaceholder
+                : copy.archivePlaceholder
             }
             transcript={mode === 'archive' ? archiveTranscript : transcript}
             diarization={mode === 'archive' ? postSessionAnalytics?.diarization ?? null : null}

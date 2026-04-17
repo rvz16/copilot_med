@@ -1,3 +1,4 @@
+import { useUiLanguage, type UiLanguage } from '../i18n';
 import type { KnowledgeExtraction, KnowledgeSoapNote } from '../types/types';
 
 interface Props {
@@ -28,6 +29,10 @@ interface EhrResourceView {
   type: string;
   id: string | null;
   description: string;
+}
+
+function localizedText(language: UiLanguage, ru: string, en: string): string {
+  return language === 'en' ? en : ru;
 }
 
 function formatPercent(value: number | null | undefined): string {
@@ -96,25 +101,77 @@ function getTextField(value: Record<string, unknown>, key: string): string | nul
   return nested ? asString(nested.text) : null;
 }
 
-function describeFhirResource(resource: Record<string, unknown>): string {
+function getSectionLabels(language: UiLanguage): Record<string, string> {
+  return language === 'en'
+    ? {
+        subjective: 'Subjective',
+        objective: 'Objective',
+        assessment: 'Assessment',
+        plan: 'Plan',
+      }
+    : {
+        subjective: 'Субъективно',
+        objective: 'Объективно',
+        assessment: 'Оценка',
+        plan: 'План',
+      };
+}
+
+function getEhrStatusLabels(language: UiLanguage): Record<string, string> {
+  return language === 'en'
+    ? {
+        synced: 'synced',
+        partial: 'partial',
+        failed: 'failed',
+        preview: 'preview',
+        skipped: 'skipped',
+      }
+    : {
+        synced: 'записано',
+        partial: 'частично',
+        failed: 'ошибка',
+        preview: 'предпросмотр',
+        skipped: 'пропущено',
+      };
+}
+
+function describeFhirResource(resource: Record<string, unknown>, language: UiLanguage): string {
   const resourceType = asString(resource.resourceType) ?? 'Resource';
 
   switch (resourceType) {
     case 'Condition':
-      return getTextField(resource, 'code') ?? 'Клиническое состояние без текстового описания';
+      return (
+        getTextField(resource, 'code') ??
+        localizedText(
+          language,
+          'Клиническое состояние без текстового описания',
+          'Clinical condition without text description',
+        )
+      );
     case 'Observation':
       return (
         asString(resource.valueString) ??
         getTextField(resource, 'code') ??
-        'Наблюдение без текстового описания'
+        localizedText(
+          language,
+          'Наблюдение без текстового описания',
+          'Observation without text description',
+        )
       );
     case 'MedicationStatement':
       return (
         getTextField(resource, 'medicationCodeableConcept') ??
-        'Назначение без текстового описания'
+        localizedText(
+          language,
+          'Назначение без текстового описания',
+          'Medication statement without text description',
+        )
       );
     case 'AllergyIntolerance':
-      return getTextField(resource, 'code') ?? 'Аллергия без текстового описания';
+      return (
+        getTextField(resource, 'code') ??
+        localizedText(language, 'Аллергия без текстового описания', 'Allergy without text description')
+      );
     case 'DocumentReference': {
       const description = asString(resource.description);
       if (description) {
@@ -125,16 +182,31 @@ function describeFhirResource(resource: Record<string, unknown>): string {
       const attachment = firstContent ? asRecord(firstContent.attachment) : null;
       const title = asString(attachment?.title);
       if (title) {
-        return `Полная SOAP-заметка консультации в JSON: ${title}`;
+        return localizedText(
+          language,
+          `Полная SOAP-заметка консультации в JSON: ${title}`,
+          `Full consultation SOAP note in JSON: ${title}`,
+        );
       }
-      return 'Полная SOAP-заметка консультации в JSON';
+      return localizedText(
+        language,
+        'Полная SOAP-заметка консультации в JSON',
+        'Full consultation SOAP note in JSON',
+      );
     }
     default:
-      return `${resourceType} без текстового описания`;
+      return localizedText(
+        language,
+        `${resourceType} без текстового описания`,
+        `${resourceType} without text description`,
+      );
   }
 }
 
-function buildWrittenResources(extraction: KnowledgeExtraction): EhrResourceView[] {
+function buildWrittenResources(
+  extraction: KnowledgeExtraction,
+  language: UiLanguage,
+): EhrResourceView[] {
   const created = extraction.persistence?.created ?? [];
   const resources: Array<EhrResourceView | null> = created.map((item, index) => {
     const record = asRecord(item);
@@ -154,14 +226,19 @@ function buildWrittenResources(extraction: KnowledgeExtraction): EhrResourceView
       key: `${type}-${id ?? 'pending'}-${index}`,
       type,
       id,
-      description: resource ? describeFhirResource(resource) : `${type} без детального описания`,
+      description: resource
+        ? describeFhirResource(resource, language)
+        : localizedText(language, `${type} без детального описания`, `${type} without detailed description`),
     };
   });
 
   return resources.filter((item): item is EhrResourceView => item !== null);
 }
 
-function buildPreparedResources(extraction: KnowledgeExtraction): EhrResourceView[] {
+function buildPreparedResources(
+  extraction: KnowledgeExtraction,
+  language: UiLanguage,
+): EhrResourceView[] {
   const resources: Array<EhrResourceView | null> = extraction.fhir_resources.map((item, index) => {
     const resource = asRecord(item);
     if (!resource) {
@@ -173,48 +250,135 @@ function buildPreparedResources(extraction: KnowledgeExtraction): EhrResourceVie
       key: `${type}-${index}`,
       type,
       id: null,
-      description: describeFhirResource(resource),
+      description: describeFhirResource(resource, language),
     };
   });
 
   return resources.filter((item): item is EhrResourceView => item !== null);
 }
 
-function formatMissingSections(missingSections: string[] | undefined): string {
+function formatMissingSections(missingSections: string[] | undefined, language: UiLanguage): string {
   if (!missingSections?.length) {
-    return 'Валидация выполнена';
+    return localizedText(language, 'Валидация выполнена', 'Validation passed');
   }
-  return `Отсутствуют: ${missingSections.map((name) => SECTION_LABELS[name] ?? name).join(', ')}`;
+
+  const sectionLabels = getSectionLabels(language);
+  return localizedText(language, 'Отсутствуют: ', 'Missing: ').concat(
+    missingSections.map((name) => sectionLabels[name] ?? name).join(', '),
+  );
 }
 
-const SECTION_LABELS: Record<string, string> = {
-  subjective: 'Субъективно',
-  objective: 'Объективно',
-  assessment: 'Оценка',
-  plan: 'План',
-};
-
-const EHR_STATUS_LABELS: Record<string, string> = {
-  synced: 'записано',
-  partial: 'частично',
-  failed: 'ошибка',
-  preview: 'предпросмотр',
-  skipped: 'пропущено',
-};
-
 export function KnowledgeExtractionPanel({ extraction, status }: Props) {
+  const { language } = useUiLanguage();
+  const sectionLabels = getSectionLabels(language);
+  const ehrStatusLabels = getEhrStatusLabels(language);
+  const copy = language === 'en'
+    ? {
+        title: 'Knowledge extraction service',
+        noData: 'no data',
+        pending: 'in progress',
+        readySoap: 'SOAP completed',
+        needsReview: 'SOAP needs review',
+        ehrEnabled: 'EHR writeback enabled',
+        previewOnly: 'Preview only',
+        noStatus: 'no status',
+        completeness: 'SOAP completeness',
+        allSections: 'All sections populated',
+        gaps: 'Contains gaps',
+        confidence: 'Overall confidence',
+        confidenceHint: 'Estimate across extracted clinical elements',
+        recordsWritten: 'EHR records',
+        successErrors: (success: number, failed: number) => `${success} succeeded, errors: ${failed}`,
+        ehr: 'EHR',
+        noDataLong:
+          'The archive does not contain a knowledge extraction report. If processing should have finished, verify session completion and integration availability.',
+        pendingText:
+          'Structured SOAP notes, confidence scores, and the EHR writeback report via FHIR will appear here once processing finishes.',
+        soapTitle: 'SOAP notes',
+        extractedSection: 'Extracted consultation elements',
+        reviewSection: 'Section requires clinician review',
+        hasFallback: 'has fallback',
+        extracted: 'extracted',
+        confidenceLabel: 'Confidence',
+        fallbackFlag: 'service fallback',
+        ehrTitle: 'EHR writeback report via FHIR',
+        ehrAddress: 'EHR/FHIR endpoint',
+        previewEndpoint: 'preview only',
+        preparedResources: 'Prepared resources',
+        synced: 'synced',
+        prepared: 'prepared',
+        noResources: 'No new EHR records have been prepared yet.',
+        serviceSummary: 'Service summary',
+        system: 'System',
+        patient: 'Patient',
+        syncedBlocks: 'Synced blocks',
+        complaint: 'Complaint',
+        concern: 'Concern',
+        observation: 'Observation',
+        measurement: 'Measurement',
+        diagnosis: 'Diagnosis',
+        assessment: 'Assessment',
+        treatment: 'Treatment',
+        followUp: 'Follow-up',
+      }
+    : {
+        title: 'Сервис извлечения знаний',
+        noData: 'нет данных',
+        pending: 'в работе',
+        readySoap: 'SOAP заполнен',
+        needsReview: 'SOAP требует проверки',
+        ehrEnabled: 'Запись в EHR включена',
+        previewOnly: 'Только предпросмотр',
+        noStatus: 'нет статуса',
+        completeness: 'Полнота SOAP',
+        allSections: 'Все разделы заполнены',
+        gaps: 'Есть пробелы',
+        confidence: 'Общая уверенность',
+        confidenceHint: 'Оценка по извлечённым клиническим элементам',
+        recordsWritten: 'Записей в EHR',
+        successErrors: (success: number, failed: number) => `успешно: ${success}, ошибок: ${failed}`,
+        ehr: 'EHR',
+        noDataLong:
+          'Архив не содержит отчёта сервиса извлечения знаний. Если обработка должна была выполниться, проверьте завершение сессии и доступность интеграций.',
+        pendingText:
+          'После завершения обработки здесь появятся структурированные SOAP-заметки, уровни уверенности и отчёт о записи в EHR через FHIR.',
+        soapTitle: 'SOAP-заметки',
+        extractedSection: 'Извлечённые элементы консультации',
+        reviewSection: 'Раздел требует врачебной проверки',
+        hasFallback: 'есть fallback',
+        extracted: 'извлечено',
+        confidenceLabel: 'Уверенность',
+        fallbackFlag: 'служебный fallback',
+        ehrTitle: 'Отчёт о записи в EHR через FHIR',
+        ehrAddress: 'Адрес EHR/FHIR',
+        previewEndpoint: 'только предпросмотр',
+        preparedResources: 'Подготовлено ресурсов',
+        synced: 'записано',
+        prepared: 'подготовлено',
+        noResources: 'Новые записи EHR ещё не были подготовлены.',
+        serviceSummary: 'Итог работы сервиса',
+        system: 'Система',
+        patient: 'Пациент',
+        syncedBlocks: 'Переданные блоки',
+        complaint: 'Жалоба',
+        concern: 'Опасение',
+        observation: 'Наблюдение',
+        measurement: 'Измерение',
+        diagnosis: 'Диагноз',
+        assessment: 'Оценка',
+        treatment: 'Лечение',
+        followUp: 'Наблюдение',
+      };
+
   if (!extraction) {
     if (status !== 'analyzing') {
       return (
         <section className="panel knowledge-panel" id="knowledge-extraction-panel">
           <div className="knowledge-header">
-            <h2>Сервис извлечения знаний</h2>
-            <span className="knowledge-badge">нет данных</span>
+            <h2>{copy.title}</h2>
+            <span className="knowledge-badge">{copy.noData}</span>
           </div>
-          <p className="knowledge-pending">
-            Архив не содержит отчёта сервиса извлечения знаний. Если обработка должна была
-            выполниться, проверьте завершение сессии и доступность интеграций.
-          </p>
+          <p className="knowledge-pending">{copy.noDataLong}</p>
         </section>
       );
     }
@@ -222,13 +386,10 @@ export function KnowledgeExtractionPanel({ extraction, status }: Props) {
     return (
       <section className="panel knowledge-panel" id="knowledge-extraction-panel">
         <div className="knowledge-header">
-          <h2>Сервис извлечения знаний</h2>
-          <span className="knowledge-badge">в работе</span>
+          <h2>{copy.title}</h2>
+          <span className="knowledge-badge">{copy.pending}</span>
         </div>
-        <p className="knowledge-pending">
-          После завершения обработки здесь появятся структурированные SOAP-заметки, уровни
-          уверенности и отчёт о записи в EHR через FHIR.
-        </p>
+        <p className="knowledge-pending">{copy.pendingText}</p>
       </section>
     );
   }
@@ -249,13 +410,13 @@ export function KnowledgeExtractionPanel({ extraction, status }: Props) {
     ? [
         {
           key: 'subjective',
-          label: SECTION_LABELS.subjective,
+          label: sectionLabels.subjective,
           populated: validation?.sections.subjective?.populated ?? false,
           usedFallback: validation?.sections.subjective?.used_fallback ?? false,
           entries: [
             ...buildSoapEntries({
               sectionKey: 'subjective',
-              kind: 'Жалоба',
+              kind: copy.complaint,
               items: soapNote.subjective.reported_symptoms,
               extractedItems: extraction.extracted_facts.symptoms,
               itemConfidence: confidence?.extracted_fields.symptoms,
@@ -264,7 +425,7 @@ export function KnowledgeExtractionPanel({ extraction, status }: Props) {
             }),
             ...buildSoapEntries({
               sectionKey: 'subjective',
-              kind: 'Опасение',
+              kind: copy.concern,
               items: soapNote.subjective.reported_concerns,
               extractedItems: extraction.extracted_facts.concerns,
               itemConfidence: confidence?.extracted_fields.concerns,
@@ -275,13 +436,13 @@ export function KnowledgeExtractionPanel({ extraction, status }: Props) {
         },
         {
           key: 'objective',
-          label: SECTION_LABELS.objective,
+          label: sectionLabels.objective,
           populated: validation?.sections.objective?.populated ?? false,
           usedFallback: validation?.sections.objective?.used_fallback ?? false,
           entries: [
             ...buildSoapEntries({
               sectionKey: 'objective',
-              kind: 'Наблюдение',
+              kind: copy.observation,
               items: soapNote.objective.observations,
               extractedItems: extraction.extracted_facts.observations,
               itemConfidence: confidence?.extracted_fields.observations,
@@ -290,7 +451,7 @@ export function KnowledgeExtractionPanel({ extraction, status }: Props) {
             }),
             ...buildSoapEntries({
               sectionKey: 'objective',
-              kind: 'Измерение',
+              kind: copy.measurement,
               items: soapNote.objective.measurements,
               extractedItems: extraction.extracted_facts.measurements,
               itemConfidence: confidence?.extracted_fields.measurements,
@@ -301,13 +462,13 @@ export function KnowledgeExtractionPanel({ extraction, status }: Props) {
         },
         {
           key: 'assessment',
-          label: SECTION_LABELS.assessment,
+          label: sectionLabels.assessment,
           populated: validation?.sections.assessment?.populated ?? false,
           usedFallback: validation?.sections.assessment?.used_fallback ?? false,
           entries: [
             ...buildSoapEntries({
               sectionKey: 'assessment',
-              kind: 'Диагноз',
+              kind: copy.diagnosis,
               items: soapNote.assessment.diagnoses,
               extractedItems: extraction.extracted_facts.diagnoses,
               itemConfidence: confidence?.extracted_fields.diagnoses,
@@ -316,7 +477,7 @@ export function KnowledgeExtractionPanel({ extraction, status }: Props) {
             }),
             ...buildSoapEntries({
               sectionKey: 'assessment',
-              kind: 'Оценка',
+              kind: copy.assessment,
               items: soapNote.assessment.evaluation,
               extractedItems: extraction.extracted_facts.evaluation,
               itemConfidence: confidence?.extracted_fields.evaluation,
@@ -327,13 +488,13 @@ export function KnowledgeExtractionPanel({ extraction, status }: Props) {
         },
         {
           key: 'plan',
-          label: SECTION_LABELS.plan,
+          label: sectionLabels.plan,
           populated: validation?.sections.plan?.populated ?? false,
           usedFallback: validation?.sections.plan?.used_fallback ?? false,
           entries: [
             ...buildSoapEntries({
               sectionKey: 'plan',
-              kind: 'Лечение',
+              kind: copy.treatment,
               items: soapNote.plan.treatment,
               extractedItems: extraction.extracted_facts.treatment,
               itemConfidence: confidence?.extracted_fields.treatment,
@@ -342,7 +503,7 @@ export function KnowledgeExtractionPanel({ extraction, status }: Props) {
             }),
             ...buildSoapEntries({
               sectionKey: 'plan',
-              kind: 'Наблюдение',
+              kind: copy.followUp,
               items: soapNote.plan.follow_up_instructions,
               extractedItems: extraction.extracted_facts.follow_up_instructions,
               itemConfidence: confidence?.extracted_fields.follow_up_instructions,
@@ -354,52 +515,52 @@ export function KnowledgeExtractionPanel({ extraction, status }: Props) {
       ]
     : [];
 
-  const writtenResources = buildWrittenResources(extraction);
-  const preparedResources = buildPreparedResources(extraction);
+  const writtenResources = buildWrittenResources(extraction, language);
+  const preparedResources = buildPreparedResources(extraction, language);
   const hasWrittenResources = writtenResources.length > 0;
 
   return (
     <section className="panel knowledge-panel" id="knowledge-extraction-panel">
       <div className="knowledge-header">
-        <h2>Сервис извлечения знаний</h2>
+        <h2>{copy.title}</h2>
         <div className="knowledge-badge-row">
           <span className="knowledge-badge">
-            {validation?.all_sections_populated ? 'SOAP заполнен' : 'SOAP требует проверки'}
+            {validation?.all_sections_populated ? copy.readySoap : copy.needsReview}
           </span>
           <span className="knowledge-badge">
-            {persistence?.enabled ? 'Запись в EHR включена' : 'Только предпросмотр'}
+            {persistence?.enabled ? copy.ehrEnabled : copy.previewOnly}
           </span>
           <span className="knowledge-badge">
-            {EHR_STATUS_LABELS[ehrSync?.status ?? ''] ?? 'нет статуса'}
+            {ehrStatusLabels[ehrSync?.status ?? ''] ?? copy.noStatus}
           </span>
         </div>
       </div>
 
       <div className="knowledge-overview-grid">
         <div className="knowledge-overview-card">
-          <span>Полнота SOAP</span>
-          <strong>{validation?.all_sections_populated ? 'Все разделы заполнены' : 'Есть пробелы'}</strong>
-          <small>{formatMissingSections(validation?.missing_sections)}</small>
+          <span>{copy.completeness}</span>
+          <strong>{validation?.all_sections_populated ? copy.allSections : copy.gaps}</strong>
+          <small>{formatMissingSections(validation?.missing_sections, language)}</small>
         </div>
         <div className="knowledge-overview-card">
-          <span>Общая уверенность</span>
+          <span>{copy.confidence}</span>
           <strong>{formatPercent(confidence?.overall)}</strong>
-          <small>Оценка по извлечённым клиническим элементам</small>
+          <small>{copy.confidenceHint}</small>
         </div>
         <div className="knowledge-overview-card">
-          <span>Записей в EHR</span>
+          <span>{copy.recordsWritten}</span>
           <strong>{persistence?.sent_successfully ?? 0}</strong>
-          <small>успешно, ошибок: {persistence?.sent_failed ?? 0}</small>
+          <small>{copy.successErrors(persistence?.sent_successfully ?? 0, persistence?.sent_failed ?? 0)}</small>
         </div>
         <div className="knowledge-overview-card">
-          <span>EHR</span>
-          <strong>{EHR_STATUS_LABELS[ehrSync?.status ?? ''] ?? 'нет данных'}</strong>
+          <span>{copy.ehr}</span>
+          <strong>{ehrStatusLabels[ehrSync?.status ?? ''] ?? copy.noData}</strong>
           <small>{ehrSync?.system ?? 'EHR (FHIR)'}</small>
         </div>
       </div>
 
       <div className="knowledge-section">
-        <h3>SOAP-заметки</h3>
+        <h3>{copy.soapTitle}</h3>
         <div className="knowledge-soap-grid">
           {soapSections.map((section) => (
             <article key={section.key} className="knowledge-soap-card">
@@ -407,13 +568,11 @@ export function KnowledgeExtractionPanel({ extraction, status }: Props) {
                 <div>
                   <h4>{section.label}</h4>
                   <p className="knowledge-detail-line">
-                    {section.populated
-                      ? 'Извлечённые элементы консультации'
-                      : 'Раздел требует врачебной проверки'}
+                    {section.populated ? copy.extractedSection : copy.reviewSection}
                   </p>
                 </div>
                 <span className="knowledge-chip">
-                  {section.usedFallback ? 'есть fallback' : 'извлечено'}
+                  {section.usedFallback ? copy.hasFallback : copy.extracted}
                 </span>
               </div>
 
@@ -426,10 +585,10 @@ export function KnowledgeExtractionPanel({ extraction, status }: Props) {
                     <div className="knowledge-soap-item-meta">
                       <span className="knowledge-soap-kind">{entry.kind}</span>
                       <span className="knowledge-soap-confidence">
-                        Уверенность: {formatPercent(entry.confidence)}
+                        {copy.confidenceLabel}: {formatPercent(entry.confidence)}
                       </span>
                       {entry.isFallback ? (
-                        <span className="knowledge-soap-flag">служебный fallback</span>
+                        <span className="knowledge-soap-flag">{copy.fallbackFlag}</span>
                       ) : null}
                     </div>
                     <p className="knowledge-soap-text">{entry.text}</p>
@@ -442,13 +601,13 @@ export function KnowledgeExtractionPanel({ extraction, status }: Props) {
       </div>
 
       <div className="knowledge-section">
-        <h3>Отчёт о записи в EHR через FHIR</h3>
+        <h3>{copy.ehrTitle}</h3>
         <p className="knowledge-detail-line">
-          Адрес EHR/FHIR: {persistence?.target_base_url ?? 'только предпросмотр'}
+          {copy.ehrAddress}: {persistence?.target_base_url ?? copy.previewEndpoint}
         </p>
         {ehrReason ? <p className="knowledge-detail-line">{ehrReason}</p> : null}
         <p className="knowledge-detail-line">
-          Подготовлено ресурсов: {extraction.fhir_resources.length}
+          {copy.preparedResources}: {extraction.fhir_resources.length}
         </p>
 
         {hasWrittenResources ? (
@@ -460,7 +619,7 @@ export function KnowledgeExtractionPanel({ extraction, status }: Props) {
                     {resource.type}
                     {resource.id ? ` #${resource.id}` : ''}
                   </strong>
-                  <span className="knowledge-chip">записано</span>
+                  <span className="knowledge-chip">{copy.synced}</span>
                 </div>
                 <p className="knowledge-detail-line">{resource.description}</p>
               </div>
@@ -472,23 +631,23 @@ export function KnowledgeExtractionPanel({ extraction, status }: Props) {
               <div key={resource.key} className="knowledge-ehr-item">
                 <div className="knowledge-ehr-item-head">
                   <strong>{resource.type}</strong>
-                  <span className="knowledge-chip">подготовлено</span>
+                  <span className="knowledge-chip">{copy.prepared}</span>
                 </div>
                 <p className="knowledge-detail-line">{resource.description}</p>
               </div>
             ))}
           </div>
         ) : (
-          <p className="knowledge-detail-line">Новые записи EHR ещё не были подготовлены.</p>
+          <p className="knowledge-detail-line">{copy.noResources}</p>
         )}
       </div>
 
       <div className="knowledge-section">
-        <h3>Итог работы сервиса</h3>
-        <p className="knowledge-detail-line">Система: {ehrSync?.system ?? 'EHR (FHIR)'}</p>
-        <p className="knowledge-detail-line">Пациент: {ehrSync?.record_id ?? '—'}</p>
+        <h3>{copy.serviceSummary}</h3>
+        <p className="knowledge-detail-line">{copy.system}: {ehrSync?.system ?? 'EHR (FHIR)'}</p>
+        <p className="knowledge-detail-line">{copy.patient}: {ehrSync?.record_id ?? '—'}</p>
         <p className="knowledge-detail-line">
-          Переданные блоки: {ehrSync?.synced_fields.length ? ehrSync.synced_fields.join(', ') : '—'}
+          {copy.syncedBlocks}: {ehrSync?.synced_fields.length ? ehrSync.synced_fields.join(', ') : '—'}
         </p>
       </div>
     </section>

@@ -17,6 +17,7 @@ class HttpAsrClient:
         seq: int,
         mime_type: str,
         is_final: bool,
+        language: str = "ru",
         file_path: Path,
         existing_stable_text: str,
     ) -> dict:
@@ -29,6 +30,7 @@ class HttpAsrClient:
                         "seq": seq,
                         "mime_type": mime_type,
                         "is_final": str(is_final).lower(),
+                        "language": language,
                         "existing_stable_text": existing_stable_text,
                     },
                     files={"file": (file_path.name, file_stream, mime_type)},
@@ -43,13 +45,14 @@ class HttpAsrClient:
         file_bytes: bytes,
         file_name: str,
         mime_type: str,
+        language: str = "ru",
         timeout_seconds: int | None = None,
     ) -> dict:
         effective_timeout = timeout_seconds or self.timeout_seconds
         with httpx.Client(timeout=effective_timeout) as client:
             response = client.post(
                 f"{self.base_url}/transcribe-full",
-                data={"session_id": session_id},
+                data={"session_id": session_id, "language": language},
                 files={"file": (file_name, file_bytes, mime_type)},
             )
             response.raise_for_status()

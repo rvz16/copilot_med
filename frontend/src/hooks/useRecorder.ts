@@ -9,17 +9,19 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { SessionLanguage } from '../types/types';
 
 export interface UseRecorderOptions {
   chunkMs?: number;
   onChunk: (blob: Blob, isFinal: boolean) => void;
+  language: SessionLanguage;
 }
 
 interface StopRecordingOptions {
   discardCurrentChunk?: boolean;
 }
 
-export function useRecorder({ chunkMs = 4000, onChunk }: UseRecorderOptions) {
+export function useRecorder({ chunkMs = 4000, onChunk, language }: UseRecorderOptions) {
   const [isRecording, setIsRecording] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
   const onChunkRef = useRef(onChunk);
@@ -94,14 +96,18 @@ export function useRecorder({ chunkMs = 4000, onChunk }: UseRecorderOptions) {
     } catch (err) {
       const msg =
         err instanceof DOMException && err.name === 'NotAllowedError'
-          ? 'Доступ к микрофону запрещён. Разрешите использование микрофона.'
+          ? language === 'en'
+            ? 'Microphone access is blocked. Allow microphone access in the browser.'
+            : 'Доступ к микрофону запрещён. Разрешите использование микрофона.'
           : err instanceof Error
             ? err.message
-            : 'Не удалось начать запись';
+            : language === 'en'
+              ? 'Failed to start recording'
+              : 'Не удалось начать запись';
       setMicError(msg);
       return false;
     }
-  }, [chunkMs]);
+  }, [chunkMs, language]);
 
   const stopRecording = useCallback((options: StopRecordingOptions = {}) => {
     stopRequestedRef.current = true;

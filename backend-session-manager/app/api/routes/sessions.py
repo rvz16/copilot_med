@@ -29,6 +29,7 @@ def create_session(
     return service.create_session(
         payload.doctor_id,
         payload.patient_id,
+        language=payload.language,
         doctor_name=payload.doctor_name,
         doctor_specialty=payload.doctor_specialty,
         patient_name=payload.patient_name,
@@ -44,6 +45,7 @@ def create_session(
 def import_audio_session(
     doctor_id: str = Form(...),
     patient_id: str = Form(...),
+    language: str = Form(default="ru"),
     file: UploadFile = File(...),
     doctor_name: str | None = Form(default=None),
     doctor_specialty: str | None = Form(default=None),
@@ -55,6 +57,7 @@ def import_audio_session(
     return service.import_recorded_session(
         doctor_id=doctor_id,
         patient_id=patient_id,
+        language=language,
         file_name=file.filename,
         mime_type=file.content_type,
         file_bytes=file_bytes,
@@ -73,6 +76,7 @@ def import_audio_session(
 def import_audio_sessions_batch(
     doctor_id: str = Form(...),
     patient_id: str = Form(...),
+    language: str = Form(default="ru"),
     files: list[UploadFile] = File(...),
     doctor_name: str | None = Form(default=None),
     doctor_specialty: str | None = Form(default=None),
@@ -84,6 +88,7 @@ def import_audio_sessions_batch(
     return service.import_recorded_sessions(
         doctor_id=doctor_id,
         patient_id=patient_id,
+        language=language,
         files=uploaded_files,
         doctor_name=doctor_name,
         doctor_specialty=doctor_specialty,
@@ -104,6 +109,7 @@ def upload_audio_chunk(
     duration_ms: int = Form(...),
     mime_type: str = Form(...),
     is_final: bool = Form(...),
+    language: str = Form(default="ru"),
     analysis_model: str | None = Form(default=None),
     service: SessionService = Depends(get_session_service),
 ) -> AudioChunkResponse:
@@ -114,6 +120,7 @@ def upload_audio_chunk(
         duration_ms=duration_ms,
         mime_type=mime_type,
         is_final=is_final,
+        language=language,
         analysis_model=analysis_model,
         file_bytes=file_bytes,
     )

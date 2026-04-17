@@ -121,6 +121,7 @@ class SessionService:
         doctor_id: str,
         patient_id: str,
         *,
+        language: str = "ru",
         doctor_name: str | None = None,
         doctor_specialty: str | None = None,
         patient_name: str | None = None,
@@ -129,6 +130,7 @@ class SessionService:
         session = self._create_session_record(
             doctor_id=doctor_id,
             patient_id=patient_id,
+            language=language,
             doctor_name=doctor_name,
             doctor_specialty=doctor_specialty,
             patient_name=patient_name,
@@ -143,6 +145,7 @@ class SessionService:
         *,
         doctor_id: str,
         patient_id: str,
+        language: str = "ru",
         file_name: str | None,
         mime_type: str | None,
         file_bytes: bytes,
@@ -158,6 +161,7 @@ class SessionService:
         session = self._create_session_record(
             doctor_id=doctor_id,
             patient_id=patient_id,
+            language=language,
             doctor_name=doctor_name,
             doctor_specialty=doctor_specialty,
             patient_name=patient_name,
@@ -200,6 +204,7 @@ class SessionService:
         *,
         doctor_id: str,
         patient_id: str,
+        language: str = "ru",
         files: list[tuple[str | None, str | None, bytes]],
         doctor_name: str | None = None,
         doctor_specialty: str | None = None,
@@ -215,6 +220,7 @@ class SessionService:
                 session = self.import_recorded_session(
                     doctor_id=doctor_id,
                     patient_id=patient_id,
+                    language=language,
                     file_name=file_name,
                     mime_type=mime_type,
                     file_bytes=file_bytes,
@@ -269,6 +275,7 @@ class SessionService:
         duration_ms: int,
         mime_type: str,
         is_final: bool,
+        language: str = "ru",
         analysis_model: str | None = None,
         file_bytes: bytes,
     ) -> AudioChunkResponse:
@@ -284,6 +291,7 @@ class SessionService:
 
         normalized_mime_type = mime_type.strip().lower()
         normalized_analysis_model = self._normalize_optional_text(analysis_model)
+        normalized_language = self._normalize_language(language, default=self._session_language(session))
         if normalized_mime_type not in self.settings.accepted_upload_mime_types:
             raise ApiError("UNSUPPORTED_MIME_TYPE", f"Неподдерживаемый MIME-тип: {mime_type}.", 400)
 
@@ -326,6 +334,7 @@ class SessionService:
                 seq=seq,
                 mime_type=normalized_mime_type,
                 is_final=is_final,
+                language=normalized_language,
                 file_path=file_path,
                 existing_stable_text=session.stable_transcript or "",
             )
@@ -365,7 +374,7 @@ class SessionService:
                         "patient_id": session.patient_id,
                         "transcript_chunk": transcription.stable_text,
                         "context": {
-                            "language": self.settings.realtime_analysis_language,
+                            "language": normalized_language,
                             "session_id": session.session_id,
                         },
                     }
@@ -456,6 +465,7 @@ class SessionService:
         self._upsert_session_snapshot(
             session=session,
             realtime_analysis=realtime_analysis_response,
+            language=normalized_language,
         )
         self.db.commit()
         self.db.refresh(session)
@@ -880,6 +890,7 @@ class SessionService:
 
     def _run_post_session_analytics(self, session: SessionRecord) -> None:
         profile = session.profile
+        language = self._session_language(session)
         archived_full_text = self._extract_full_transcript_text(self._build_post_analytics_snapshot(session))
         transcript_text = archived_full_text or session.stable_transcript or ""
         payload = {
@@ -891,6 +902,7 @@ class SessionService:
             "doctor_name": profile.doctor_name if profile else None,
             "doctor_specialty": profile.doctor_specialty if profile else None,
             "chief_complaint": profile.chief_complaint if profile else None,
+            "language": language,
             "transcript": transcript_text,
             "persist": self.settings.knowledge_extractor_persist_fhir,
             "sync_ehr": self.settings.knowledge_extractor_sync_ehr,
@@ -955,6 +967,7 @@ class SessionService:
                 file_bytes=file_bytes,
                 file_name=recording_path.name,
                 mime_type=mime_type,
+                language=self._session_language(session),
                 timeout_seconds=self.settings.full_transcription_timeout_seconds,
             )
             self._log_external_call(
@@ -1032,6 +1045,7 @@ class SessionService:
             "session_id": session.session_id,
             "patient_id": session.patient_id,
             "encounter_id": session.encounter_id,
+            "language": self._session_language(session),
             "full_transcript": full_transcription.full_text,
             "realtime_transcript": session.stable_transcript or "",
             "realtime_hints": hints_data if isinstance(hints_data, list) else [],
@@ -1466,6 +1480,7 @@ class SessionService:
         return SessionSummaryResponse(
             session_id=session.session_id,
             doctor_id=session.doctor_id,
+            language=self._session_language(session),
             doctor_name=profile.doctor_name if profile else None,
             doctor_specialty=profile.doctor_specialty if profile else None,
             patient_id=session.patient_id,
@@ -1693,6 +1708,7 @@ class SessionService:
             session_id=session.session_id,
             status=self._public_status(session),
             recording_state=session.recording_state,
+            language=self._session_language(session),
             upload_config=self._upload_config(),
             doctor_name=profile.doctor_name if profile else None,
             doctor_specialty=profile.doctor_specialty if profile else None,
@@ -1705,6 +1721,7 @@ class SessionService:
         *,
         doctor_id: str,
         patient_id: str,
+        language: str = "ru",
         doctor_name: str | None = None,
         doctor_specialty: str | None = None,
         patient_name: str | None = None,
@@ -1730,7 +1747,11 @@ class SessionService:
         )
         self.db.add(profile)
         session.profile = profile
-        self._upsert_session_snapshot(session=session, realtime_analysis=None)
+        self._upsert_session_snapshot(
+            session=session,
+            realtime_analysis=None,
+            language=self._normalize_language(language),
+        )
         return session
 
     def _normalize_import_audio_mime_type(self, *, file_name: str | None, mime_type: str | None) -> str:
@@ -1761,12 +1782,29 @@ class SessionService:
             raise ApiError("VALIDATION_ERROR", f"Поле '{field_name}' должно быть непустым.", 400)
         return normalized
 
+    @staticmethod
+    def _normalize_language(value: str | None, *, default: str = "ru") -> str:
+        normalized = str(value or "").strip().lower()
+        if normalized in {"ru", "en"}:
+            return normalized
+        return default
+
+    def _session_language(self, session: SessionRecord) -> str:
+        snapshot = session.workspace_snapshot
+        if snapshot is not None and isinstance(snapshot.payload_json, dict):
+            return self._normalize_language(
+                snapshot.payload_json.get("language"),
+                default=self.settings.realtime_analysis_language,
+            )
+        return self._normalize_language(self.settings.realtime_analysis_language)
+
     def _upsert_session_snapshot(
         self,
         *,
         session: SessionRecord,
         realtime_analysis: RealtimeAnalysisResponse | None,
         finalized: bool = False,
+        language: str | None = None,
     ) -> None:
         snapshot = session.workspace_snapshot
         if snapshot is None:
@@ -1800,6 +1838,13 @@ class SessionService:
             "status": self._public_status(session),
             "recording_state": session.recording_state,
             "processing_state": session.processing_state,
+            "language": self._normalize_language(
+                language,
+                default=self._normalize_language(
+                    previous_payload.get("language"),
+                    default=self.settings.realtime_analysis_language,
+                ),
+            ),
             "latest_seq": session.latest_seq,
             "transcript": transcript_text,
             "hints": [item.model_dump(mode="json") for item in hints],

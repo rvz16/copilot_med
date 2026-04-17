@@ -2,12 +2,34 @@
 
 import { useCallback, useState } from 'react';
 import { api } from '../api';
-import type { CreateSessionRequest, SessionLifecycleStatus, UploadConfig } from '../types/types';
+import type {
+  CreateSessionRequest,
+  SessionLifecycleStatus,
+  SessionLanguage,
+  UploadConfig,
+} from '../types/types';
 
 export type SessionStatus = SessionLifecycleStatus;
 export type RecordingState = 'idle' | 'recording' | 'stopped';
 
-export function useSession() {
+function fallbackErrorMessage(language: SessionLanguage, type: 'create' | 'stop' | 'close'): string {
+  const messages =
+    language === 'en'
+      ? {
+          create: 'Failed to create the session',
+          stop: 'Failed to stop recording',
+          close: 'Failed to close the session',
+        }
+      : {
+          create: 'Не удалось создать сессию',
+          stop: 'Не удалось остановить запись',
+          close: 'Не удалось закрыть сессию',
+        };
+
+  return messages[type];
+}
+
+export function useSession(language: SessionLanguage) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>('idle');
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
@@ -24,11 +46,11 @@ export function useSession() {
       setUploadConfig(res.upload_config);
       return res;
     } catch (err) {
-      const error = err instanceof Error ? err : new Error('Не удалось создать сессию');
+      const error = err instanceof Error ? err : new Error(fallbackErrorMessage(language, 'create'));
       setError(error.message);
       throw error;
     }
-  }, []);
+  }, [language]);
 
   const stopRecording = useCallback(async () => {
     if (!sessionId) return;
@@ -39,11 +61,11 @@ export function useSession() {
       setRecordingState(res.recording_state as RecordingState);
       return res;
     } catch (err) {
-      const error = err instanceof Error ? err : new Error('Не удалось остановить запись');
+      const error = err instanceof Error ? err : new Error(fallbackErrorMessage(language, 'stop'));
       setError(error.message);
       throw error;
     }
-  }, [sessionId]);
+  }, [language, sessionId]);
 
   const closeSession = useCallback(async () => {
     if (!sessionId) return;
@@ -54,11 +76,11 @@ export function useSession() {
       setRecordingState(res.recording_state as RecordingState);
       return res;
     } catch (err) {
-      const error = err instanceof Error ? err : new Error('Не удалось закрыть сессию');
+      const error = err instanceof Error ? err : new Error(fallbackErrorMessage(language, 'close'));
       setError(error.message);
       throw error;
     }
-  }, [sessionId]);
+  }, [language, sessionId]);
 
   const resetSession = useCallback(() => {
     setSessionId(null);

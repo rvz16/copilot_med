@@ -1,23 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
+import { LanguageSwitch } from './components/LanguageSwitch';
 import { ConsultationWorkspace } from './components/ConsultationWorkspace';
 import { DoctorDashboard } from './components/DoctorDashboard';
 import { LandingPage } from './components/LandingPage';
 import { LoginPage } from './components/LoginPage';
-import { ANALYSIS_MODEL_OPTIONS } from './data/analysisModels';
+import { getAnalysisModelOptions } from './data/analysisModels';
 import {
   SAMPLE_DOCTORS,
   authenticateDoctor,
   findDoctorById,
+  getDoctorDisplayName,
+  getDoctorSpecialty,
   type DoctorAccount,
 } from './data/doctors';
 import { useRecorder } from './hooks/useRecorder';
 import { useSession } from './hooks/useSession';
 import { useUploader } from './hooks/useUploader';
+import { I18nProvider, type UiLanguage, useUiLanguage } from './i18n';
 import type { CreateSessionRequest, SessionDetail, SessionSummary } from './types/types';
 
 const IS_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
 const AUTH_STORAGE_KEY = 'medcopilot.activeDoctorId';
+const LANGUAGE_STORAGE_KEY = 'medcopilot.uiLanguage';
 
 type Screen = 'landing' | 'login' | 'dashboard' | 'workspace';
 
@@ -35,7 +40,14 @@ function readStoredDoctor(): DoctorAccount | null {
   return findDoctorById(window.localStorage.getItem(AUTH_STORAGE_KEY));
 }
 
-export default function App() {
+function readStoredLanguage(): UiLanguage {
+  if (typeof window === 'undefined') return 'ru';
+  const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+  return stored === 'en' ? 'en' : 'ru';
+}
+
+function AppContent() {
+  const { language } = useUiLanguage();
   const [activeDoctor, setActiveDoctor] = useState<DoctorAccount | null>(() => readStoredDoctor());
   const [screen, setScreen] = useState<Screen>(() => (readStoredDoctor() ? 'dashboard' : 'landing'));
   const [authError, setAuthError] = useState<string | null>(null);
@@ -52,8 +64,51 @@ export default function App() {
   const [selectedAnalysisModel, setSelectedAnalysisModel] = useState<string | null>(null);
   const pendingStopRequestRef = useRef<Promise<unknown> | null>(null);
 
-  const session = useSession();
-  const uploader = useUploader(session.sessionId, selectedAnalysisModel);
+  const copy = useMemo(
+    () =>
+      language === 'en'
+        ? {
+            loginError: 'Invalid credentials. Use one of the demo accounts below.',
+            loadSessionsError: 'Failed to load doctor sessions',
+            openArchiveError: 'Failed to open the archived session',
+            deleteSessionError: 'Failed to delete the session',
+            importSessionError: 'Failed to import the completed session',
+            importSelectionError: 'Failed to import the selected recordings',
+            importQueueNoticeMany: (accepted: number, failed: number) =>
+              `Queued ${accepted}; failed to import ${failed}.`,
+            importQueueNoticeAll: (accepted: number) =>
+              `Queued ${accepted} session(s) for post-session analysis.`,
+            topbarPlatform: 'Platform for running medical consultations',
+            topbarLogin: 'Demo sign-in for clinicians',
+            topbarMock: 'MOCK MODE',
+            workspaceDraftSessionId: 'draft',
+            workspacePatientFallback: 'Patient',
+            workspacePatientIdFallback: 'pat_pending',
+          }
+        : {
+            loginError: 'Неверные учётные данные. Используйте один из демо-аккаунтов ниже.',
+            loadSessionsError: 'Не удалось загрузить сессии врача',
+            openArchiveError: 'Не удалось открыть архивную сессию',
+            deleteSessionError: 'Не удалось удалить сессию',
+            importSessionError: 'Не удалось импортировать завершённую сессию',
+            importSelectionError: 'Не удалось импортировать выбранные записи',
+            importQueueNoticeMany: (accepted: number, failed: number) =>
+              `В очередь добавлено ${accepted}; не удалось импортировать ${failed}.`,
+            importQueueNoticeAll: (accepted: number) =>
+              `В очередь post-session analysis добавлено ${accepted} сессии.`,
+            topbarPlatform: 'Платформа для ведения врачебных консультаций',
+            topbarLogin: 'Демонстрационный вход для врачей',
+            topbarMock: 'ТЕСТОВЫЙ РЕЖИМ',
+            workspaceDraftSessionId: 'черновик',
+            workspacePatientFallback: 'Пациент',
+            workspacePatientIdFallback: 'pat_ожидание',
+          },
+    [language],
+  );
+
+  const analysisModelOptions = useMemo(() => getAnalysisModelOptions(language), [language]);
+  const session = useSession(language);
+  const uploader = useUploader(session.sessionId, selectedAnalysisModel, language);
 
   const onChunk = useCallback((blob: Blob, isFinal: boolean) => {
     uploader.enqueueChunk(blob, isFinal);
@@ -62,7 +117,14 @@ export default function App() {
   const recorder = useRecorder({
     chunkMs: session.uploadConfig?.recommended_chunk_ms ?? 4000,
     onChunk,
+    language,
   });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+    }
+  }, [language]);
 
   const refreshSessions = useCallback(async (doctor: DoctorAccount | null = activeDoctor) => {
     if (!doctor) {
@@ -76,12 +138,12 @@ export default function App() {
       const response = await api.listSessions({ doctorId: doctor.id, limit: 50, offset: 0 });
       setSessions(response.items);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Не удалось загрузить сессии врача';
+      const message = error instanceof Error ? error.message : copy.loadSessionsError;
       setSessionsError(message);
     } finally {
       setSessionsLoading(false);
     }
-  }, [activeDoctor]);
+  }, [activeDoctor, copy.loadSessionsError]);
 
   useEffect(() => {
     if (!activeDoctor) {
@@ -114,7 +176,7 @@ export default function App() {
   const handleLogin = useCallback(async (username: string, password: string) => {
     const doctor = authenticateDoctor(username, password);
     if (!doctor) {
-      setAuthError('Неверные учётные данные. Используйте один из демо-аккаунтов ниже.');
+      setAuthError(copy.loginError);
       return;
     }
 
@@ -126,7 +188,7 @@ export default function App() {
     setActiveDoctor(doctor);
     setScreen('dashboard');
     await refreshSessions(doctor);
-  }, [refreshSessions]);
+  }, [copy.loginError, refreshSessions]);
 
   const handleLogout = useCallback(() => {
     if (typeof window !== 'undefined') {
@@ -155,11 +217,12 @@ export default function App() {
 
     const createPayload: CreateSessionRequest = {
       doctor_id: activeDoctor.id,
-      doctor_name: activeDoctor.name,
-      doctor_specialty: activeDoctor.specialty,
+      doctor_name: getDoctorDisplayName(activeDoctor, language),
+      doctor_specialty: getDoctorSpecialty(activeDoctor, language),
       patient_id: payload.patientId.trim(),
       patient_name: payload.patientName.trim(),
       chief_complaint: payload.chiefComplaint.trim() || undefined,
+      language,
     };
 
     try {
@@ -173,8 +236,8 @@ export default function App() {
 
       await session.createSession(createPayload);
       setLiveSessionProfile({
-        doctorName: activeDoctor.name,
-        doctorSpecialty: activeDoctor.specialty,
+        doctorName: createPayload.doctor_name ?? getDoctorDisplayName(activeDoctor, language),
+        doctorSpecialty: createPayload.doctor_specialty ?? getDoctorSpecialty(activeDoctor, language),
         patientId: createPayload.patient_id,
         patientName: createPayload.patient_name ?? createPayload.patient_id,
         chiefComplaint: createPayload.chief_complaint ?? null,
@@ -186,7 +249,7 @@ export default function App() {
     } finally {
       setIsStartingSession(false);
     }
-  }, [activeDoctor, recorder, refreshSessions, session, uploader]);
+  }, [activeDoctor, language, recorder, refreshSessions, session, uploader]);
 
   const handleOpenSession = useCallback(async (sessionId: string) => {
     try {
@@ -197,10 +260,10 @@ export default function App() {
       setWorkspaceMode('archive');
       setScreen('workspace');
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Не удалось открыть архивную сессию';
+      const message = error instanceof Error ? error.message : copy.openArchiveError;
       setSessionsError(message);
     }
-  }, []);
+  }, [copy.openArchiveError]);
 
   const handleDeleteSession = useCallback(async (sessionId: string) => {
     try {
@@ -213,11 +276,11 @@ export default function App() {
       }
       await refreshSessions(activeDoctor);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Не удалось удалить сессию';
+      const message = error instanceof Error ? error.message : copy.deleteSessionError;
       setSessionsError(message);
       throw error;
     }
-  }, [activeDoctor, refreshSessions, selectedSession]);
+  }, [activeDoctor, copy.deleteSessionError, refreshSessions, selectedSession]);
 
   const handleImportSession = useCallback(async (payload: {
     patientId: string;
@@ -230,11 +293,12 @@ export default function App() {
 
     const importPayload: CreateSessionRequest = {
       doctor_id: activeDoctor.id,
-      doctor_name: activeDoctor.name,
-      doctor_specialty: activeDoctor.specialty,
+      doctor_name: getDoctorDisplayName(activeDoctor, language),
+      doctor_specialty: getDoctorSpecialty(activeDoctor, language),
       patient_id: payload.patientId.trim(),
       patient_name: payload.patientName.trim(),
       chief_complaint: payload.chiefComplaint.trim() || undefined,
+      language,
     };
 
     try {
@@ -256,26 +320,37 @@ export default function App() {
         const result = await api.importHistoricalSessions(importPayload, payload.files);
         if (result.accepted_count === 0) {
           const firstError = result.items.find((item) => item.error_message)?.error_message;
-          throw new Error(firstError || 'Не удалось импортировать выбранные записи');
+          throw new Error(firstError || copy.importSelectionError);
         }
         setSelectedSession(null);
         setWorkspaceMode('archive');
         setScreen('dashboard');
         setSessionsNotice(
           result.failed_count > 0
-            ? `В очередь добавлено ${result.accepted_count}; не удалось импортировать ${result.failed_count}.`
-            : `В очередь post-session analysis добавлено ${result.accepted_count} сессии.`,
+            ? copy.importQueueNoticeMany(result.accepted_count, result.failed_count)
+            : copy.importQueueNoticeAll(result.accepted_count),
         );
       }
       await refreshSessions(activeDoctor);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Не удалось импортировать завершённую сессию';
+      const message = error instanceof Error ? error.message : copy.importSessionError;
       setSessionsError(message);
       throw error;
     } finally {
       setIsImportingSession(false);
     }
-  }, [activeDoctor, recorder, refreshSessions, session, uploader]);
+  }, [
+    activeDoctor,
+    copy.importQueueNoticeAll,
+    copy.importQueueNoticeMany,
+    copy.importSelectionError,
+    copy.importSessionError,
+    language,
+    recorder,
+    refreshSessions,
+    session,
+    uploader,
+  ]);
 
   const ensureRecordingStopped = useCallback(async () => {
     const hadActiveRecording = recorder.isRecording || session.recordingState === 'recording';
@@ -351,20 +426,26 @@ export default function App() {
     return list;
   }, [recorder.micError, session.error, uploader.uploadError]);
 
+  const renderTopbar = (subtitle: string) => (
+    <header className="topbar">
+      <div className="brand-block">
+        <span className="brand-mark">MC</span>
+        <div>
+          <h1>MedCoPilot</h1>
+          <p>{subtitle}</p>
+        </div>
+      </div>
+      <div className="topbar-actions">
+        <LanguageSwitch />
+        {IS_MOCK && <span className="mock-badge">{copy.topbarMock}</span>}
+      </div>
+    </header>
+  );
+
   if (screen === 'landing') {
     return (
       <div className="app-shell">
-        <header className="topbar">
-          <div className="brand-block">
-            <span className="brand-mark">MC</span>
-            <div>
-              <h1>MedCoPilot</h1>
-              <p>Платформа для ведения врачебных консультаций</p>
-            </div>
-          </div>
-          {IS_MOCK && <span className="mock-badge">ТЕСТОВЫЙ РЕЖИМ</span>}
-        </header>
-
+        {renderTopbar(copy.topbarPlatform)}
         <LandingPage doctors={SAMPLE_DOCTORS} onShowLogin={() => setScreen('login')} />
       </div>
     );
@@ -373,17 +454,7 @@ export default function App() {
   if (screen === 'login') {
     return (
       <div className="app-shell">
-        <header className="topbar">
-          <div className="brand-block">
-            <span className="brand-mark">MC</span>
-            <div>
-              <h1>MedCoPilot</h1>
-              <p>Демонстрационный вход для врачей</p>
-            </div>
-          </div>
-          {IS_MOCK && <span className="mock-badge">ТЕСТОВЫЙ РЕЖИМ</span>}
-        </header>
-
+        {renderTopbar(copy.topbarLogin)}
         <LoginPage
           doctors={SAMPLE_DOCTORS}
           error={authError}
@@ -404,17 +475,7 @@ export default function App() {
   if (screen === 'dashboard') {
     return (
       <div className="app-shell">
-        <header className="topbar">
-          <div className="brand-block">
-            <span className="brand-mark">MC</span>
-            <div>
-              <h1>MedCoPilot</h1>
-              <p>{activeDoctor.name}</p>
-            </div>
-          </div>
-          {IS_MOCK && <span className="mock-badge">ТЕСТОВЫЙ РЕЖИМ</span>}
-        </header>
-
+        {renderTopbar(getDoctorDisplayName(activeDoctor, language))}
         <DoctorDashboard
           doctor={activeDoctor}
           sessions={sessions}
@@ -437,22 +498,12 @@ export default function App() {
   if (workspaceMode === 'archive' && selectedSession) {
     return (
       <div className="app-shell">
-        <header className="topbar">
-          <div className="brand-block">
-            <span className="brand-mark">MC</span>
-            <div>
-              <h1>MedCoPilot</h1>
-              <p>{selectedSession.doctor_name || activeDoctor.name}</p>
-            </div>
-          </div>
-          {IS_MOCK && <span className="mock-badge">ТЕСТОВЫЙ РЕЖИМ</span>}
-        </header>
-
+        {renderTopbar(selectedSession.doctor_name || getDoctorDisplayName(activeDoctor, language))}
         <ConsultationWorkspace
           mode="archive"
           sessionId={selectedSession.session_id}
-          doctorName={selectedSession.doctor_name || activeDoctor.name}
-          doctorSpecialty={selectedSession.doctor_specialty || activeDoctor.specialty}
+          doctorName={selectedSession.doctor_name || getDoctorDisplayName(activeDoctor, language)}
+          doctorSpecialty={selectedSession.doctor_specialty || getDoctorSpecialty(activeDoctor, language)}
           patientName={selectedSession.patient_name || selectedSession.patient_id}
           patientId={selectedSession.patient_id}
           chiefComplaint={selectedSession.chief_complaint}
@@ -465,6 +516,7 @@ export default function App() {
           closedAt={selectedSession.closed_at}
           performanceMetrics={selectedSession.snapshot?.performance_metrics ?? null}
           analysisModel={null}
+          analysisModelOptions={analysisModelOptions}
           transcript={selectedSession.snapshot?.transcript ?? selectedSession.stable_transcript ?? ''}
           hints={selectedSession.snapshot?.hints ?? []}
           analysis={selectedSession.snapshot?.realtime_analysis ?? null}
@@ -496,24 +548,14 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <div className="brand-block">
-          <span className="brand-mark">MC</span>
-          <div>
-            <h1>MedCoPilot</h1>
-            <p>{activeDoctor.name}</p>
-          </div>
-        </div>
-        {IS_MOCK && <span className="mock-badge">ТЕСТОВЫЙ РЕЖИМ</span>}
-      </header>
-
+      {renderTopbar(getDoctorDisplayName(activeDoctor, language))}
       <ConsultationWorkspace
         mode="live"
-        sessionId={session.sessionId ?? 'черновик'}
-        doctorName={liveSessionProfile?.doctorName ?? activeDoctor.name}
-        doctorSpecialty={liveSessionProfile?.doctorSpecialty ?? activeDoctor.specialty}
-        patientName={liveSessionProfile?.patientName ?? 'Пациент'}
-        patientId={liveSessionProfile?.patientId ?? 'pat_ожидание'}
+        sessionId={session.sessionId ?? copy.workspaceDraftSessionId}
+        doctorName={liveSessionProfile?.doctorName ?? getDoctorDisplayName(activeDoctor, language)}
+        doctorSpecialty={liveSessionProfile?.doctorSpecialty ?? getDoctorSpecialty(activeDoctor, language)}
+        patientName={liveSessionProfile?.patientName ?? copy.workspacePatientFallback}
+        patientId={liveSessionProfile?.patientId ?? copy.workspacePatientIdFallback}
         chiefComplaint={liveSessionProfile?.chiefComplaint ?? null}
         status={session.sessionStatus}
         recordingState={session.recordingState}
@@ -524,7 +566,7 @@ export default function App() {
         closedAt={null}
         performanceMetrics={null}
         analysisModel={selectedAnalysisModel}
-        analysisModelOptions={ANALYSIS_MODEL_OPTIONS}
+        analysisModelOptions={analysisModelOptions}
         transcript={uploader.transcript}
         hints={uploader.hints}
         analysis={uploader.latestAnalysis}
@@ -544,5 +586,15 @@ export default function App() {
         onCloseSession={handleCloseSession}
       />
     </div>
+  );
+}
+
+export default function App() {
+  const [language, setLanguage] = useState<UiLanguage>(() => readStoredLanguage());
+
+  return (
+    <I18nProvider language={language} setLanguage={setLanguage}>
+      <AppContent />
+    </I18nProvider>
   );
 }

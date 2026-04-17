@@ -51,6 +51,7 @@ export const sessionApi: SessionApi = {
     const form = new FormData();
     form.append('doctor_id', payload.doctor_id);
     form.append('patient_id', payload.patient_id);
+    if (payload.language) form.append('language', payload.language);
     if (payload.doctor_name) form.append('doctor_name', payload.doctor_name);
     if (payload.doctor_specialty) form.append('doctor_specialty', payload.doctor_specialty);
     if (payload.patient_name) form.append('patient_name', payload.patient_name);
@@ -68,6 +69,7 @@ export const sessionApi: SessionApi = {
     const form = new FormData();
     form.append('doctor_id', payload.doctor_id);
     form.append('patient_id', payload.patient_id);
+    if (payload.language) form.append('language', payload.language);
     if (payload.doctor_name) form.append('doctor_name', payload.doctor_name);
     if (payload.doctor_specialty) form.append('doctor_specialty', payload.doctor_specialty);
     if (payload.patient_name) form.append('patient_name', payload.patient_name);
@@ -85,13 +87,16 @@ export const sessionApi: SessionApi = {
     return withBaseUrl(`/api/v1/sessions/${sessionId}/report.pdf`);
   },
 
-  async uploadAudioChunk(sessionId, file, seq, durationMs, mimeType, isFinal, analysisModel, signal) {
+  async uploadAudioChunk(sessionId, file, seq, durationMs, mimeType, isFinal, analysisModel, signal, language) {
     const form = new FormData();
     form.append('file', file);
     form.append('seq', String(seq));
     form.append('duration_ms', String(durationMs));
     form.append('mime_type', mimeType);
     form.append('is_final', String(isFinal));
+    if (language) {
+      form.append('language', language);
+    }
     if (analysisModel?.trim()) {
       form.append('analysis_model', analysisModel.trim());
     }

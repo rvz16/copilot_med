@@ -3,6 +3,7 @@
 // Session types.
 
 export type SessionLifecycleStatus = 'idle' | 'active' | 'analyzing' | 'finished';
+export type SessionLanguage = 'ru' | 'en';
 
 export interface UploadConfig {
   recommended_chunk_ms: number;
@@ -13,6 +14,7 @@ export interface UploadConfig {
 export interface CreateSessionRequest {
   doctor_id: string;
   patient_id: string;
+  language?: SessionLanguage;
   doctor_name?: string;
   doctor_specialty?: string;
   patient_name?: string;
@@ -41,6 +43,7 @@ export interface CreateSessionResponse {
   session_id: string;
   status: string;
   recording_state: string;
+  language?: SessionLanguage;
   upload_config: UploadConfig;
   doctor_name?: string | null;
   doctor_specialty?: string | null;
@@ -349,6 +352,7 @@ export interface SessionSnapshot {
   status: string;
   recording_state: string;
   processing_state: string;
+  language?: SessionLanguage;
   latest_seq: number;
   transcript: string;
   hints: StoredHint[];
@@ -364,6 +368,7 @@ export interface SessionSnapshot {
 export interface SessionSummary {
   session_id: string;
   doctor_id: string;
+  language?: SessionLanguage;
   doctor_name: string | null;
   doctor_specialty: string | null;
   patient_id: string;
@@ -434,6 +439,7 @@ export interface SessionApi {
     isFinal: boolean,
     analysisModel?: string | null,
     signal?: AbortSignal,
+    language?: SessionLanguage,
   ): Promise<AudioChunkResponse>;
   stopRecording(sessionId: string): Promise<StopRecordingResponse>;
   closeSession(sessionId: string): Promise<CloseSessionResponse>;

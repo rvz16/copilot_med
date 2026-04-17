@@ -1,6 +1,7 @@
 /* Render realtime hints and analysis results from Session Manager. */
 
 import { useMemo } from 'react';
+import { useUiLanguage } from '../i18n';
 import type { Hint, RealtimeAnalysis, RecommendedDocument } from '../types/types';
 
 interface Props {
@@ -9,43 +10,21 @@ interface Props {
   recommendedDocuments: RecommendedDocument[];
 }
 
+type FactKey = typeof FACT_KEYS[number];
+
 const SEVERITY_COLORS: Record<string, string> = {
   high: '#e74c3c',
   medium: '#f39c12',
   low: '#27ae60',
 };
 
-const SEVERITY_LABELS: Record<string, string> = {
-  high: 'высокий',
-  medium: 'средний',
-  low: 'низкий',
-};
-
-const HINT_TYPE_LABELS: Record<string, string> = {
-  clinical_recommendation: 'клин. рекомендация',
-  drug_interaction: 'лек. взаимодействие',
-  diagnosis_suggestion: 'диагноз',
-  question_to_ask: 'вопрос',
-  next_step: 'след. шаг',
-};
-
-const SUGGESTION_COLUMNS = [
-  { type: 'diagnosis_suggestion', label: 'Предполагаемые диагнозы', icon: '🩺' },
-  { type: 'question_to_ask', label: 'Вопросы пациенту', icon: '❓' },
-  { type: 'next_step', label: 'Следующие шаги', icon: '➡️' },
-] as const;
-
-const FACT_SECTIONS = [
-  { key: 'symptoms', label: 'Симптомы' },
-  { key: 'conditions', label: 'Заболевания' },
-  { key: 'medications', label: 'Лекарства' },
-  { key: 'allergies', label: 'Аллергии' },
-] as const;
+const SUGGESTION_TYPES = ['diagnosis_suggestion', 'question_to_ask', 'next_step'] as const;
+const FACT_KEYS = ['symptoms', 'conditions', 'medications', 'allergies'] as const;
 
 function groupHintsAndSort(hints: Hint[]) {
   const grouped: Record<string, Hint[]> = {};
-  for (const col of SUGGESTION_COLUMNS) {
-    grouped[col.type] = [];
+  for (const type of SUGGESTION_TYPES) {
+    grouped[type] = [];
   }
   const other: Hint[] = [];
   for (const hint of hints) {
@@ -55,7 +34,6 @@ function groupHintsAndSort(hints: Hint[]) {
       other.push(hint);
     }
   }
-  // Sort each group by descending confidence.
   for (const key of Object.keys(grouped)) {
     grouped[key].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
   }
@@ -64,6 +42,85 @@ function groupHintsAndSort(hints: Hint[]) {
 }
 
 export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
+  const { language } = useUiLanguage();
+  const severityLabels: Record<string, string> = language === 'en'
+    ? { high: 'high', medium: 'medium', low: 'low' }
+    : { high: 'высокий', medium: 'средний', low: 'низкий' };
+  const hintTypeLabels: Record<string, string> = language === 'en'
+    ? {
+        clinical_recommendation: 'guideline',
+        drug_interaction: 'drug interaction',
+        diagnosis_suggestion: 'diagnosis',
+        question_to_ask: 'question',
+        next_step: 'next step',
+      }
+    : {
+        clinical_recommendation: 'клин. рекомендация',
+        drug_interaction: 'лек. взаимодействие',
+        diagnosis_suggestion: 'диагноз',
+        question_to_ask: 'вопрос',
+        next_step: 'след. шаг',
+      };
+  const suggestionColumns = language === 'en'
+    ? [
+        { type: 'diagnosis_suggestion', label: 'Likely diagnoses', icon: '🩺' },
+        { type: 'question_to_ask', label: 'Questions for the patient', icon: '❓' },
+        { type: 'next_step', label: 'Next steps', icon: '➡️' },
+      ]
+    : [
+        { type: 'diagnosis_suggestion', label: 'Предполагаемые диагнозы', icon: '🩺' },
+        { type: 'question_to_ask', label: 'Вопросы пациенту', icon: '❓' },
+        { type: 'next_step', label: 'Следующие шаги', icon: '➡️' },
+      ];
+  const factSections: Array<{ key: FactKey; label: string }> = language === 'en'
+    ? [
+        { key: 'symptoms', label: 'Symptoms' },
+        { key: 'conditions', label: 'Conditions' },
+        { key: 'medications', label: 'Medications' },
+        { key: 'allergies', label: 'Allergies' },
+      ]
+    : [
+        { key: 'symptoms', label: 'Симптомы' },
+        { key: 'conditions', label: 'Заболевания' },
+        { key: 'medications', label: 'Лекарства' },
+        { key: 'allergies', label: 'Аллергии' },
+      ];
+  const copy = language === 'en'
+    ? {
+        title: 'Realtime analysis',
+        empty: 'Clinical analysis and suggestions will appear here.',
+        model: 'Model',
+        latency: 'Latency',
+        recommendations: 'Clinical guidelines',
+        pdf: 'PDF',
+        results: 'Analysis results',
+        noSuggestions: 'No analysis suggestions yet.',
+        other: 'Other suggestions',
+        extracted: 'Extracted facts',
+        vitals: 'Vitals',
+        interactions: 'Drug interactions',
+        interactionType: 'drug interaction',
+        refs: 'Reference materials',
+        errors: 'Analysis errors',
+      }
+    : {
+        title: 'Анализ в реальном времени',
+        empty: 'Клинический анализ и подсказки появятся здесь.',
+        model: 'Модель',
+        latency: 'Задержка',
+        recommendations: 'Клинические рекомендации',
+        pdf: 'PDF',
+        results: 'Результаты анализа',
+        noSuggestions: 'Подсказки анализа пока отсутствуют.',
+        other: 'Другие подсказки',
+        extracted: 'Извлечённые факты',
+        vitals: 'Витальные показатели',
+        interactions: 'Лекарственные взаимодействия',
+        interactionType: 'лек. взаимодействие',
+        refs: 'Справочные материалы',
+        errors: 'Ошибки анализа',
+      };
+
   const visibleKnowledgeRefs = useMemo(
     () => analysis?.knowledge_refs.filter((reference) => reference.source !== 'heuristic_rules') ?? [],
     [analysis],
@@ -80,13 +137,13 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
     [hints],
   );
 
-  const hasGroupedHints = SUGGESTION_COLUMNS.some(
+  const hasGroupedHints = suggestionColumns.some(
     ({ type }) => groupedHints[type].length > 0,
   ) || otherHints.length > 0;
 
   const hasExtractedFacts =
     !!analysis &&
-    (FACT_SECTIONS.some(({ key }) => analysis.extracted_facts[key].length > 0) || hasVitals);
+    (FACT_KEYS.some((key) => analysis.extracted_facts[key].length > 0) || hasVitals);
 
   const isEmpty = !hasGroupedHints && !hasExtractedFacts && recommendedDocuments.length === 0
     && (!analysis || (
@@ -97,29 +154,27 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
 
   return (
     <section className="panel" id="hints-panel">
-      <h2>Анализ в реальном времени</h2>
+      <h2>{copy.title}</h2>
 
       {isEmpty ? (
-        <p className="placeholder-text">Клинический анализ и подсказки появятся здесь.</p>
+        <p className="placeholder-text">{copy.empty}</p>
       ) : (
         <div className="analysis-stack">
-          {/* Model metadata. */}
           {analysis && (
             <div className="analysis-meta">
               <span className="analysis-chip">
-                Модель: {analysis.model.name}
+                {copy.model}: {analysis.model.name}
               </span>
               <span className="analysis-chip">
-                Задержка: {analysis.latency_ms} мс
+                {copy.latency}: {analysis.latency_ms} ms
               </span>
             </div>
           )}
 
-          {/* Clinical recommendations. */}
           {recommendedDocuments.length > 0 && (
             <div className="recommendations-card">
               <h3 className="recommendations-card-title">
-                📚 Клинические рекомендации
+                📚 {copy.recommendations}
                 <span className="recommendations-count">{recommendedDocuments.length}</span>
               </h3>
               <div className="recommendations-list">
@@ -139,7 +194,7 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
                         target="_blank"
                         rel="noreferrer"
                       >
-                        📄 PDF
+                        📄 {copy.pdf}
                       </a>
                     </div>
                   </div>
@@ -148,15 +203,13 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
             </div>
           )}
 
-          {/* Main columns with suggestions and extracted facts. */}
           <div className="analysis-section">
-            <h3 className="analysis-title">Результаты анализа</h3>
+            <h3 className="analysis-title">{copy.results}</h3>
             <div className="analysis-main-grid">
-              {/* Suggestion columns. */}
               <div className="analysis-suggestions-area">
                 {hasGroupedHints ? (
                   <div className="suggestion-columns">
-                    {SUGGESTION_COLUMNS.map(({ type, label, icon }) => {
+                    {suggestionColumns.map(({ type, label, icon }) => {
                       const items = groupedHints[type] ?? [];
                       return (
                         <div key={type} className="suggestion-column">
@@ -175,7 +228,7 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
                                         className="hint-severity"
                                         style={{ color: SEVERITY_COLORS[h.severity] ?? '#888' }}
                                       >
-                                        {SEVERITY_LABELS[h.severity] ?? h.severity}
+                                        {severityLabels[h.severity] ?? h.severity}
                                       </span>
                                     )}
                                     {typeof h.confidence === 'number' && (
@@ -194,24 +247,23 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
                     })}
                   </div>
                 ) : (
-                  <p className="placeholder-text">Подсказки анализа пока отсутствуют.</p>
+                  <p className="placeholder-text">{copy.noSuggestions}</p>
                 )}
 
-                {/* Other hint types. */}
                 {otherHints.length > 0 && (
                   <div className="analysis-section" style={{ marginTop: '0.75rem' }}>
-                    <h4 className="suggestion-column-title">📋 Другие подсказки</h4>
+                    <h4 className="suggestion-column-title">📋 {copy.other}</h4>
                     <ul className="hints-list">
                       {otherHints.map((h) => (
                         <li key={h.hint_id} className="hint-card">
                           <div className="hint-header">
-                            <span className="hint-type">{HINT_TYPE_LABELS[h.type] ?? h.type}</span>
+                            <span className="hint-type">{hintTypeLabels[h.type] ?? h.type}</span>
                             {h.severity && (
                               <span
                                 className="hint-severity"
                                 style={{ color: SEVERITY_COLORS[h.severity] ?? '#888' }}
                               >
-                                {SEVERITY_LABELS[h.severity] ?? h.severity}
+                                {severityLabels[h.severity] ?? h.severity}
                               </span>
                             )}
                             {typeof h.confidence === 'number' && (
@@ -228,17 +280,16 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
                 )}
               </div>
 
-              {/* Extracted facts column. */}
               {hasExtractedFacts && analysis && (
                 <div className="analysis-facts-area">
-                  <h4 className="suggestion-column-title">📋 Извлечённые факты</h4>
+                  <h4 className="suggestion-column-title">📋 {copy.extracted}</h4>
                   <div className="facts-column-content">
-                    {FACT_SECTIONS.map(({ key, label }) => (
+                    {factSections.map(({ key, label }) => (
                       analysis.extracted_facts[key].length > 0 ? (
                         <div key={key} className="facts-group">
                           <span className="analysis-stat-label">{label}</span>
                           <div className="fact-pills">
-                            {analysis.extracted_facts[key].map((value) => (
+                            {analysis.extracted_facts[key].map((value: string) => (
                               <span key={value} className="fact-pill">
                                 {value}
                               </span>
@@ -250,7 +301,7 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
 
                     {hasVitals && (
                       <div className="facts-group">
-                        <span className="analysis-stat-label">Витальные показатели</span>
+                        <span className="analysis-stat-label">{copy.vitals}</span>
                         <div className="fact-pills">
                           {Object.entries(analysis.extracted_facts.vitals).map(([key, value]) => (
                             value !== null && value !== '' ? (
@@ -268,20 +319,19 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
             </div>
           </div>
 
-          {/* Drug interactions. */}
           {analysis && analysis.drug_interactions.length > 0 && (
             <div className="analysis-section">
-              <h3 className="analysis-title">Лекарственные взаимодействия</h3>
+              <h3 className="analysis-title">{copy.interactions}</h3>
               <ul className="hints-list">
                 {analysis.drug_interactions.map((interaction, index) => (
                   <li key={`${interaction.drug_a}-${interaction.drug_b}-${index}`} className="hint-card">
                     <div className="hint-header">
-                      <span className="hint-type">лек. взаимодействие</span>
+                      <span className="hint-type">{copy.interactionType}</span>
                       <span
                         className="hint-severity"
                         style={{ color: SEVERITY_COLORS[interaction.severity] ?? '#888' }}
                       >
-                        {SEVERITY_LABELS[interaction.severity] ?? interaction.severity}
+                        {severityLabels[interaction.severity] ?? interaction.severity}
                       </span>
                       <span className="hint-confidence">
                         {(interaction.confidence * 100).toFixed(0)}%
@@ -296,10 +346,9 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
             </div>
           )}
 
-          {/* Knowledge references. */}
           {analysis && visibleKnowledgeRefs.length > 0 && (
             <div className="analysis-section">
-              <h3 className="analysis-title">Справочные материалы</h3>
+              <h3 className="analysis-title">{copy.refs}</h3>
               <ul className="hints-list">
                 {visibleKnowledgeRefs.map((reference, index) => (
                   <li key={`${reference.title}-${index}`} className="hint-card">
@@ -316,10 +365,9 @@ export function HintsPanel({ hints, analysis, recommendedDocuments }: Props) {
             </div>
           )}
 
-          {/* Model and processing errors. */}
           {analysis && analysis.errors.length > 0 && (
             <div className="analysis-section">
-              <h3 className="analysis-title">Ошибки анализа</h3>
+              <h3 className="analysis-title">{copy.errors}</h3>
               <ul className="error-list">
                 {analysis.errors.map((error) => (
                   <li key={error} className="error-item">

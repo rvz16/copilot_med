@@ -55,13 +55,24 @@ def _build_default_extractor() -> BaseExtractor:
 
 class DocumentationService:
     FALLBACK_SECTION_TEXT = {
-        "subjective": "В расшифровке не найдено явно зафиксированных жалоб или опасений пациента.",
-        "objective": "В расшифровке не найдено явно зафиксированных объективных наблюдений или измерений.",
-        "assessment": (
-            "В расшифровке не найдено явно зафиксированной оценки состояния или диагноза; "
-            "требуется врачебная проверка."
-        ),
-        "plan": "В расшифровке не найдено явно зафиксированного плана лечения или инструкций по наблюдению.",
+        "ru": {
+            "subjective": "В расшифровке не найдено явно зафиксированных жалоб или опасений пациента.",
+            "objective": "В расшифровке не найдено явно зафиксированных объективных наблюдений или измерений.",
+            "assessment": (
+                "В расшифровке не найдено явно зафиксированной оценки состояния или диагноза; "
+                "требуется врачебная проверка."
+            ),
+            "plan": "В расшифровке не найдено явно зафиксированного плана лечения или инструкций по наблюдению.",
+        },
+        "en": {
+            "subjective": "No explicit patient complaints or concerns were found in the transcript.",
+            "objective": "No explicit objective observations or measurements were found in the transcript.",
+            "assessment": (
+                "No explicit assessment or diagnosis was documented in the transcript; "
+                "clinical review is required."
+            ),
+            "plan": "No explicit treatment plan or follow-up instructions were found in the transcript.",
+        },
     }
 
     def __init__(
@@ -85,10 +96,10 @@ class DocumentationService:
 
     def build_documentation(self, request: ExtractionRequest) -> ExtractionResponse:
         started_at = time.perf_counter()
-        canonical = self._extract_canonical(request.transcript)
+        canonical = self._extract_canonical(request.transcript, request.language)
         canonical = self.sanitizer.sanitize(canonical)
         has_meaningful_data = canonical.has_meaningful_data()
-        soap_note = self._build_complete_soap_note(canonical.to_soap_note())
+        soap_note = self._build_complete_soap_note(canonical.to_soap_note(), request.language)
         extracted_facts = canonical.to_extracted_facts()
         summary = canonical.to_summary()
         validation = self._build_validation(soap_note)
@@ -131,9 +142,9 @@ class DocumentationService:
             ehr_sync=ehr_sync,
         )
 
-    def _extract_canonical(self, transcript: str) -> CanonicalExtraction:
+    def _extract_canonical(self, transcript: str, language: str = "ru") -> CanonicalExtraction:
         try:
-            return self.extractor.extract(transcript)
+            return self.extractor.extract(transcript, language)
         except Exception as exc:
             if isinstance(self.extractor, RuleBasedMedicalExtractor):
                 raise
@@ -146,7 +157,7 @@ class DocumentationService:
                     "error": str(exc),
                 },
             )
-            return self.rule_based_fallback.extract(transcript)
+            return self.rule_based_fallback.extract(transcript, language)
 
     def _build_persistence_result(
         self,
@@ -225,20 +236,21 @@ class DocumentationService:
         return f"{resource_type} без текстового описания"
 
     @staticmethod
-    def _build_complete_soap_note(soap_note: SoapNote) -> SoapNote:
+    def _build_complete_soap_note(soap_note: SoapNote, language: str = "ru") -> SoapNote:
+        fallback_text = DocumentationService.FALLBACK_SECTION_TEXT["en" if language == "en" else "ru"]
         subjective_count = len(soap_note.subjective.reported_symptoms) + len(soap_note.subjective.reported_concerns)
         objective_count = len(soap_note.objective.observations) + len(soap_note.objective.measurements)
         assessment_count = len(soap_note.assessment.diagnoses) + len(soap_note.assessment.evaluation)
         plan_count = len(soap_note.plan.treatment) + len(soap_note.plan.follow_up_instructions)
 
         if subjective_count == 0:
-            soap_note.subjective.reported_concerns.append(DocumentationService.FALLBACK_SECTION_TEXT["subjective"])
+            soap_note.subjective.reported_concerns.append(fallback_text["subjective"])
         if objective_count == 0:
-            soap_note.objective.observations.append(DocumentationService.FALLBACK_SECTION_TEXT["objective"])
+            soap_note.objective.observations.append(fallback_text["objective"])
         if assessment_count == 0:
-            soap_note.assessment.evaluation.append(DocumentationService.FALLBACK_SECTION_TEXT["assessment"])
+            soap_note.assessment.evaluation.append(fallback_text["assessment"])
         if plan_count == 0:
-            soap_note.plan.follow_up_instructions.append(DocumentationService.FALLBACK_SECTION_TEXT["plan"])
+            soap_note.plan.follow_up_instructions.append(fallback_text["plan"])
 
         return soap_note
 

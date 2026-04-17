@@ -1,5 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
+import { getDoctorDisplayName, getDoctorSpecialty } from '../data/doctors';
 import type { DoctorAccount } from '../data/doctors';
+import { useUiLanguage } from '../i18n';
 import type { SessionSummary } from '../types/types';
 import { formatDateTime, formatStatusLabel } from '../utils/format';
 
@@ -47,6 +49,7 @@ export function DoctorDashboard({
   onStartSession,
   onImportSession,
 }: Props) {
+  const { language } = useUiLanguage();
   const [formMode, setFormMode] = useState<'live' | 'import'>('live');
   const [patientId, setPatientId] = useState('');
   const [patientName, setPatientName] = useState('');
@@ -59,6 +62,110 @@ export function DoctorDashboard({
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'analyzing' | 'finished'>('all');
   const [openingSessionId, setOpeningSessionId] = useState<string | null>(null);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+
+  const copy = language === 'en'
+    ? {
+        workspace: 'Doctor workspace',
+        hero: 'Manage new consultations and reopen completed visits from their saved final state.',
+        refresh: 'Refresh',
+        logout: 'Log out',
+        stats: {
+          total: 'total consultations',
+          active: 'active sessions',
+          analyzing: 'in deep review',
+          finished: 'completed sessions',
+        },
+        launch: 'Start consultation',
+        newConsultation: 'Create a new consultation',
+        importedConsultation: 'Load a completed visit',
+        sessionMode: 'Session creation mode',
+        newTab: 'New consultation',
+        importTab: 'Completed visit',
+        patientName: 'Patient name',
+        patientId: 'Patient ID',
+        chiefComplaint: 'Chief complaint',
+        audio: 'Consultation audio',
+        complaintPlaceholder: 'Recurring frontal headache',
+        create: 'Open workspace',
+        creating: 'Creating…',
+        import: 'Create completed sessions',
+        importing: 'Queueing…',
+        importHint:
+          'Upload one or more MP3/WAV files. Each file becomes a separate completed session queued for post-session analysis.',
+        historyEyebrow: 'Session history',
+        historyTitle: 'Previous visits',
+        searchPlaceholder: 'Search by patient or complaint',
+        statusOptions: {
+          all: 'All statuses',
+          active: 'Active',
+          analyzing: 'Analyzing',
+          finished: 'Finished',
+        },
+        loading: 'Loading doctor history…',
+        empty: 'History is empty. Create the first consultation for this doctor.',
+        complaintMissing: 'Chief complaint not provided',
+        created: 'Created',
+        snapshot: 'Final state',
+        snapshotReady: 'saved',
+        snapshotPending: 'not ready',
+        open: 'Open consultation',
+        opening: 'Opening…',
+        deleteTitle: 'Delete session',
+        deleteAria: (sessionId: string) => `Delete session ${sessionId}`,
+        deleteConfirm: (sessionId: string, patientLabel: string) =>
+          `Delete session ${sessionId} for patient ${patientLabel}?`,
+      }
+    : {
+        workspace: 'Рабочее пространство врача',
+        hero: 'Управляйте новыми консультациями и поднимайте завершённые встречи в сохранённом финальном состоянии.',
+        refresh: 'Обновить',
+        logout: 'Выйти',
+        stats: {
+          total: 'всего консультаций',
+          active: 'активных встреч',
+          analyzing: 'в глубоком разборе',
+          finished: 'завершённых сессий',
+        },
+        launch: 'Запуск консультации',
+        newConsultation: 'Создать новую консультацию',
+        importedConsultation: 'Поднять уже прошедшую встречу',
+        sessionMode: 'Режим создания сессии',
+        newTab: 'Новая консультация',
+        importTab: 'Уже прошедшая',
+        patientName: 'Имя пациента',
+        patientId: 'ID пациента',
+        chiefComplaint: 'Причина обращения',
+        audio: 'Аудиозапись консультации',
+        complaintPlaceholder: 'Повторяющаяся лобная головная боль',
+        create: 'Открыть рабочую сессию',
+        creating: 'Создание…',
+        import: 'Создать завершённые сессии',
+        importing: 'Ставим в очередь…',
+        importHint:
+          'Загрузите один или несколько MP3/WAV файлов. Каждый файл станет отдельной завершённой сессией и попадёт в очередь post-session analysis.',
+        historyEyebrow: 'История сессий',
+        historyTitle: 'Предыдущие встречи',
+        searchPlaceholder: 'Поиск по пациенту или жалобе',
+        statusOptions: {
+          all: 'Все статусы',
+          active: 'Активные',
+          analyzing: 'Идёт разбор',
+          finished: 'Завершённые',
+        },
+        loading: 'Загружаем историю врача…',
+        empty: 'История пока пуста. Создайте первую консультацию для этого врача.',
+        complaintMissing: 'Причина обращения не указана',
+        created: 'Создана',
+        snapshot: 'Финальное состояние',
+        snapshotReady: 'сохранено',
+        snapshotPending: 'не готово',
+        open: 'Открыть консультацию',
+        opening: 'Открываем…',
+        deleteTitle: 'Удалить сессию',
+        deleteAria: (sessionId: string) => `Удалить сессию ${sessionId}`,
+        deleteConfirm: (sessionId: string, patientLabel: string) =>
+          `Удалить сессию ${sessionId} для пациента ${patientLabel}?`,
+      };
 
   const stats = useMemo(() => {
     const total = sessions.length;
@@ -138,7 +245,7 @@ export function DoctorDashboard({
 
   const handleDeleteSession = async (session: SessionSummary) => {
     const patientLabel = session.patient_name || session.patient_id;
-    const confirmed = window.confirm(`Удалить сессию ${session.session_id} для пациента ${patientLabel}?`);
+    const confirmed = window.confirm(copy.deleteConfirm(session.session_id, patientLabel));
     if (!confirmed) return;
 
     try {
@@ -153,20 +260,19 @@ export function DoctorDashboard({
     <main className="dashboard-page">
       <section className="dashboard-header">
         <div>
-          <p className="eyebrow">Рабочее пространство врача</p>
-          <h1>{doctor.name}</h1>
+          <p className="eyebrow">{copy.workspace}</p>
+          <h1>{getDoctorDisplayName(doctor, language)}</h1>
           <p className="hero-text">
-            {doctor.specialty}. Управляйте новыми консультациями и поднимайте завершённые встречи
-            в сохранённом финальном состоянии.
+            {getDoctorSpecialty(doctor, language)}. {copy.hero}
           </p>
         </div>
 
         <div className="dashboard-header-actions">
           <button type="button" className="ghost-button" onClick={onRefresh}>
-            Обновить
+            {copy.refresh}
           </button>
           <button type="button" className="ghost-button" onClick={onLogout}>
-            Выйти
+            {copy.logout}
           </button>
         </div>
       </section>
@@ -174,50 +280,50 @@ export function DoctorDashboard({
       <section className="dashboard-stats">
         <article className="metric-card">
           <span className="metric-value">{stats.total}</span>
-          <span className="metric-label">всего консультаций</span>
+          <span className="metric-label">{copy.stats.total}</span>
         </article>
         <article className="metric-card">
           <span className="metric-value">{stats.active}</span>
-          <span className="metric-label">активных встреч</span>
+          <span className="metric-label">{copy.stats.active}</span>
         </article>
         <article className="metric-card">
           <span className="metric-value">{stats.analyzing}</span>
-          <span className="metric-label">в глубоком разборе</span>
+          <span className="metric-label">{copy.stats.analyzing}</span>
         </article>
         <article className="metric-card">
           <span className="metric-value">{stats.finished}</span>
-          <span className="metric-label">завершённых сессий</span>
+          <span className="metric-label">{copy.stats.finished}</span>
         </article>
       </section>
 
       <section className="dashboard-grid">
         <article className="panel form-panel">
           <div className="section-heading compact">
-            <p className="eyebrow">Запуск консультации</p>
-            <h2>{formMode === 'live' ? 'Создать новую консультацию' : 'Поднять уже прошедшую встречу'}</h2>
+            <p className="eyebrow">{copy.launch}</p>
+            <h2>{formMode === 'live' ? copy.newConsultation : copy.importedConsultation}</h2>
           </div>
 
-          <div className="session-form-switcher" role="tablist" aria-label="Режим создания сессии">
+          <div className="session-form-switcher" role="tablist" aria-label={copy.sessionMode}>
             <button
               type="button"
               className={`session-form-switcher-button ${formMode === 'live' ? 'is-active' : ''}`}
               onClick={() => setFormMode('live')}
             >
-              Новая консультация
+              {copy.newTab}
             </button>
             <button
               type="button"
               className={`session-form-switcher-button ${formMode === 'import' ? 'is-active' : ''}`}
               onClick={() => setFormMode('import')}
             >
-              Уже прошедшая
+              {copy.importTab}
             </button>
           </div>
 
           {formMode === 'live' ? (
             <form className="dashboard-form" onSubmit={handleStartSession}>
               <div className="form-row">
-                <label htmlFor="patient-name">Имя пациента</label>
+                <label htmlFor="patient-name">{copy.patientName}</label>
                 <input
                   id="patient-name"
                   type="text"
@@ -228,7 +334,7 @@ export function DoctorDashboard({
               </div>
 
               <div className="form-row">
-                <label htmlFor="patient-id">ID пациента</label>
+                <label htmlFor="patient-id">{copy.patientId}</label>
                 <input
                   id="patient-id"
                   type="text"
@@ -239,13 +345,13 @@ export function DoctorDashboard({
               </div>
 
               <div className="form-row">
-                <label htmlFor="chief-complaint">Причина обращения</label>
+                <label htmlFor="chief-complaint">{copy.chiefComplaint}</label>
                 <input
                   id="chief-complaint"
                   type="text"
                   value={chiefComplaint}
                   onChange={(event) => setChiefComplaint(event.target.value)}
-                  placeholder="Повторяющаяся лобная головная боль"
+                  placeholder={copy.complaintPlaceholder}
                 />
               </div>
 
@@ -254,13 +360,13 @@ export function DoctorDashboard({
                 className="primary-cta"
                 disabled={isStartingSession || !patientId.trim() || !patientName.trim()}
               >
-                {isStartingSession ? 'Создание…' : 'Открыть рабочую сессию'}
+                {isStartingSession ? copy.creating : copy.create}
               </button>
             </form>
           ) : (
             <form className="dashboard-form" onSubmit={handleImportSession}>
               <div className="form-row">
-                <label htmlFor="import-patient-name">Имя пациента</label>
+                <label htmlFor="import-patient-name">{copy.patientName}</label>
                 <input
                   id="import-patient-name"
                   type="text"
@@ -271,7 +377,7 @@ export function DoctorDashboard({
               </div>
 
               <div className="form-row">
-                <label htmlFor="import-patient-id">ID пациента</label>
+                <label htmlFor="import-patient-id">{copy.patientId}</label>
                 <input
                   id="import-patient-id"
                   type="text"
@@ -282,18 +388,18 @@ export function DoctorDashboard({
               </div>
 
               <div className="form-row">
-                <label htmlFor="import-chief-complaint">Причина обращения</label>
+                <label htmlFor="import-chief-complaint">{copy.chiefComplaint}</label>
                 <input
                   id="import-chief-complaint"
                   type="text"
                   value={importChiefComplaint}
                   onChange={(event) => setImportChiefComplaint(event.target.value)}
-                  placeholder="Повторяющаяся лобная головная боль"
+                  placeholder={copy.complaintPlaceholder}
                 />
               </div>
 
               <div className="form-row">
-                <label htmlFor="import-audio">Аудиозапись консультации</label>
+                <label htmlFor="import-audio">{copy.audio}</label>
                 <input
                   id="import-audio"
                   className="upload-file-input"
@@ -302,10 +408,7 @@ export function DoctorDashboard({
                   accept=".mp3,.wav,audio/mpeg,audio/wav"
                   onChange={(event) => setImportFiles(Array.from(event.target.files ?? []))}
                 />
-                <p className="form-helper-text">
-                  Загрузите один или несколько MP3/WAV файлов. Каждый файл станет отдельной
-                  завершённой сессией и попадёт в очередь post-session analysis.
-                </p>
+                <p className="form-helper-text">{copy.importHint}</p>
                 {importFiles.length > 0 && (
                   <div className="selected-file-list" aria-live="polite">
                     {importFiles.map((file) => (
@@ -325,7 +428,7 @@ export function DoctorDashboard({
                   importFiles.length === 0
                 }
               >
-                {isImportingSession ? 'Ставим в очередь…' : 'Создать завершённые сессии'}
+                {isImportingSession ? copy.importing : copy.import}
               </button>
             </form>
           )}
@@ -334,8 +437,8 @@ export function DoctorDashboard({
         <article className="panel history-panel">
           <div className="history-toolbar">
             <div className="section-heading compact">
-              <p className="eyebrow">История сессий</p>
-              <h2>Предыдущие встречи</h2>
+              <p className="eyebrow">{copy.historyEyebrow}</p>
+              <h2>{copy.historyTitle}</h2>
             </div>
 
             <div className="history-filters">
@@ -343,7 +446,7 @@ export function DoctorDashboard({
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Поиск по пациенту или жалобе"
+                placeholder={copy.searchPlaceholder}
               />
               <select
                 value={statusFilter}
@@ -351,22 +454,20 @@ export function DoctorDashboard({
                   setStatusFilter(event.target.value as 'all' | 'active' | 'analyzing' | 'finished')
                 }
               >
-                <option value="all">Все статусы</option>
-                <option value="active">Активные</option>
-                <option value="analyzing">Идёт разбор</option>
-                <option value="finished">Завершённые</option>
+                <option value="all">{copy.statusOptions.all}</option>
+                <option value="active">{copy.statusOptions.active}</option>
+                <option value="analyzing">{copy.statusOptions.analyzing}</option>
+                <option value="finished">{copy.statusOptions.finished}</option>
               </select>
             </div>
           </div>
 
           {error && <p className="inline-error">{error}</p>}
           {notice && !error && <p className="inline-notice">{notice}</p>}
-          {loading ? <p className="placeholder-text">Загружаем историю врача…</p> : null}
+          {loading ? <p className="placeholder-text">{copy.loading}</p> : null}
 
           {!loading && filteredSessions.length === 0 ? (
-            <p className="placeholder-text">
-              История пока пуста. Создайте первую консультацию для этого врача.
-            </p>
+            <p className="placeholder-text">{copy.empty}</p>
           ) : (
             <div className="session-history-list">
               {filteredSessions.map((session) => (
@@ -374,10 +475,10 @@ export function DoctorDashboard({
                   <div className="history-card-head">
                     <div>
                       <h3>{session.patient_name || session.patient_id}</h3>
-                      <p>{session.chief_complaint || 'Причина обращения не указана'}</p>
+                      <p>{session.chief_complaint || copy.complaintMissing}</p>
                     </div>
                     <span className={`badge badge-${session.status}`}>
-                      {formatStatusLabel(session.status)}
+                      {formatStatusLabel(session.status, language)}
                     </span>
                   </div>
 
@@ -387,12 +488,12 @@ export function DoctorDashboard({
                       <dd>{session.session_id}</dd>
                     </div>
                     <div>
-                      <dt>Создана</dt>
-                      <dd>{formatDateTime(session.created_at)}</dd>
+                      <dt>{copy.created}</dt>
+                      <dd>{formatDateTime(session.created_at, language)}</dd>
                     </div>
                     <div>
-                      <dt>Финальное состояние</dt>
-                      <dd>{session.snapshot_available ? 'сохранено' : 'не готово'}</dd>
+                      <dt>{copy.snapshot}</dt>
+                      <dd>{session.snapshot_available ? copy.snapshotReady : copy.snapshotPending}</dd>
                     </div>
                   </dl>
 
@@ -410,13 +511,13 @@ export function DoctorDashboard({
                         deletingSessionId === session.session_id
                       }
                     >
-                      {openingSessionId === session.session_id ? 'Открываем…' : 'Открыть консультацию'}
+                      {openingSessionId === session.session_id ? copy.opening : copy.open}
                     </button>
                     <button
                       type="button"
                       className="danger-icon-button"
-                      aria-label={`Удалить сессию ${session.session_id}`}
-                      title="Удалить сессию"
+                      aria-label={copy.deleteAria(session.session_id)}
+                      title={copy.deleteTitle}
                       onClick={() => void handleDeleteSession(session)}
                       disabled={
                         deletingSessionId === session.session_id ||

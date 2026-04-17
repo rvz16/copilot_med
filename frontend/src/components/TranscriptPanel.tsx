@@ -1,4 +1,5 @@
 import type { PostAnalyticsDiarization } from '../types/types';
+import { useUiLanguage } from '../i18n';
 
 /* Display the aggregated stable transcript. */
 
@@ -32,6 +33,7 @@ export function TranscriptPanel({
   placeholder = 'Транскрипция появится здесь после начала записи…',
   diarization = null,
 }: Props) {
+  const { language } = useUiLanguage();
   return (
     <section className="panel" id="transcript-panel">
       <h2>{title}</h2>
@@ -41,7 +43,7 @@ export function TranscriptPanel({
             {diarization && (
               <div className="transcript-section">
                 <div className="transcript-section-header">
-                  <h3>Диаризация</h3>
+                  <h3>{language === 'en' ? 'Diarization' : 'Диаризация'}</h3>
                   <span>{diarization.model_used}</span>
                 </div>
                 <DiarizationBlock diarization={diarization} />
@@ -50,7 +52,7 @@ export function TranscriptPanel({
             <div className="transcript-section">
               {diarization && (
                 <div className="transcript-section-header">
-                  <h3>Полный текст</h3>
+                  <h3>{language === 'en' ? 'Full transcript' : 'Полный текст'}</h3>
                 </div>
               )}
               <p className="transcript-preformatted">{transcript}</p>

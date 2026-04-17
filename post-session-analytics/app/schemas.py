@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -10,6 +10,7 @@ class ApiBaseModel(BaseModel):
 class AnalyticsRequest(ApiBaseModel):
     session_id: str
     patient_id: str
+    language: Literal["ru", "en"] = "ru"
     encounter_id: str | None = None
     full_transcript: str
     realtime_transcript: str | None = None

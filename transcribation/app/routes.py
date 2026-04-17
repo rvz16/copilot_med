@@ -126,6 +126,7 @@ async def transcribe_chunk(
     seq: Annotated[int, Form(ge=0)],
     mime_type: Annotated[str, Form(...)],
     is_final: Annotated[bool, Form(...)],
+    language: str = Form(default="ru"),
     existing_stable_text: str = Form(default=""),
     file: UploadFile = File(...),
     use_audio_context: bool = Form(default=DEFAULT_USE_AUDIO_CONTEXT),
@@ -205,6 +206,7 @@ async def transcribe_chunk(
             use_hallucination_filter=use_hallucination_filter,
             previous_text=effective_existing if use_prompt else None,
             is_first_chunk=first_chunk,
+            language=language,
         )
     except Exception as exc:
         logger.exception(
@@ -256,6 +258,7 @@ async def transcribe_chunk(
 @router.post("/transcribe-full")
 async def transcribe_full(
     session_id: Annotated[str, Form(...)],
+    language: str = Form(default="ru"),
     file: UploadFile = File(...),
 ):
     """Transcribe a complete recording file for the most accurate result."""
@@ -276,7 +279,7 @@ async def transcribe_full(
         if len(full_pcm) == 0:
             return {
                 "session_id": normalized_session_id, "full_text": "", "source": "groq" if USE_GROQ_API else "whisper_ct2_ru",
-                "language": "ru", "audio_file_duration": 0.0, "processing_time_sec": 0.0,
+                "language": language, "audio_file_duration": 0.0, "processing_time_sec": 0.0,
             }
     except Exception as exc:
         logger.error("PCM decode failed for full transcription, session %s: %s", normalized_session_id, exc)
@@ -292,7 +295,7 @@ async def transcribe_full(
             elapsed = round(time.time() - start, 2)
             return {
                 "session_id": normalized_session_id, "full_text": "", "source": "groq" if USE_GROQ_API else "whisper_ct2_ru",
-                "language": "ru", "audio_file_duration": round(total_duration, 2), "processing_time_sec": elapsed,
+                "language": language, "audio_file_duration": round(total_duration, 2), "processing_time_sec": elapsed,
             }
         try:
             result = transcribe_pcm(
@@ -301,6 +304,7 @@ async def transcribe_full(
                 use_hallucination_filter=True,
                 previous_text=None,
                 is_first_chunk=True,
+                language=language,
             )
         except Exception as exc:
             logger.exception("Full transcription backend failed for session %s", normalized_session_id, exc_info=exc)
@@ -331,6 +335,7 @@ async def transcribe_full(
                 use_hallucination_filter=True,
                 previous_text=accumulated_text if not is_first else None,
                 is_first_chunk=is_first,
+                language=language,
             )
         except Exception as exc:
             logger.exception("Segment transcription backend failed for session %s", normalized_session_id, exc_info=exc)
@@ -345,7 +350,7 @@ async def transcribe_full(
         "session_id": normalized_session_id,
         "full_text": " ".join(transcripts),
         "source": "groq" if USE_GROQ_API else "whisper_ct2_ru",
-        "language": "ru",
+        "language": language,
         "audio_file_duration": round(total_duration, 2),
         "processing_time_sec": elapsed,
     }

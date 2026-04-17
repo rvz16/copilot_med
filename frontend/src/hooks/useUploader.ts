@@ -2,12 +2,31 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { api } from '../api';
-import type { Hint, RealtimeAnalysis, RecommendedDocument } from '../types/types';
+import type { Hint, RealtimeAnalysis, RecommendedDocument, SessionLanguage } from '../types/types';
 
 export type UploadStatus = 'idle' | 'uploading';
 type QueuedChunk = { blob: Blob; isFinal: boolean };
 
-export function useUploader(sessionId: string | null, analysisModel: string | null) {
+function fallbackMessage(language: SessionLanguage, type: 'pending' | 'upload'): string {
+  const messages =
+    language === 'en'
+      ? {
+          pending: 'Failed to upload pending audio chunks.',
+          upload: 'Failed to upload the audio chunk',
+        }
+      : {
+          pending: 'Не удалось загрузить ожидающие аудиофрагменты.',
+          upload: 'Не удалось загрузить аудиофрагмент',
+        };
+
+  return messages[type];
+}
+
+export function useUploader(
+  sessionId: string | null,
+  analysisModel: string | null,
+  language: SessionLanguage,
+) {
   const [transcript, setTranscript] = useState('');
   const [hints, setHints] = useState<Hint[]>([]);
   const [latestAnalysis, setLatestAnalysis] = useState<RealtimeAnalysis | null>(null);
@@ -36,7 +55,7 @@ export function useUploader(sessionId: string | null, analysisModel: string | nu
       return;
     }
 
-    const error = new Error('Не удалось загрузить ожидающие аудиофрагменты.');
+    const error = new Error(fallbackMessage(language, 'pending'));
     waiters.forEach(({ reject }) => reject(error));
   }, []);
 
@@ -66,6 +85,7 @@ export function useUploader(sessionId: string | null, analysisModel: string | nu
           isFinal,
           analysisModel,
           abortController.signal,
+          language,
         );
         if (runId !== activeRunIdRef.current) {
           break;
@@ -92,7 +112,7 @@ export function useUploader(sessionId: string | null, analysisModel: string | nu
           break;
         }
         setUploadError(
-          err instanceof Error ? err.message : 'Не удалось загрузить аудиофрагмент',
+          err instanceof Error ? err.message : fallbackMessage(language, 'upload'),
         );
         // Stop processing on error. The user can retry by adding more chunks.
         break;
@@ -108,7 +128,7 @@ export function useUploader(sessionId: string | null, analysisModel: string | nu
       setUploadStatus('idle');
       settleIdleWaiters();
     }
-  }, [analysisModel, sessionId, settleIdleWaiters]);
+  }, [analysisModel, language, sessionId, settleIdleWaiters]);
 
   const enqueueChunk = useCallback(
     (blob: Blob, isFinal = false) => {
@@ -124,13 +144,13 @@ export function useUploader(sessionId: string | null, analysisModel: string | nu
       if (queueRef.current.length === 0) {
         return Promise.resolve();
       }
-      return Promise.reject(new Error('Не удалось загрузить ожидающие аудиофрагменты.'));
+      return Promise.reject(new Error(fallbackMessage(language, 'pending')));
     }
 
     return new Promise<void>((resolve, reject) => {
       idleWaitersRef.current.push({ resolve, reject });
     });
-  }, []);
+  }, [language]);
 
   const discardPending = useCallback(() => {
     activeRunIdRef.current += 1;

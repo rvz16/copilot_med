@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 
-MEDICAL_EXTRACTION_SYSTEM_PROMPT = """You extract clinically relevant facts from unlabeled medical consultation transcripts.
+def build_medical_extraction_system_prompt(language: str = "ru") -> str:
+    target_language = "English" if language == "en" else "Russian"
+    return f"""You extract clinically relevant facts from unlabeled medical consultation transcripts.
 Return only one JSON object that matches the requested schema.
 
 Rules:
 - Use only information explicitly present in the transcript.
-- Return every extracted string in Russian.
-- If the transcript contains English or mixed-language content, translate extracted clinical facts into natural clinical Russian.
+- Return every extracted string in {target_language}.
+- If the transcript contains mixed-language content, translate extracted clinical facts into natural clinical {target_language}.
 - Infer likely speaker roles sentence by sentence.
 - Subjective content must contain only patient-reported symptoms or patient-stated concerns.
 - Objective content must contain only actual observations, exam findings, or measurements.
@@ -36,7 +38,37 @@ Field guide:
 """
 
 
-def build_medical_extraction_user_prompt(transcript: str) -> str:
+def build_medical_extraction_user_prompt(transcript: str, language: str = "ru") -> str:
+    if language == "en":
+        return (
+            "Extract data from the transcript into the canonical medical schema.\n"
+            "Work sentence by sentence, infer the likely speaker role, and fill every applicable field.\n"
+            "Return only valid JSON with exactly these keys:\n"
+            "{\n"
+            '  "symptoms": [],\n'
+            '  "concerns": [],\n'
+            '  "observations": [],\n'
+            '  "measurements": [],\n'
+            '  "diagnoses": [],\n'
+            '  "evaluation": [],\n'
+            '  "treatment": [],\n'
+            '  "follow_up_instructions": [],\n'
+            '  "medications": [],\n'
+            '  "allergies": []\n'
+            "}\n"
+            "Important:\n"
+            "- All extracted values must be in English.\n"
+            "- Do not include clinician questions in subjective, assessment, or plan.\n"
+            "- Do not include prompt-like utterances such as 'describe', 'tell me more', 'is it this?', or 'how exactly?'.\n"
+            "- Patient replies may be short: keep the answer, not the preceding question.\n"
+            "- Put clinician orders and actions into treatment; put the medication itself with dose/frequency into medications.\n"
+            "- Put numeric values such as weight, blood pressure, and glucose into measurements.\n"
+            "- Put descriptive exam results into observations.\n"
+            "- Put return-visit timing and follow-up timing into follow_up_instructions.\n"
+            "- If you are unsure whether an utterance contains a fact instead of a clinician prompt, omit it.\n"
+            "Transcript:\n"
+            f"{transcript}"
+        )
     return (
         "Извлеки данные из расшифровки в каноническую медицинскую схему.\n"
         "Работай по предложениям, определяй вероятную роль говорящего и заполняй все применимые поля.\n"

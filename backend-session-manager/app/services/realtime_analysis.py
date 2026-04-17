@@ -23,6 +23,7 @@ class MockRealtimeAnalysisProvider:
     def analyze(self, payload: dict) -> dict:
         transcript = payload.get("transcript_chunk", "")
         analysis_model = str(payload.get("analysis_model") or "").strip() or "mock-realtime-analysis"
+        language = str(((payload.get("context") or {}) if isinstance(payload.get("context"), dict) else {}).get("language") or "ru").strip().lower()
         lowered = transcript.casefold()
         suggestions: list[dict] = []
         interactions: list[dict] = []
@@ -33,36 +34,48 @@ class MockRealtimeAnalysisProvider:
             suggestions.append(
                 {
                     "type": "question_to_ask",
-                    "text": "Уточните выраженность головной боли и её длительность.",
+                    "text": (
+                        "Clarify headache severity and duration."
+                        if language == "en"
+                        else "Уточните выраженность головной боли и её длительность."
+                    ),
                     "confidence": 0.82,
                     "evidence": [transcript[:120].strip()] if transcript.strip() else [],
                 }
             )
-            symptoms.append("головная боль")
+            symptoms.append("headache" if language == "en" else "головная боль")
 
         if "nausea" in lowered or "тошнот" in lowered:
             suggestions.append(
                 {
                     "type": "next_step",
-                    "text": "Проверьте признаки обезвоживания и сопутствующие желудочно-кишечные симптомы.",
+                    "text": (
+                        "Check for dehydration and associated GI symptoms."
+                        if language == "en"
+                        else "Проверьте признаки обезвоживания и сопутствующие желудочно-кишечные симптомы."
+                    ),
                     "confidence": 0.71,
                     "evidence": [transcript[:120].strip()] if transcript.strip() else [],
                 }
             )
-            symptoms.append("тошнота")
+            symptoms.append("nausea" if language == "en" else "тошнота")
 
         if "warfarin" in lowered:
-            medications.append("варфарин")
+            medications.append("warfarin" if language == "en" else "варфарин")
         if "ibuprofen" in lowered or "ибупрофен" in lowered:
-            medications.append("ибупрофен")
+            medications.append("ibuprofen" if language == "en" else "ибупрофен")
 
         if "warfarin" in lowered and ("ibuprofen" in lowered or "ибупрофен" in lowered):
             interactions.append(
                 {
-                    "drug_a": "варфарин",
-                    "drug_b": "ибупрофен",
+                    "drug_a": "warfarin" if language == "en" else "варфарин",
+                    "drug_b": "ibuprofen" if language == "en" else "ибупрофен",
                     "severity": "high",
-                    "rationale": "Повышается риск кровотечения при сочетании антикоагулянтов с НПВП.",
+                    "rationale": (
+                        "Bleeding risk increases when anticoagulants are combined with NSAIDs."
+                        if language == "en"
+                        else "Повышается риск кровотечения при сочетании антикоагулянтов с НПВП."
+                    ),
                     "confidence": 0.91,
                 }
             )

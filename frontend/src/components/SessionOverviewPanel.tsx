@@ -1,4 +1,5 @@
 import type { AnalysisModelOption } from '../data/analysisModels';
+import { useUiLanguage } from '../i18n';
 import type { SessionPerformanceMetrics } from '../types/types';
 import { formatDateTime, formatDurationMs, formatStatusLabel } from '../utils/format';
 
@@ -49,19 +50,95 @@ export function SessionOverviewPanel({
   onCloseSession,
   onBackToDashboard,
 }: Props) {
+  const { language } = useUiLanguage();
   const isProcessingMetricsPending = status === 'analyzing' || processingState === 'processing';
   const realtimeMetrics = performanceMetrics?.realtime_analysis;
   const documentationMetrics = performanceMetrics?.documentation_service;
   const postSessionMetrics = performanceMetrics?.post_session_analysis;
   const realtimeMetricLabel = realtimeMetrics
-    ? `${formatDurationMs(realtimeMetrics.average_latency_ms)} · ${realtimeMetrics.sample_count} изм.`
+    ? `${formatDurationMs(realtimeMetrics.average_latency_ms, language)} · ${realtimeMetrics.sample_count} ${language === 'en' ? 'samples' : 'изм.'}`
     : '—';
   const postProcessingMetricLabel = (value?: number | null) => {
     if (typeof value === 'number') {
-      return formatDurationMs(value);
+      return formatDurationMs(value, language);
     }
-    return isProcessingMetricsPending ? 'Вычисляется' : '—';
+    return isProcessingMetricsPending ? (language === 'en' ? 'Calculating' : 'Вычисляется') : '—';
   };
+  const copy = language === 'en'
+    ? {
+        live: 'Current session',
+        archive: 'Archived snapshot',
+        finished: {
+          title: 'Post-session review completed',
+          description: 'Final materials are saved and available in the consultation archive.',
+        },
+        analyzing: {
+          title: 'Post-session review in progress',
+          description: 'The service is assembling the full transcript and generating deep analytics.',
+        },
+        active: {
+          title: 'Session is active',
+          description: 'The consultation is still open. Deep review starts after the session is closed.',
+        },
+        sessionId: 'Session ID',
+        patientId: 'Patient ID',
+        complaint: 'Chief complaint',
+        complaintMissing: 'Not provided',
+        status: 'Status',
+        recording: 'Recording',
+        processing: 'Processing',
+        chunks: 'Uploaded chunks',
+        created: 'Created',
+        updated: 'Updated',
+        closed: 'Closed',
+        analysisModel: 'Analysis model',
+        analysisModelLabel: 'Model for upcoming realtime requests',
+        analysisModelHelp:
+          'The change applies to the next audio chunks sent to realtime analysis.',
+        performance: 'Performance metrics',
+        realtime: 'Average realtime latency',
+        documentation: 'Documentation Service',
+        postSession: 'Post-Session Analysis',
+        close: 'Close consultation',
+        back: 'Back to doctor page',
+      }
+    : {
+        live: 'Текущая сессия',
+        archive: 'Архивный снимок',
+        finished: {
+          title: 'Пост-сессионный разбор завершён',
+          description: 'Итоговые материалы сохранены и доступны в архиве консультации.',
+        },
+        analyzing: {
+          title: 'Идёт пост-сессионный разбор',
+          description: 'Сервис собирает полный транскрипт и формирует углублённую аналитику.',
+        },
+        active: {
+          title: 'Сессия активна',
+          description: 'Консультация ещё не завершена. Углублённый разбор начнётся после закрытия сессии.',
+        },
+        sessionId: 'ID сессии',
+        patientId: 'ID пациента',
+        complaint: 'Причина обращения',
+        complaintMissing: 'Не указана',
+        status: 'Статус',
+        recording: 'Запись',
+        processing: 'Обработка',
+        chunks: 'Загружено фрагментов',
+        created: 'Создана',
+        updated: 'Обновлена',
+        closed: 'Закрыта',
+        analysisModel: 'Модель анализа',
+        analysisModelLabel: 'Модель для следующих realtime-запросов',
+        analysisModelHelp:
+          'Изменение применяется к следующим порциям аудио, которые уйдут в realtime analysis.',
+        performance: 'Метрики производительности',
+        realtime: 'Средняя задержка Real-Time',
+        documentation: 'Documentation Service',
+        postSession: 'Post-Session Analysis',
+        close: 'Закрыть консультацию',
+        back: 'Вернуться к странице врача',
+      };
   const selectedAnalysisModelOption =
     analysisModelOptions.find((option) => option.value === (analysisModel ?? '')) ?? analysisModelOptions[0];
 
@@ -70,30 +147,30 @@ export function SessionOverviewPanel({
       return {
         value: 100,
         tone: 'finished',
-        title: 'Пост-сессионный разбор завершён',
-        description: 'Итоговые материалы сохранены и доступны в архиве консультации.',
+        title: copy.finished.title,
+        description: copy.finished.description,
       };
     }
     if (status === 'analyzing' || processingState === 'processing') {
       return {
         value: 76,
         tone: 'analyzing',
-        title: 'Идёт пост-сессионный разбор',
-        description: 'Сервис собирает полный транскрипт и формирует углублённую аналитику.',
+        title: copy.analyzing.title,
+        description: copy.analyzing.description,
       };
     }
     return {
       value: latestSeq > 0 ? 38 : 16,
       tone: 'active',
-      title: 'Сессия активна',
-      description: 'Консультация ещё не завершена. Углублённый разбор начнётся после закрытия сессии.',
+      title: copy.active.title,
+      description: copy.active.description,
     };
   })();
 
   return (
     <section className="panel session-overview-panel">
       <div className="section-heading compact">
-        <p className="eyebrow">{mode === 'live' ? 'Текущая сессия' : 'Архивный снимок'}</p>
+        <p className="eyebrow">{mode === 'live' ? copy.live : copy.archive}</p>
         <h2>{patientName}</h2>
       </div>
 
@@ -114,58 +191,58 @@ export function SessionOverviewPanel({
 
       <dl className="session-facts">
         <div>
-          <dt>ID сессии</dt>
+          <dt>{copy.sessionId}</dt>
           <dd>{sessionId}</dd>
         </div>
         <div>
-          <dt>ID пациента</dt>
+          <dt>{copy.patientId}</dt>
           <dd>{patientId}</dd>
         </div>
         <div>
-          <dt>Причина обращения</dt>
-          <dd>{chiefComplaint || 'Не указана'}</dd>
+          <dt>{copy.complaint}</dt>
+          <dd>{chiefComplaint || copy.complaintMissing}</dd>
         </div>
         <div>
-          <dt>Статус</dt>
+          <dt>{copy.status}</dt>
           <dd>
-            <span className={`badge badge-${status}`}>{formatStatusLabel(status)}</span>
+            <span className={`badge badge-${status}`}>{formatStatusLabel(status, language)}</span>
           </dd>
         </div>
         <div>
-          <dt>Запись</dt>
+          <dt>{copy.recording}</dt>
           <dd>
             <span className={`badge badge-${recordingState}`}>
-              {formatStatusLabel(recordingState)}
+              {formatStatusLabel(recordingState, language)}
             </span>
           </dd>
         </div>
         <div>
-          <dt>Обработка</dt>
-          <dd>{formatStatusLabel(processingState)}</dd>
+          <dt>{copy.processing}</dt>
+          <dd>{formatStatusLabel(processingState, language)}</dd>
         </div>
         <div>
-          <dt>Загружено фрагментов</dt>
+          <dt>{copy.chunks}</dt>
           <dd>{latestSeq}</dd>
         </div>
         <div>
-          <dt>Создана</dt>
-          <dd>{formatDateTime(createdAt)}</dd>
+          <dt>{copy.created}</dt>
+          <dd>{formatDateTime(createdAt, language)}</dd>
         </div>
         <div>
-          <dt>Обновлена</dt>
-          <dd>{formatDateTime(updatedAt)}</dd>
+          <dt>{copy.updated}</dt>
+          <dd>{formatDateTime(updatedAt, language)}</dd>
         </div>
         <div>
-          <dt>Закрыта</dt>
-          <dd>{formatDateTime(closedAt)}</dd>
+          <dt>{copy.closed}</dt>
+          <dd>{formatDateTime(closedAt, language)}</dd>
         </div>
       </dl>
 
       {mode === 'live' && analysisModelOptions.length > 0 && onAnalysisModelChange && (
         <>
-          <h3 className="session-section-title">Модель анализа</h3>
+          <h3 className="session-section-title">{copy.analysisModel}</h3>
           <div className="form-row analysis-model-control">
-            <label htmlFor="analysis-model-select">Модель для следующих realtime-запросов</label>
+            <label htmlFor="analysis-model-select">{copy.analysisModelLabel}</label>
             <select
               id="analysis-model-select"
               value={analysisModel ?? ''}
@@ -180,7 +257,7 @@ export function SessionOverviewPanel({
             </select>
             <p className="form-helper-text">
               {selectedAnalysisModelOption?.description ??
-                'Изменение применяется к следующим порциям аудио, которые уйдут в realtime analysis.'}
+                copy.analysisModelHelp}
             </p>
           </div>
         </>
@@ -188,18 +265,18 @@ export function SessionOverviewPanel({
 
       {mode === 'archive' && (
         <>
-          <h3 className="session-section-title">Метрики производительности</h3>
+          <h3 className="session-section-title">{copy.performance}</h3>
           <dl className="session-facts session-performance-facts">
             <div>
-              <dt>Средняя задержка Real-Time</dt>
+              <dt>{copy.realtime}</dt>
               <dd>{realtimeMetricLabel}</dd>
             </div>
             <div>
-              <dt>Documentation Service</dt>
+              <dt>{copy.documentation}</dt>
               <dd>{postProcessingMetricLabel(documentationMetrics?.processing_time_ms)}</dd>
             </div>
             <div>
-              <dt>Post-Session Analysis</dt>
+              <dt>{copy.postSession}</dt>
               <dd>{postProcessingMetricLabel(postSessionMetrics?.processing_time_ms)}</dd>
             </div>
           </dl>
@@ -214,13 +291,13 @@ export function SessionOverviewPanel({
             onClick={() => void onCloseSession()}
             disabled={disableActions}
           >
-            Закрыть консультацию
+            {copy.close}
           </button>
         )}
 
         {mode === 'archive' && onBackToDashboard && (
           <button type="button" className="ghost-button" onClick={onBackToDashboard}>
-            Вернуться к странице врача
+            {copy.back}
           </button>
         )}
       </div>

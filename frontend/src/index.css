@@ -79,6 +79,12 @@ a {
   gap: 16px;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .brand-block {
   display: flex;
   align-items: center;
@@ -121,6 +127,31 @@ a {
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.08em;
+}
+
+.language-switch {
+  display: inline-flex;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.language-switch-button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.language-switch-button.is-active {
+  background: linear-gradient(135deg, #203e49 0%, #2e7a72 100%);
+  color: #fffdf8;
 }
 
 .landing-page,

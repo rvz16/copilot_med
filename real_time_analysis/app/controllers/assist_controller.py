@@ -91,6 +91,7 @@ class AssistController:
         suggestions = self._merge_suggestions(
             model_suggestions=model_result.get("suggestions", []),
             fallback_evidence=evidence_defaults,
+            language=language,
         )
 
         interactions = self._merge_interactions(
@@ -133,6 +134,7 @@ class AssistController:
         self,
         model_suggestions: Any,
         fallback_evidence: list[str],
+        language: str = "en",
     ) -> list[dict[str, Any]]:
         suggestions: list[dict[str, Any]] = []
         if isinstance(model_suggestions, list):
@@ -163,7 +165,11 @@ class AssistController:
         if suggestions:
             return suggestions
 
-        fallback_text = "Clarify symptom onset, severity, and red-flag progression."
+        fallback_text = (
+            "Clarify symptom onset, severity, and red-flag progression."
+            if language == "en"
+            else "Уточните начало симптомов, выраженность и динамику красных флагов."
+        )
         return [{
             "type": "question_to_ask",
             "text": fallback_text,

@@ -8,8 +8,8 @@ import httpx
 
 from app.llm_client import LLMGenerationResult, PostAnalyticsLLMClient
 from app.prompts import (
-    DIARIZATION_SYSTEM_PROMPT,
-    SYSTEM_PROMPT,
+    build_diarization_system_prompt,
+    build_system_prompt,
     build_diarization_user_prompt,
     build_user_prompt,
 )
@@ -102,6 +102,15 @@ def _normalize_speaker_label(value: str) -> str:
     return "Пациент"
 
 
+def _localized_speaker_label(value: str, language: str) -> str:
+    normalized = _safe_str(value).casefold()
+    doctor = "Doctor" if language == "en" else "Доктор"
+    patient = "Patient" if language == "en" else "Пациент"
+    if normalized in {"доктор", "врач", "doctor", "clinician", "provider"}:
+        return doctor
+    return patient
+
+
 def _clean_turn_text(value: str) -> str:
     text = re.sub(r"\s+", " ", _safe_str(value)).strip(" \t\r\n-:")
     return text
@@ -143,10 +152,10 @@ def _guess_speaker(sentence: str) -> str:
         "одышка",
     )
     if any(marker in normalized for marker in doctor_markers):
-        return "Доктор"
+        return "doctor"
     if any(marker in normalized for marker in patient_markers):
-        return "Пациент"
-    return "Пациент"
+        return "patient"
+    return "patient"
 
 
 def _fallback_diarization(request: AnalyticsRequest) -> TranscriptDiarization:
@@ -167,7 +176,8 @@ def _fallback_diarization(request: AnalyticsRequest) -> TranscriptDiarization:
         sentence = _clean_turn_text(part)
         if not sentence:
             continue
-        speaker = _guess_speaker(sentence)
+        speaker_key = _guess_speaker(sentence)
+        speaker = _doctor_label(request.language) if speaker_key == "doctor" else _patient_label(request.language)
         if current_speaker is None:
             current_speaker = speaker
             current_lines = [sentence]
@@ -181,7 +191,7 @@ def _fallback_diarization(request: AnalyticsRequest) -> TranscriptDiarization:
 
     flush()
     if not segments and request.full_transcript.strip():
-        segments = [DiarizationSegment(speaker="Пациент", text=request.full_transcript.strip())]
+        segments = [DiarizationSegment(speaker=_patient_label(request.language), text=request.full_transcript.strip())]
 
     return TranscriptDiarization(
         model_used="fallback-diarization",
@@ -190,7 +200,7 @@ def _fallback_diarization(request: AnalyticsRequest) -> TranscriptDiarization:
     )
 
 
-def _parse_diarization_payload(raw: dict, model_used: str) -> TranscriptDiarization | None:
+def _parse_diarization_payload(raw: dict, model_used: str, language: str) -> TranscriptDiarization | None:
     raw_segments = raw.get("segments", [])
     if not isinstance(raw_segments, list):
         return None
@@ -202,7 +212,7 @@ def _parse_diarization_payload(raw: dict, model_used: str) -> TranscriptDiarizat
         text = _clean_turn_text(item.get("text", ""))
         if not text:
             continue
-        speaker = _normalize_speaker_label(item.get("speaker", "Пациент"))
+        speaker = _localized_speaker_label(item.get("speaker", "Пациент"), language)
         if segments and segments[-1].speaker == speaker:
             segments[-1] = DiarizationSegment(
                 speaker=speaker,
@@ -230,14 +240,15 @@ def _build_diarization(
 
     try:
         result = client.generate(
-            DIARIZATION_SYSTEM_PROMPT,
+            build_diarization_system_prompt(request.language),
             build_diarization_user_prompt(
                 full_transcript=request.full_transcript,
+                language=request.language,
                 chief_complaint=request.chief_complaint,
             ),
             preferred_model_name=client.diarization_model_name,
         )
-        parsed = _parse_diarization_payload(result.payload, result.model_name)
+        parsed = _parse_diarization_payload(result.payload, result.model_name, request.language)
         if parsed is not None:
             return parsed
     except Exception as exc:
@@ -252,6 +263,7 @@ def _compose_fallback_response(
     elapsed_ms: int,
     model_used: str,
 ) -> AnalyticsResponse:
+    is_english = request.language == "en"
     realtime_analysis = request.realtime_analysis if isinstance(request.realtime_analysis, dict) else {}
     diagnosis_candidates = _extract_suggestion_texts(realtime_analysis, "diagnosis_suggestion")
     follow_up_candidates = _extract_suggestion_texts(realtime_analysis, "next_step")
@@ -277,45 +289,69 @@ def _compose_fallback_response(
     transcript_excerpt = _safe_str(request.full_transcript)[:240]
     key_findings = _unique_texts(
         [
-            f"Основная жалоба: {request.chief_complaint}" if request.chief_complaint else "",
-            f"Симптомы в разговоре: {', '.join(symptoms[:3])}" if symptoms else "",
-            f"Упомянутые состояния: {', '.join(conditions[:2])}" if conditions else "",
-            f"Упомянутые препараты: {', '.join(medications[:2])}" if medications else "",
+            f"{'Chief complaint' if is_english else 'Основная жалоба'}: {request.chief_complaint}" if request.chief_complaint else "",
+            f"{'Symptoms mentioned' if is_english else 'Симптомы в разговоре'}: {', '.join(symptoms[:3])}" if symptoms else "",
+            f"{'Conditions mentioned' if is_english else 'Упомянутые состояния'}: {', '.join(conditions[:2])}" if conditions else "",
+            f"{'Medications mentioned' if is_english else 'Упомянутые препараты'}: {', '.join(medications[:2])}" if medications else "",
             (
-                f"Рабочие гипотезы realtime-анализа: {', '.join(diagnosis_candidates[:2])}"
+                f"{'Realtime working hypotheses' if is_english else 'Рабочие гипотезы realtime-анализа'}: {', '.join(diagnosis_candidates[:2])}"
                 if diagnosis_candidates
                 else ""
             ),
             (
-                f"Клинические рекомендации были подобраны по запросам: {', '.join(recommendation_queries[:2])}"
+                f"{'Clinical guidelines were matched for queries' if is_english else 'Клинические рекомендации были подобраны по запросам'}: {', '.join(recommendation_queries[:2])}"
                 if recommendation_queries
                 else ""
             ),
         ]
     )[:5]
     if not key_findings:
-        key_findings = ["Полная транскрипция консультации сохранена для последующего ручного разбора."]
+        key_findings = [
+            "The full consultation transcript was saved for manual review."
+            if is_english
+            else "Полная транскрипция консультации сохранена для последующего ручного разбора."
+        ]
 
     summary_parts = []
     if request.chief_complaint:
-        summary_parts.append(f"Основная жалоба пациента: {request.chief_complaint}.")
+        summary_parts.append(
+            f"{'Patient chief complaint' if is_english else 'Основная жалоба пациента'}: {request.chief_complaint}."
+        )
     if diagnosis_candidates:
         summary_parts.append(
-            f"По сохранённым артефактам realtime-анализа наиболее вероятны: {', '.join(diagnosis_candidates[:2])}."
+            (
+                f"The most likely diagnoses based on saved realtime artifacts are: {', '.join(diagnosis_candidates[:2])}."
+                if is_english
+                else f"По сохранённым артефактам realtime-анализа наиболее вероятны: {', '.join(diagnosis_candidates[:2])}."
+            )
         )
     elif symptoms:
-        summary_parts.append(f"В беседе упоминались симптомы: {', '.join(symptoms[:3])}.")
+        summary_parts.append(
+            f"{'Symptoms mentioned in the consultation' if is_english else 'В беседе упоминались симптомы'}: {', '.join(symptoms[:3])}."
+        )
     if recommendation_queries:
         summary_parts.append(
-            "Во время консультации были найдены релевантные клинические рекомендации, "
-            f"связанные с запросами: {', '.join(recommendation_queries[:2])}."
+            (
+                "Relevant clinical guidelines were found during the consultation for the following queries: "
+                f"{', '.join(recommendation_queries[:2])}."
+                if is_english
+                else "Во время консультации были найдены релевантные клинические рекомендации, "
+                f"связанные с запросами: {', '.join(recommendation_queries[:2])}."
+            )
         )
     summary_parts.append(
-        "Внешний LLM для post-session analytics временно недоступен, поэтому показан резервный "
-        "разбор на основе уже сохранённых транскриптов, подсказок и структурированных фактов."
+        (
+            "The external post-session analytics LLM is temporarily unavailable, so this fallback "
+            "review is based on the saved transcripts, hints, and structured facts."
+            if is_english
+            else "Внешний LLM для post-session analytics временно недоступен, поэтому показан резервный "
+            "разбор на основе уже сохранённых транскриптов, подсказок и структурированных фактов."
+        )
     )
     if transcript_excerpt:
-        summary_parts.append(f"Фрагмент полной транскрипции: {transcript_excerpt}")
+        summary_parts.append(
+            f"{'Full transcript excerpt' if is_english else 'Фрагмент полной транскрипции'}: {transcript_excerpt}"
+        )
     clinical_narrative = " ".join(summary_parts)
 
     insights: list[CriticalInsight] = []
@@ -337,7 +373,11 @@ def _compose_fallback_response(
                     description=message,
                     severity=severity,
                     confidence=_clamp(_safe_float(item.get("confidence"), 0.55)),
-                    evidence="Сформировано из подсказок реального времени.",
+                    evidence=(
+                        "Derived from realtime hints."
+                        if is_english
+                        else "Сформировано из подсказок реального времени."
+                    ),
                 )
             )
             if len(insights) >= 3:
@@ -349,9 +389,12 @@ def _compose_fallback_response(
             FollowUpRecommendation(
                 action=action,
                 priority="routine",
-                timeframe="при ближайшем клиническом разборе",
+                timeframe="during the next clinical review" if is_english else "при ближайшем клиническом разборе",
                 rationale=(
-                    "Рекомендация перенесена из realtime-артефактов, пока внешний пост-сессионный "
+                    "This recommendation was carried over from realtime artifacts while the external "
+                    "post-session LLM is unavailable."
+                    if is_english
+                    else "Рекомендация перенесена из realtime-артефактов, пока внешний пост-сессионный "
                     "LLM недоступен."
                 ),
             )
@@ -359,16 +402,32 @@ def _compose_fallback_response(
     if not follow_up_recommendations:
         follow_up_recommendations = [
             FollowUpRecommendation(
-                action="Повторно просмотреть полную транскрипцию и подтвердить итоговое клиническое заключение.",
+                action=(
+                    "Review the full transcript again and confirm the final clinical impression."
+                    if is_english
+                    else "Повторно просмотреть полную транскрипцию и подтвердить итоговое клиническое заключение."
+                ),
                 priority="routine",
-                timeframe="при ближайшем разборе",
-                rationale="Резервная рекомендация сформирована из полного текста консультации.",
+                timeframe="during the next review" if is_english else "при ближайшем разборе",
+                rationale=(
+                    "Fallback recommendation based on the complete consultation transcript."
+                    if is_english
+                    else "Резервная рекомендация сформирована из полного текста консультации."
+                ),
             ),
             FollowUpRecommendation(
-                action="Сверить план наблюдения с найденными клиническими рекомендациями и красными флагами.",
+                action=(
+                    "Cross-check the follow-up plan against the matched clinical guidelines and red flags."
+                    if is_english
+                    else "Сверить план наблюдения с найденными клиническими рекомендациями и красными флагами."
+                ),
                 priority="routine",
-                timeframe="до финального документирования",
-                rationale="Это снижает риск пропустить важные follow-up действия при отсутствии deep-analysis LLM.",
+                timeframe="before final documentation" if is_english else "до финального документирования",
+                rationale=(
+                    "This reduces the risk of missing important follow-up actions while the deep-analysis LLM is unavailable."
+                    if is_english
+                    else "Это снижает риск пропустить важные follow-up действия при отсутствии deep-analysis LLM."
+                ),
             ),
         ]
 
@@ -377,22 +436,46 @@ def _compose_fallback_response(
         overall_score=transcript_scale,
         metrics=[
             QualityMetric(
-                metric_name="Полнота анамнеза",
+                metric_name="History completeness" if is_english else "Полнота анамнеза",
                 score=transcript_scale,
-                description="Резервная оценка построена по длине транскрипции и сохранённым realtime-артефактам.",
-                improvement_suggestion="После восстановления LLM повторно запустить post-session analytics для полного разбора.",
+                description=(
+                    "Fallback score based on transcript length and saved realtime artifacts."
+                    if is_english
+                    else "Резервная оценка построена по длине транскрипции и сохранённым realtime-артефактам."
+                ),
+                improvement_suggestion=(
+                    "Rerun post-session analytics after LLM recovery for the full review."
+                    if is_english
+                    else "После восстановления LLM повторно запустить post-session analytics для полного разбора."
+                ),
             ),
             QualityMetric(
-                metric_name="Качество документирования",
+                metric_name="Documentation quality" if is_english else "Качество документирования",
                 score=0.62 if key_findings else 0.55,
-                description="Часть структуры восстановлена из уже сохранённых подсказок и extracted facts.",
-                improvement_suggestion="Проверить полноту итогового заключения вручную перед использованием в документации.",
+                description=(
+                    "Part of the structure was reconstructed from saved hints and extracted facts."
+                    if is_english
+                    else "Часть структуры восстановлена из уже сохранённых подсказок и extracted facts."
+                ),
+                improvement_suggestion=(
+                    "Review the final summary manually before using it in documentation."
+                    if is_english
+                    else "Проверить полноту итогового заключения вручную перед использованием в документации."
+                ),
             ),
             QualityMetric(
-                metric_name="Дифференциальное мышление",
+                metric_name="Differential reasoning" if is_english else "Дифференциальное мышление",
                 score=0.66 if diagnosis_candidates else 0.52,
-                description="Оценка основана на диагнозах и следующих шагах, найденных во время live-анализа.",
-                improvement_suggestion="Подтвердить основные и альтернативные гипотезы при следующем обзоре случая.",
+                description=(
+                    "The score is based on diagnoses and next steps captured during live analysis."
+                    if is_english
+                    else "Оценка основана на диагнозах и следующих шагах, найденных во время live-анализа."
+                ),
+                improvement_suggestion=(
+                    "Confirm the primary and alternative hypotheses during the next case review."
+                    if is_english
+                    else "Подтвердить основные и альтернативные гипотезы при следующем обзоре случая."
+                ),
             ),
         ],
     )
@@ -575,6 +658,7 @@ def analyze(request: AnalyticsRequest) -> AnalyticsResponse:
 
     user_prompt = build_user_prompt(
         full_transcript=request.full_transcript,
+        language=request.language,
         chief_complaint=request.chief_complaint,
         realtime_transcript=request.realtime_transcript,
         realtime_hints=request.realtime_hints,
@@ -587,7 +671,7 @@ def analyze(request: AnalyticsRequest) -> AnalyticsResponse:
     try:
         client = get_llm_client()
         with ThreadPoolExecutor(max_workers=2) as executor:
-            analytics_future = executor.submit(client.generate, SYSTEM_PROMPT, user_prompt)
+            analytics_future = executor.submit(client.generate, build_system_prompt(request.language), user_prompt)
             diarization_future = executor.submit(_build_diarization, request, client)
             result: LLMGenerationResult = analytics_future.result()
             diarization = diarization_future.result()

@@ -2,17 +2,7 @@
 
 import type { RecordingState } from '../hooks/useSession';
 import type { UploadStatus } from '../hooks/useUploader';
-
-const RECORDING_LABELS: Record<RecordingState, string> = {
-  idle: 'ожидание',
-  recording: 'запись',
-  stopped: 'остановлена',
-};
-
-const UPLOAD_LABELS: Record<UploadStatus, string> = {
-  idle: 'ожидание',
-  uploading: 'загрузка',
-};
+import { useUiLanguage } from '../i18n';
 
 interface Props {
   recordingState: RecordingState;
@@ -35,9 +25,36 @@ export function RecordingControls({
   onStartRecording,
   onStopRecording,
 }: Props) {
+  const { language } = useUiLanguage();
+  const recordingLabels: Record<RecordingState, string> = language === 'en'
+    ? { idle: 'idle', recording: 'recording', stopped: 'stopped' }
+    : { idle: 'ожидание', recording: 'запись', stopped: 'остановлена' };
+  const uploadLabels: Record<UploadStatus, string> = language === 'en'
+    ? { idle: 'idle', uploading: 'uploading' }
+    : { idle: 'ожидание', uploading: 'загрузка' };
+  const copy = language === 'en'
+    ? {
+        title: 'Recording controls',
+        start: 'Start recording',
+        stop: 'Stop recording',
+        recording: 'Recording:',
+        upload: 'Upload:',
+        chunks: 'Uploaded chunks:',
+        live: '● recording',
+      }
+    : {
+        title: 'Управление записью',
+        start: 'Начать запись',
+        stop: 'Остановить запись',
+        recording: 'Запись:',
+        upload: 'Загрузка:',
+        chunks: 'Отправлено фрагментов:',
+        live: '● запись идёт',
+      };
+
   return (
     <section className="panel" id="recording-controls">
-      <h2>Управление записью</h2>
+      <h2>{copy.title}</h2>
 
       <div className="button-row">
         <button
@@ -45,7 +62,7 @@ export function RecordingControls({
           onClick={onStartRecording}
           disabled={disabled || !canRecord || isRecording}
         >
-          Начать запись
+          {copy.start}
         </button>
 
         <button
@@ -54,26 +71,26 @@ export function RecordingControls({
           disabled={disabled || !isRecording}
           className="btn-secondary"
         >
-          Остановить запись
+          {copy.stop}
         </button>
       </div>
 
       <div className="info-row">
-        <span className="label">Запись:</span>
+        <span className="label">{copy.recording}</span>
         <span className={`badge badge-${recordingState}`}>
-          {isRecording ? '● запись идёт' : RECORDING_LABELS[recordingState]}
+          {isRecording ? copy.live : recordingLabels[recordingState]}
         </span>
       </div>
 
       <div className="info-row">
-        <span className="label">Загрузка:</span>
+        <span className="label">{copy.upload}</span>
         <span className={`badge ${uploadStatus === 'uploading' ? 'badge-active' : 'badge-idle'}`}>
-          {UPLOAD_LABELS[uploadStatus]}
+          {uploadLabels[uploadStatus]}
         </span>
       </div>
 
       <div className="info-row">
-        <span className="label">Отправлено фрагментов:</span>
+        <span className="label">{copy.chunks}</span>
         <span>{chunksUploaded}</span>
       </div>
     </section>

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -26,6 +26,7 @@ class UploadConfig(ApiBaseModel):
 class CreateSessionRequest(ApiBaseModel):
     doctor_id: str
     patient_id: str
+    language: Literal["ru", "en"] = "ru"
     doctor_name: str | None = None
     doctor_specialty: str | None = None
     patient_name: str | None = None
@@ -52,6 +53,7 @@ class CreateSessionResponse(ApiBaseModel):
     session_id: str
     status: str
     recording_state: str
+    language: Literal["ru", "en"] = "ru"
     upload_config: UploadConfig
     doctor_name: str | None = None
     doctor_specialty: str | None = None
@@ -223,6 +225,7 @@ class HealthResponse(ApiBaseModel):
 class SessionSummaryResponse(ApiBaseModel):
     session_id: str
     doctor_id: str
+    language: Literal["ru", "en"] = "ru"
     doctor_name: str | None = None
     doctor_specialty: str | None = None
     patient_id: str
@@ -289,6 +292,7 @@ class ConsultationSnapshotResponse(ApiBaseModel):
     status: str
     recording_state: str
     processing_state: str
+    language: Literal["ru", "en"] = "ru"
     latest_seq: int
     transcript: str
     hints: list[HintListItem] = Field(default_factory=list)

@@ -24,13 +24,16 @@ _OPENAI_COMPATIBLE_PROVIDERS = {
     "google-openai",
 }
 
-SYSTEM_PROMPT = """\
+def build_system_prompt(language: str) -> str:
+    language_name = "English" if language == "en" else "Russian"
+    return f"""\
 Clinical assistant. Return ONLY a short JSON object:
-{"suggestions":[{"type":"diagnosis_suggestion|question_to_ask|next_step|warning","text":"...","confidence":0.0-1.0}],\
-"drug_interactions":[{"drug_a":"..","drug_b":"..","severity":"low|medium|high","rationale":"..","confidence":0.0-1.0}],\
-"extracted_facts":{"symptoms":[],"conditions":[],"medications":[],"allergies":[],"vitals":{"age":null,"weight_kg":null,"height_cm":null,"bp":null,"hr":null,"temp_c":null}},\
-"knowledge_refs":[]}
+{{"suggestions":[{{"type":"diagnosis_suggestion|question_to_ask|next_step|warning","text":"...","confidence":0.0-1.0}}],\
+"drug_interactions":[{{"drug_a":"..","drug_b":"..","severity":"low|medium|high","rationale":"..","confidence":0.0-1.0}}],\
+"extracted_facts":{{"symptoms":[],"conditions":[],"medications":[],"allergies":[],"vitals":{{"age":null,"weight_kg":null,"height_cm":null,"bp":null,"hr":null,"temp_c":null}}}},\
+"knowledge_refs":[]}}
 Rules: Max 3 suggestions. Keep text short (under 15 words). No markdown. Confidence 0-1. Empty lists when unsure.\
+All generated text must be in {language_name}.\
 If type is diagnosis_suggestion, text must contain only the most likely diagnosis or condition name in the same language as the transcript. No prefixes like "consider", "rule out", "check for", or treatment advice.\
 """
 
@@ -92,7 +95,7 @@ class LLMClient:
         body = {
             "model": effective_model_name,
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": build_system_prompt(language)},
                 {"role": "user", "content": user_content},
             ],
         }

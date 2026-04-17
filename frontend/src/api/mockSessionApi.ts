@@ -25,40 +25,61 @@ import type {
 const MOCK_DELAY_MS = 300;
 const MOCK_ANALYTICS_DELAY_MS = 2800;
 
+function localizedText(language: 'ru' | 'en', ru: string, en: string): string {
+  return language === 'en' ? en : ru;
+}
+
+function normalizeLanguage(language: string | undefined): 'ru' | 'en' {
+  return language === 'en' ? 'en' : 'ru';
+}
+
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-const TRANSCRIPT_FRAGMENTS = [
-  'Пациент жалуется на головную боль в течение двух дней.',
-  ' Боль локализуется в лобной области.',
-  ' Ранее приступов мигрени не отмечалось.',
-  ' Обезболивающие из аптеки помогают только частично.',
-  ' Нарушений зрения не отмечает.',
-  ' Тошноту и рвоту пациент отрицает.',
-];
+function getTranscriptFragments(language: 'ru' | 'en'): string[] {
+  return language === 'en'
+    ? [
+        'The patient reports a headache lasting for two days.',
+        ' The pain is localized in the frontal area.',
+        ' There is no previous history of migraine attacks.',
+        ' Over-the-counter pain medication provides only partial relief.',
+        ' The patient denies visual disturbances.',
+        ' The patient denies nausea and vomiting.',
+      ]
+    : [
+        'Пациент жалуется на головную боль в течение двух дней.',
+        ' Боль локализуется в лобной области.',
+        ' Ранее приступов мигрени не отмечалось.',
+        ' Обезболивающие из аптеки помогают только частично.',
+        ' Нарушений зрения не отмечает.',
+        ' Тошноту и рвоту пациент отрицает.',
+      ];
+}
 
-const SAMPLE_HINTS: Hint[] = [
-  {
-    hint_id: 'hint_001',
-    type: 'followup_hint',
-    message: 'Уточните интенсивность боли и её длительность.',
-    confidence: 0.84,
-    severity: 'medium',
-  },
-  {
-    hint_id: 'hint_002',
-    type: 'differential_hint',
-    message: 'Рассмотрите головную боль напряжения и мигрень.',
-    confidence: 0.72,
-    severity: 'low',
-  },
-  {
-    hint_id: 'hint_003',
-    type: 'followup_hint',
-    message: 'Спросите о недавнем стрессе и изменениях сна.',
-    confidence: 0.68,
-    severity: 'low',
-  },
-];
+function getSampleHints(language: 'ru' | 'en'): Hint[] {
+  return [
+    {
+      hint_id: 'hint_001',
+      type: 'followup_hint',
+      message: localizedText(language, 'Уточните интенсивность боли и её длительность.', 'Clarify the pain intensity and duration.'),
+      confidence: 0.84,
+      severity: 'medium',
+    },
+    {
+      hint_id: 'hint_002',
+      type: 'differential_hint',
+      message: localizedText(language, 'Рассмотрите головную боль напряжения и мигрень.', 'Consider tension headache and migraine.'),
+      confidence: 0.72,
+      severity: 'low',
+    },
+    {
+      hint_id: 'hint_003',
+      type: 'followup_hint',
+      message: localizedText(language, 'Спросите о недавнем стрессе и изменениях сна.', 'Ask about recent stress and sleep changes.'),
+      confidence: 0.68,
+      severity: 'low',
+    },
+  ];
+}
 
 interface MockSessionRecord {
   request: CreateSessionRequest;
@@ -78,8 +99,9 @@ function buildRealtimeAnalysis(
   stableText: string,
   seq: number,
   analysisModel: string | null | undefined,
+  language: 'ru' | 'en',
 ): RealtimeAnalysis {
-  const normalizedModel = analysisModel?.trim() || 'тестовый модуль анализа';
+  const normalizedModel = analysisModel?.trim() || localizedText(language, 'тестовый модуль анализа', 'test analysis module');
   return {
     request_id: `mock-analysis-${seq}`,
     latency_ms: 25,
@@ -90,14 +112,14 @@ function buildRealtimeAnalysis(
     suggestions: [
       {
         type: 'question_to_ask',
-        text: 'Уточните выраженность симптомов и их развитие.',
+        text: localizedText(language, 'Уточните выраженность симптомов и их развитие.', 'Clarify symptom severity and progression.'),
         confidence: 0.8,
         evidence: [stableText],
       },
     ],
     drug_interactions: [],
     extracted_facts: {
-      symptoms: stableText.toLowerCase().includes('головн') ? ['головная боль'] : [],
+      symptoms: /головн|headach/i.test(stableText) ? [localizedText(language, 'головная боль', 'headache')] : [],
       conditions: [],
       medications: [],
       allergies: [],
@@ -113,8 +135,8 @@ function buildRealtimeAnalysis(
     knowledge_refs: [],
     recommended_document: {
       recommendation_id: `rec-${seq}`,
-      title: 'Клиническая рекомендация по ведению головной боли',
-      matched_query: 'Оценка головной боли',
+      title: localizedText(language, 'Клиническая рекомендация по ведению головной боли', 'Clinical guideline for headache evaluation'),
+      matched_query: localizedText(language, 'Оценка головной боли', 'Headache evaluation'),
       diagnosis_confidence: 0.8,
       search_score: 0.77,
       pdf_available: true,
@@ -123,8 +145,8 @@ function buildRealtimeAnalysis(
     recommended_documents: [
       {
         recommendation_id: `rec-${seq}`,
-        title: 'Клиническая рекомендация по ведению головной боли',
-        matched_query: 'Оценка головной боли',
+        title: localizedText(language, 'Клиническая рекомендация по ведению головной боли', 'Clinical guideline for headache evaluation'),
+        matched_query: localizedText(language, 'Оценка головной боли', 'Headache evaluation'),
         diagnosis_confidence: 0.8,
         search_score: 0.77,
         pdf_available: true,
@@ -133,12 +155,12 @@ function buildRealtimeAnalysis(
     ],
     patient_context: {
       patient_name: 'Olivia Bennett',
-      gender: 'женский',
+      gender: localizedText(language, 'женский', 'female'),
       birth_date: '1991-04-18',
-      conditions: ['Сезонный аллергический ринит'],
-      medications: ['Ибупрофен'],
-      allergies: ['Пенициллин'],
-      observations: ['Головная боль в течение двух дней'],
+      conditions: [localizedText(language, 'Сезонный аллергический ринит', 'Seasonal allergic rhinitis')],
+      medications: [localizedText(language, 'Ибупрофен', 'Ibuprofen')],
+      allergies: [localizedText(language, 'Пенициллин', 'Penicillin')],
+      observations: [localizedText(language, 'Головная боль в течение двух дней', 'Headache for two days')],
     },
     errors: [],
   };
@@ -149,6 +171,7 @@ function buildEmptySnapshot(summary: SessionSummary): SessionSnapshot {
     status: summary.status,
     recording_state: summary.recording_state,
     processing_state: summary.processing_state,
+    language: summary.language,
     latest_seq: summary.latest_seq,
     transcript: '',
     hints: [],
@@ -190,37 +213,43 @@ function buildPerformanceMetrics(
   };
 }
 
-function buildKnowledgeExtraction(transcript: string): KnowledgeExtraction {
+function buildKnowledgeExtraction(transcript: string, language: 'ru' | 'en'): KnowledgeExtraction {
   return {
     soap_note: {
       subjective: {
-        reported_symptoms: transcript ? ['Головная боль в течение двух дней'] : [],
-        reported_concerns: ['Пациент беспокоится о причинах боли'],
+        reported_symptoms: transcript ? [localizedText(language, 'Головная боль в течение двух дней', 'Headache for two days')] : [],
+        reported_concerns: [localizedText(language, 'Пациент беспокоится о причинах боли', 'The patient is concerned about the cause of the pain')],
       },
       objective: {
-        observations: ['Объективные наблюдения в записи ограничены'],
-        measurements: ['No objective clinical observations or measurements were explicitly documented in the transcript.'],
+        observations: [localizedText(language, 'Объективные наблюдения в записи ограничены', 'Objective observations in the recording are limited')],
+        measurements: [
+          localizedText(
+            language,
+            'В транскрипте не были явно зафиксированы объективные клинические измерения.',
+            'No objective clinical observations or measurements were explicitly documented in the transcript.',
+          ),
+        ],
       },
       assessment: {
-        diagnoses: ['Головная боль требует уточнения причины'],
-        evaluation: ['Нужна дополнительная клиническая оценка'],
+        diagnoses: [localizedText(language, 'Головная боль требует уточнения причины', 'The headache requires clarification of the cause')],
+        evaluation: [localizedText(language, 'Нужна дополнительная клиническая оценка', 'Additional clinical evaluation is needed')],
       },
       plan: {
-        treatment: ['Сформировать окончательный план терапии после очного осмотра'],
-        follow_up_instructions: ['Контрольный визит в течение недели'],
+        treatment: [localizedText(language, 'Сформировать окончательный план терапии после очного осмотра', 'Finalize the treatment plan after an in-person evaluation')],
+        follow_up_instructions: [localizedText(language, 'Контрольный визит в течение недели', 'Schedule a follow-up visit within one week')],
       },
     },
     extracted_facts: {
-      symptoms: ['головная боль'],
-      concerns: ['причина боли'],
-      observations: ['ограниченные объективные данные'],
+      symptoms: [localizedText(language, 'головная боль', 'headache')],
+      concerns: [localizedText(language, 'причина боли', 'cause of pain')],
+      observations: [localizedText(language, 'ограниченные объективные данные', 'limited objective data')],
       measurements: [],
-      diagnoses: ['головная боль неуточнённая'],
-      evaluation: ['нужна дополнительная оценка'],
+      diagnoses: [localizedText(language, 'головная боль неуточнённая', 'unspecified headache')],
+      evaluation: [localizedText(language, 'нужна дополнительная оценка', 'further evaluation needed')],
       medications: [],
       allergies: [],
-      treatment: ['наблюдение'],
-      follow_up_instructions: ['повторный визит'],
+      treatment: [localizedText(language, 'наблюдение', 'observation')],
+      follow_up_instructions: [localizedText(language, 'повторный визит', 'follow-up visit')],
     },
     summary: {
       counts: {
@@ -300,60 +329,68 @@ function buildKnowledgeExtraction(transcript: string): KnowledgeExtraction {
   };
 }
 
-function buildPostSessionAnalytics(transcript: string): PostSessionAnalytics {
+function buildPostSessionAnalytics(transcript: string, language: 'ru' | 'en'): PostSessionAnalytics {
   return {
     summary: {
       clinical_narrative:
-        transcript || 'Полный пост-сессионный анализ будет собран после завершения консультации.',
+        transcript ||
+        localizedText(
+          language,
+          'Полный пост-сессионный анализ будет собран после завершения консультации.',
+          'The full post-session analysis will be assembled after the consultation is completed.',
+        ),
       key_findings: [
-        'Симптомы требуют уточнения динамики и факторов усиления.',
-        'Нужна формализация финального клинического впечатления.',
+        localizedText(language, 'Симптомы требуют уточнения динамики и факторов усиления.', 'Symptoms need clarification regarding progression and aggravating factors.'),
+        localizedText(language, 'Нужна формализация финального клинического впечатления.', 'The final clinical impression needs clearer formalization.'),
       ],
-      primary_impressions: ['Головная боль напряжения'],
-      differential_diagnoses: ['Мигрень без ауры', 'Вторичная головная боль'],
+      primary_impressions: [localizedText(language, 'Головная боль напряжения', 'Tension-type headache')],
+      differential_diagnoses: [
+        localizedText(language, 'Мигрень без ауры', 'Migraine without aura'),
+        localizedText(language, 'Вторичная головная боль', 'Secondary headache'),
+      ],
     },
     insights: [
       {
         category: 'diagnostic_gap',
-        description: 'В финальной беседе не хватило уточнения триггеров и сопутствующих симптомов.',
+        description: localizedText(language, 'В финальной беседе не хватило уточнения триггеров и сопутствующих симптомов.', 'The final conversation did not sufficiently clarify triggers and associated symptoms.'),
         severity: 'medium',
         confidence: 0.78,
-        evidence: 'В записи нет подтверждения вопросов о сне, стрессе и фоточувствительности.',
+        evidence: localizedText(language, 'В записи нет подтверждения вопросов о сне, стрессе и фоточувствительности.', 'The record does not confirm that sleep, stress, and photophobia were addressed.'),
       },
     ],
     recommendations: [
       {
-        action: 'Назначить короткий повторный опрос по красным флагам и триггерам боли.',
+        action: localizedText(language, 'Назначить короткий повторный опрос по красным флагам и триггерам боли.', 'Arrange a short follow-up questionnaire about red flags and pain triggers.'),
         priority: 'routine',
         timeframe: '24-48 часов',
-        rationale: 'Это снизит риск пропустить вторичную причину головной боли.',
+        rationale: localizedText(language, 'Это снизит риск пропустить вторичную причину головной боли.', 'This reduces the risk of missing a secondary cause of headache.'),
       },
     ],
     quality: {
       overall_score: 0.84,
       metrics: [
         {
-          metric_name: 'Полнота анамнеза',
+          metric_name: localizedText(language, 'Полнота анамнеза', 'History completeness'),
           score: 0.8,
-          description: 'Ключевая жалоба отражена, но не все уточняющие вопросы заданы.',
-          improvement_suggestion: 'Добавить вопросы про стресс, сон и фотофобию.',
+          description: localizedText(language, 'Ключевая жалоба отражена, но не все уточняющие вопросы заданы.', 'The main complaint is captured, but not all clarifying questions were asked.'),
+          improvement_suggestion: localizedText(language, 'Добавить вопросы про стресс, сон и фотофобию.', 'Add questions about stress, sleep, and photophobia.'),
         },
         {
-          metric_name: 'Структура консультации',
+          metric_name: localizedText(language, 'Структура консультации', 'Consultation structure'),
           score: 0.88,
-          description: 'Консультация выглядит последовательной и логичной.',
+          description: localizedText(language, 'Консультация выглядит последовательной и логичной.', 'The consultation appears consistent and logically structured.'),
           improvement_suggestion: null,
         },
       ],
     },
     diarization: {
       model_used: 'mock-diarization',
-      formatted_text: `Доктор: Расскажите, что вас беспокоит.\n\nПациент: ${transcript || 'Полный текст появится после завершения консультации.'}`,
+      formatted_text: `${localizedText(language, 'Доктор', 'Doctor')}: ${localizedText(language, 'Расскажите, что вас беспокоит.', 'Tell me what is bothering you.')}\n\n${localizedText(language, 'Пациент', 'Patient')}: ${transcript || localizedText(language, 'Полный текст появится после завершения консультации.', 'The full text will appear after the consultation is completed.')}`,
       segments: [
-        { speaker: 'Доктор', text: 'Расскажите, что вас беспокоит.' },
+        { speaker: localizedText(language, 'Доктор', 'Doctor'), text: localizedText(language, 'Расскажите, что вас беспокоит.', 'Tell me what is bothering you.') },
         {
-          speaker: 'Пациент',
-          text: transcript || 'Полный текст появится после завершения консультации.',
+          speaker: localizedText(language, 'Пациент', 'Patient'),
+          text: transcript || localizedText(language, 'Полный текст появится после завершения консультации.', 'The full text will appear after the consultation is completed.'),
         },
       ],
     },
@@ -371,8 +408,9 @@ function scheduleAnalyticsCompletion(record: MockSessionRecord): void {
 
   globalThis.setTimeout(() => {
     const timestamp = isoNow();
-    const analytics = buildPostSessionAnalytics(record.snapshot.transcript);
-    const knowledgeExtraction = buildKnowledgeExtraction(record.snapshot.transcript);
+    const language = normalizeLanguage(record.snapshot.language);
+    const analytics = buildPostSessionAnalytics(record.snapshot.transcript, language);
+    const knowledgeExtraction = buildKnowledgeExtraction(record.snapshot.transcript, language);
     const finalizedTranscript = analytics.full_transcript?.full_text ?? record.snapshot.transcript;
 
     record.summary = {
@@ -412,7 +450,7 @@ function detailFromRecord(record: MockSessionRecord): SessionDetail {
 function getRecord(sessionId: string): MockSessionRecord {
   const record = sessions.get(sessionId);
   if (!record) {
-    throw new Error(`Тестовая сессия ${sessionId} не найдена`);
+    throw new Error(`Mock session ${sessionId} was not found`);
   }
   return record;
 }
@@ -421,13 +459,15 @@ function createImportedSession(payload: ImportRecordedSessionRequest): SessionDe
   mockSessionCounter += 1;
   const timestamp = isoNow();
   const sessionId = `mock_sess_${mockSessionCounter}`;
-  const transcript = TRANSCRIPT_FRAGMENTS.join('');
-  const analytics = buildPostSessionAnalytics(transcript);
-  const knowledgeExtraction = buildKnowledgeExtraction(transcript);
+  const language = normalizeLanguage(payload.language);
+  const transcript = getTranscriptFragments(language).join('');
+  const analytics = buildPostSessionAnalytics(transcript, language);
+  const knowledgeExtraction = buildKnowledgeExtraction(transcript, language);
 
   const summary: SessionSummary = {
     session_id: sessionId,
     doctor_id: payload.doctor_id,
+    language,
     doctor_name: payload.doctor_name ?? null,
     doctor_specialty: payload.doctor_specialty ?? null,
     patient_id: payload.patient_id,
@@ -456,6 +496,7 @@ function createImportedSession(payload: ImportRecordedSessionRequest): SessionDe
       status: 'finished',
       recording_state: 'stopped',
       processing_state: 'completed',
+      language,
       latest_seq: 1,
       transcript,
       hints: [],
@@ -487,6 +528,7 @@ export const mockSessionApi: SessionApi = {
       doctor_name: payload.doctor_name ?? null,
       doctor_specialty: payload.doctor_specialty ?? null,
       patient_id: payload.patient_id,
+      language: payload.language,
       patient_name: payload.patient_name ?? null,
       chief_complaint: payload.chief_complaint ?? null,
       encounter_id: null,
@@ -516,6 +558,7 @@ export const mockSessionApi: SessionApi = {
       session_id: sessionId,
       status: 'active',
       recording_state: 'idle',
+      language: payload.language,
       upload_config: {
         recommended_chunk_ms: 4000,
         accepted_mime_types: ['audio/webm', 'audio/wav'],
@@ -546,7 +589,7 @@ export const mockSessionApi: SessionApi = {
           processing_state: null,
           session: null,
           error_code: 'UNSUPPORTED_AUDIO_FORMAT',
-          error_message: 'Загрузите MP3 или WAV файл с записью консультации.',
+          error_message: localizedText(normalizeLanguage(payload.language), 'Загрузите MP3 или WAV файл с записью консультации.', 'Upload an MP3 or WAV consultation recording.'),
         };
       }
 
@@ -573,7 +616,7 @@ export const mockSessionApi: SessionApi = {
     return `data:application/pdf;base64,${btoa(`%PDF-1.4\n% Mock report for ${sessionId}\n`)}`;
   },
 
-  async uploadAudioChunk(sessionId, file, seq, durationMs, mimeType, isFinal, analysisModel, signal) {
+  async uploadAudioChunk(sessionId, file, seq, durationMs, mimeType, isFinal, analysisModel, signal, language = 'ru') {
     void file;
     void durationMs;
     void mimeType;
@@ -582,15 +625,19 @@ export const mockSessionApi: SessionApi = {
     await delay(MOCK_DELAY_MS);
 
     const record = getRecord(sessionId);
-    const fragmentIndex = (seq - 1) % TRANSCRIPT_FRAGMENTS.length;
-    const stableText = TRANSCRIPT_FRAGMENTS.slice(0, fragmentIndex + 1).join('');
-    const deltaText = TRANSCRIPT_FRAGMENTS[fragmentIndex];
-    const analysis = buildRealtimeAnalysis(stableText, seq, analysisModel);
+    const normalizedLanguage = normalizeLanguage(language);
+    const transcriptFragments = getTranscriptFragments(normalizedLanguage);
+    const fragmentIndex = (seq - 1) % transcriptFragments.length;
+    const stableText = transcriptFragments.slice(0, fragmentIndex + 1).join('');
+    const deltaText = transcriptFragments[fragmentIndex];
+    record.request = { ...record.request, language: normalizedLanguage };
+    const analysis = buildRealtimeAnalysis(stableText, seq, analysisModel, normalizedLanguage);
     const timestamp = isoNow();
+    const sampleHints = getSampleHints(normalizedLanguage);
 
     const newHints: Hint[] =
       seq % 2 === 1
-        ? [SAMPLE_HINTS[Math.floor((seq - 1) / 2) % SAMPLE_HINTS.length]]
+        ? [sampleHints[Math.floor((seq - 1) / 2) % sampleHints.length]]
         : [];
 
     const storedHints: StoredHint[] = [
@@ -605,6 +652,7 @@ export const mockSessionApi: SessionApi = {
       ...record.summary,
       status: 'active',
       recording_state: 'recording',
+      language: normalizedLanguage,
       latest_seq: seq,
       transcript_preview: stableText.slice(0, 180),
       stable_transcript: stableText,
@@ -616,6 +664,7 @@ export const mockSessionApi: SessionApi = {
       status: record.summary.status,
       recording_state: record.summary.recording_state,
       processing_state: record.summary.processing_state,
+      language: normalizedLanguage,
       latest_seq: seq,
       transcript: stableText,
       hints: storedHints,
@@ -663,7 +712,7 @@ export const mockSessionApi: SessionApi = {
       session_id: sessionId,
       status: record.summary.status,
       recording_state: 'stopped',
-      message: 'Запись остановлена.',
+      message: localizedText(normalizeLanguage(record.request.language), 'Запись остановлена.', 'Recording stopped.'),
     };
     return response;
   },
@@ -710,7 +759,7 @@ export const mockSessionApi: SessionApi = {
   async deleteSession(sessionId) {
     await delay(MOCK_DELAY_MS);
     if (!sessions.delete(sessionId)) {
-      throw new Error(`Тестовая сессия ${sessionId} не найдена`);
+      throw new Error(`Mock session ${sessionId} was not found`);
     }
   },
 
@@ -740,7 +789,7 @@ export const mockSessionApi: SessionApi = {
 
   async healthCheck() {
     await delay(MOCK_DELAY_MS);
-    const response: HealthResponse = { status: 'ok', service: 'менеджер сессий (тестовый режим)' };
+    const response: HealthResponse = { status: 'ok', service: 'mock session manager' };
     return response;
   },
 };

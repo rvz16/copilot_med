@@ -51,6 +51,7 @@ class AsrProvider(Protocol):
         seq: int,
         mime_type: str,
         is_final: bool,
+        language: str = "ru",
         file_path: Path,
         existing_stable_text: str,
     ) -> ChunkTranscriptionResult:
@@ -66,6 +67,7 @@ class AsrProvider(Protocol):
         file_bytes: bytes,
         file_name: str,
         mime_type: str,
+        language: str = "ru",
         timeout_seconds: int | None = None,
     ) -> FullTranscriptionResult:
         ...
@@ -81,6 +83,7 @@ class MockAsrProvider:
         seq: int,
         mime_type: str,
         is_final: bool,
+        language: str = "ru",
         file_path: Path,
         existing_stable_text: str,
     ) -> ChunkTranscriptionResult:
@@ -105,13 +108,14 @@ class MockAsrProvider:
         file_bytes: bytes,
         file_name: str,
         mime_type: str,
+        language: str = "ru",
         timeout_seconds: int | None = None,
     ) -> FullTranscriptionResult:
         full_text = "".join(TRANSCRIPT_FRAGMENTS)
         return FullTranscriptionResult(
             full_text=full_text,
             source="mock_asr",
-            language="ru",
+            language=language,
             audio_duration=30.0,
             processing_time_sec=0.1,
         )
@@ -130,6 +134,7 @@ class HttpAsrProvider:
         seq: int,
         mime_type: str,
         is_final: bool,
+        language: str = "ru",
         file_path: Path,
         existing_stable_text: str,
     ) -> ChunkTranscriptionResult:
@@ -138,6 +143,7 @@ class HttpAsrProvider:
             seq=seq,
             mime_type=mime_type,
             is_final=is_final,
+            language=language,
             file_path=file_path,
             existing_stable_text=existing_stable_text,
         )
@@ -167,6 +173,7 @@ class HttpAsrProvider:
         file_bytes: bytes,
         file_name: str,
         mime_type: str,
+        language: str = "ru",
         timeout_seconds: int | None = None,
     ) -> FullTranscriptionResult:
         response = self.client.transcribe_full(
@@ -174,6 +181,7 @@ class HttpAsrProvider:
             file_bytes=file_bytes,
             file_name=file_name,
             mime_type=mime_type,
+            language=language,
             timeout_seconds=timeout_seconds,
         )
         return FullTranscriptionResult(

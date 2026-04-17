@@ -95,11 +95,15 @@ def load_model():
     return _model
 
 
-def _build_prompt(previous_text: str | None, use_prompt: bool, is_first_chunk: bool) -> str | None:
+def _build_prompt(previous_text: str | None, use_prompt: bool, is_first_chunk: bool, language: str = LANGUAGE) -> str | None:
     if not use_prompt:
         return None
-    
-    base_anchor = "Медицинский диалог на русском языке. " + INITIAL_PROMPT
+
+    base_anchor = (
+        "Medical dialogue in English. "
+        if str(language).strip().lower() == "en"
+        else "Медицинский диалог на русском языке. "
+    ) + INITIAL_PROMPT
 
     if is_first_chunk:
         return base_anchor
@@ -111,9 +115,9 @@ def _build_prompt(previous_text: str | None, use_prompt: bool, is_first_chunk: b
     return base_anchor
 
 
-def _base_kwargs(prompt: str | None) -> dict:
+def _base_kwargs(prompt: str | None, language: str = LANGUAGE) -> dict:
     kwargs: dict = {
-        "language": LANGUAGE,
+        "language": str(language or LANGUAGE).strip().lower() or LANGUAGE,
         "beam_size": BEAM_SIZE,
         "best_of": BEST_OF,
         "patience": PATIENCE,
@@ -221,10 +225,10 @@ def _filter_hallucinations(segments: list, audio_duration: float = 0.0, is_first
 
 # Local Faster-Whisper implementation.
 
-def _transcribe_file_local(audio_path: str, *, use_prompt: bool = True, use_hallucination_filter: bool = True, previous_text: str | None = None, is_first_chunk: bool = False) -> dict:
+def _transcribe_file_local(audio_path: str, *, use_prompt: bool = True, use_hallucination_filter: bool = True, previous_text: str | None = None, is_first_chunk: bool = False, language: str = LANGUAGE) -> dict:
     model = load_model()
-    prompt = _build_prompt(previous_text, use_prompt, is_first_chunk)
-    kwargs = _base_kwargs(prompt)
+    prompt = _build_prompt(previous_text, use_prompt, is_first_chunk, language)
+    kwargs = _base_kwargs(prompt, language)
     kwargs["without_timestamps"] = True
 
     segments, info = model.transcribe(audio_path, **kwargs)
@@ -242,10 +246,10 @@ def _transcribe_file_local(audio_path: str, *, use_prompt: bool = True, use_hall
         "audio_file_duration": round(info.duration, 2),
     }
 
-def _transcribe_pcm_local(pcm: np.ndarray, *, use_prompt: bool = True, use_hallucination_filter: bool = True, previous_text: str | None = None, is_first_chunk: bool = False) -> dict:
+def _transcribe_pcm_local(pcm: np.ndarray, *, use_prompt: bool = True, use_hallucination_filter: bool = True, previous_text: str | None = None, is_first_chunk: bool = False, language: str = LANGUAGE) -> dict:
     model = load_model()
-    prompt = _build_prompt(previous_text, use_prompt, is_first_chunk)
-    kwargs = _base_kwargs(prompt)
+    prompt = _build_prompt(previous_text, use_prompt, is_first_chunk, language)
+    kwargs = _base_kwargs(prompt, language)
     kwargs["without_timestamps"] = False
 
     audio_duration = len(pcm) / SAMPLE_RATE
@@ -286,9 +290,9 @@ def _parse_groq_segments(raw_segments: list) -> list[DummySegment]:
     return parsed
 
 
-def _transcribe_file_groq(audio_path: str, *, use_prompt: bool = True, use_hallucination_filter: bool = True, previous_text: str | None = None, is_first_chunk: bool = False) -> dict:
+def _transcribe_file_groq(audio_path: str, *, use_prompt: bool = True, use_hallucination_filter: bool = True, previous_text: str | None = None, is_first_chunk: bool = False, language: str = LANGUAGE) -> dict:
     client = get_groq_client()
-    prompt = _build_prompt(previous_text, use_prompt, is_first_chunk)
+    prompt = _build_prompt(previous_text, use_prompt, is_first_chunk, language)
     
     try:
         with open(audio_path, "rb") as f:
@@ -298,7 +302,7 @@ def _transcribe_file_groq(audio_path: str, *, use_prompt: bool = True, use_hallu
                 "temperature": 0.0,
                 "response_format": "verbose_json",
             }
-            if LANGUAGE: kwargs["language"] = LANGUAGE
+            if language: kwargs["language"] = language
             if prompt: kwargs["prompt"] = prompt
 
             res = client.audio.transcriptions.create(**kwargs)
@@ -315,21 +319,21 @@ def _transcribe_file_groq(audio_path: str, *, use_prompt: bool = True, use_hallu
         return {
             "text": text.strip(),
             "speech_detected": any((seg.end - seg.start) > 0 for seg in segments),
-            "language": LANGUAGE,
+            "language": language,
             "language_probability": 1.0,
             "audio_file_duration": round(duration, 2),
         }
     except Exception as exc:
         logger.error("Groq API transcription failed for file: %s", exc)
-        return {"text": "", "speech_detected": False, "language": LANGUAGE, "language_probability": 1.0, "audio_file_duration": 0.0}
+        return {"text": "", "speech_detected": False, "language": language, "language_probability": 1.0, "audio_file_duration": 0.0}
 
 
-def _transcribe_pcm_groq(pcm: np.ndarray, *, use_prompt: bool = True, use_hallucination_filter: bool = True, previous_text: str | None = None, is_first_chunk: bool = False) -> dict:
+def _transcribe_pcm_groq(pcm: np.ndarray, *, use_prompt: bool = True, use_hallucination_filter: bool = True, previous_text: str | None = None, is_first_chunk: bool = False, language: str = LANGUAGE) -> dict:
     if len(pcm) == 0:
-        return {"text": "", "segments": [], "speech_detected": False, "language": LANGUAGE, "language_probability": 1.0, "audio_file_duration": 0.0}
+        return {"text": "", "segments": [], "speech_detected": False, "language": language, "language_probability": 1.0, "audio_file_duration": 0.0}
 
     client = get_groq_client()
-    prompt = _build_prompt(previous_text, use_prompt, is_first_chunk)
+    prompt = _build_prompt(previous_text, use_prompt, is_first_chunk, language)
     audio_duration = len(pcm) / SAMPLE_RATE
 
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
@@ -349,7 +353,7 @@ def _transcribe_pcm_groq(pcm: np.ndarray, *, use_prompt: bool = True, use_halluc
                 "temperature": 0.0,
                 "response_format": "verbose_json",
             }
-            if LANGUAGE: kwargs["language"] = LANGUAGE
+            if language: kwargs["language"] = language
             if prompt: kwargs["prompt"] = prompt
 
             res = client.audio.transcriptions.create(**kwargs)
@@ -366,7 +370,7 @@ def _transcribe_pcm_groq(pcm: np.ndarray, *, use_prompt: bool = True, use_halluc
             "text": text.strip(),
             "segments": segments,
             "speech_detected": any((seg.end - seg.start) > 0 for seg in segments),
-            "language": LANGUAGE,
+            "language": language,
             "language_probability": 1.0,
             "audio_file_duration": round(audio_duration, 2),
         }
@@ -376,7 +380,7 @@ def _transcribe_pcm_groq(pcm: np.ndarray, *, use_prompt: bool = True, use_halluc
             "text": "",
             "segments": [],
             "speech_detected": False,
-            "language": LANGUAGE,
+            "language": language,
             "language_probability": 1.0,
             "audio_file_duration": round(audio_duration, 2),
         }

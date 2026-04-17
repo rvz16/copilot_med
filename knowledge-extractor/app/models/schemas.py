@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -10,6 +10,7 @@ class ExtractionRequest(BaseModel):
 
     session_id: str
     patient_id: str
+    language: Literal["ru", "en"] = "ru"
     encounter_id: str | None = None
     patient_name: str | None = None
     doctor_id: str | None = None

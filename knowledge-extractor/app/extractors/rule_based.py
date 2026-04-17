@@ -185,7 +185,8 @@ class RuleBasedMedicalExtractor(BaseExtractor):
         flags=re.IGNORECASE,
     )
 
-    def extract(self, transcript: str) -> CanonicalExtraction:
+    def extract(self, transcript: str, language: str = "ru") -> CanonicalExtraction:
+        del language
         sentences = self._split_sentences(transcript)
         extraction = CanonicalExtraction()
 

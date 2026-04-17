@@ -1,3 +1,4 @@
+import { useUiLanguage } from '../i18n';
 import type { PostSessionAnalytics, RecommendedDocument } from '../types/types';
 
 interface Props {
@@ -13,29 +14,10 @@ const SEVERITY_COLORS: Record<string, string> = {
   low: '#27ae60',
 };
 
-const SEVERITY_LABELS: Record<string, string> = {
-  high: 'высокий',
-  medium: 'средний',
-  low: 'низкий',
-};
-
 const PRIORITY_COLORS: Record<string, string> = {
   urgent: '#e74c3c',
   routine: '#f39c12',
   optional: '#27ae60',
-};
-
-const PRIORITY_LABELS: Record<string, string> = {
-  urgent: 'срочно',
-  routine: 'плановый',
-  optional: 'по желанию',
-};
-
-const CATEGORY_LABELS: Record<string, string> = {
-  missed_symptom: 'пропущенный симптом',
-  drug_interaction: 'лек. взаимодействие',
-  red_flag: 'тревожный признак',
-  diagnostic_gap: 'диагностический пробел',
 };
 
 function ScoreBar({ score, label }: { score: number; label?: string }) {
@@ -58,6 +40,68 @@ export function PostSessionAnalyticsPanel({
   clinicalRecommendations = [],
   reportUrl,
 }: Props) {
+  const { language } = useUiLanguage();
+  const severityLabels: Record<string, string> = language === 'en'
+    ? { high: 'high', medium: 'medium', low: 'low' }
+    : { high: 'высокий', medium: 'средний', low: 'низкий' };
+  const priorityLabels: Record<string, string> = language === 'en'
+    ? { urgent: 'urgent', routine: 'routine', optional: 'optional' }
+    : { urgent: 'срочно', routine: 'плановый', optional: 'по желанию' };
+  const categoryLabels: Record<string, string> = language === 'en'
+    ? {
+        missed_symptom: 'missed symptom',
+        drug_interaction: 'drug interaction',
+        red_flag: 'red flag',
+        diagnostic_gap: 'diagnostic gap',
+      }
+    : {
+        missed_symptom: 'пропущенный симптом',
+        drug_interaction: 'лек. взаимодействие',
+        red_flag: 'тревожный признак',
+        diagnostic_gap: 'диагностический пробел',
+      };
+  const copy = language === 'en'
+    ? {
+        pendingTitle: 'Deep consultation review',
+        pendingStatus: 'in progress',
+        pendingText:
+          'Post-session analytics is still being generated. Once the review is complete, the final summary, critical findings, and follow-up recommendations will appear here.',
+        readyTitle: 'Post-Session Analytics results',
+        download: 'Download PDF',
+        readyStatus: 'ready',
+        guidelines: 'Clinical guidelines in context',
+        openPdf: 'Open PDF',
+        guidelinesEmpty: 'No clinical guidelines were found during the session to carry into deep analysis.',
+        summary: 'Medical summary',
+        findings: 'Key findings',
+        impressions: 'Primary impressions',
+        differential: 'Differential diagnoses',
+        diarization: 'Consultation diarization',
+        insights: 'Critical findings',
+        recommendations: 'Follow-up recommendations',
+        quality: 'Consultation quality assessment',
+      }
+    : {
+        pendingTitle: 'Углублённый анализ консультации',
+        pendingStatus: 'в работе',
+        pendingText:
+          'Пост-сессионная аналитика ещё формируется. Как только разбор завершится, здесь появятся итоговое заключение, критические замечания и рекомендации.',
+        readyTitle: 'Результаты Post-Session Analytics',
+        download: 'Скачать PDF',
+        readyStatus: 'готово',
+        guidelines: 'Клинические рекомендации в контексте',
+        openPdf: 'Открыть PDF',
+        guidelinesEmpty: 'Во время сессии не было найдено клинических рекомендаций для передачи в глубокий анализ.',
+        summary: 'Медицинское заключение',
+        findings: 'Ключевые находки',
+        impressions: 'Основные впечатления',
+        differential: 'Дифференциальные диагнозы',
+        diarization: 'Диаризация консультации',
+        insights: 'Критические замечания',
+        recommendations: 'Рекомендации к наблюдению',
+        quality: 'Оценка качества консультации',
+      };
+
   if (!analytics) {
     if (status !== 'analyzing') {
       return null;
@@ -66,17 +110,14 @@ export function PostSessionAnalyticsPanel({
     return (
       <section className="panel psa-panel" id="post-session-analytics-panel">
         <div className="psa-header">
-          <h2>Углублённый анализ консультации</h2>
-          <span className="psa-badge">в работе</span>
+          <h2>{copy.pendingTitle}</h2>
+          <span className="psa-badge">{copy.pendingStatus}</span>
         </div>
         <div className="psa-pending">
           <div className="psa-pending-track" aria-hidden="true">
             <div className="psa-pending-fill" />
           </div>
-          <p>
-            Пост-сессионная аналитика ещё формируется. Как только разбор завершится, здесь появятся
-            итоговое заключение, критические замечания и рекомендации.
-          </p>
+          <p>{copy.pendingText}</p>
         </div>
       </section>
     );
@@ -88,20 +129,20 @@ export function PostSessionAnalyticsPanel({
   return (
     <section className="panel psa-panel" id="post-session-analytics-panel">
       <div className="psa-header">
-        <h2>Результаты Post-Session Analytics</h2>
+        <h2>{copy.readyTitle}</h2>
         <div className="psa-header-actions">
           {reportUrl && (
             <a className="psa-report-button" href={reportUrl} download>
-              Скачать PDF
+              {copy.download}
             </a>
           )}
-          <span className="psa-badge">готово</span>
+          <span className="psa-badge">{copy.readyStatus}</span>
         </div>
       </div>
 
       <div className="psa-context-grid">
         <div className="psa-context-card">
-          <h3 className="psa-section-title">Клинические рекомендации в контексте</h3>
+          <h3 className="psa-section-title">{copy.guidelines}</h3>
           {attachedRecommendations.length > 0 ? (
             <div className="psa-guidelines-list">
               {attachedRecommendations.map((doc, index) => (
@@ -109,28 +150,25 @@ export function PostSessionAnalyticsPanel({
                   <strong>{doc.title}</strong>
                   <span>{doc.matched_query}</span>
                   <a href={doc.pdf_url} target="_blank" rel="noreferrer">
-                    Открыть PDF
+                    {copy.openPdf}
                   </a>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="placeholder-text">
-              Во время сессии не было найдено клинических рекомендаций для передачи в глубокий анализ.
-            </p>
+            <p className="placeholder-text">{copy.guidelinesEmpty}</p>
           )}
         </div>
       </div>
 
-      {/* Medical summary. */}
       {summary && (
         <div className="psa-section">
-          <h3 className="psa-section-title">Медицинское заключение</h3>
+          <h3 className="psa-section-title">{copy.summary}</h3>
           <p className="psa-narrative">{summary.clinical_narrative}</p>
 
           {summary.key_findings.length > 0 && (
             <div className="psa-subsection">
-              <span className="psa-subsection-label">Ключевые находки</span>
+              <span className="psa-subsection-label">{copy.findings}</span>
               <ul className="psa-bullet-list">
                 {summary.key_findings.map((finding, i) => (
                   <li key={i}>{finding}</li>
@@ -143,7 +181,7 @@ export function PostSessionAnalyticsPanel({
             <div className="psa-pills-row">
               {summary.primary_impressions.length > 0 && (
                 <div className="psa-subsection">
-                  <span className="psa-subsection-label">Основные впечатления</span>
+                  <span className="psa-subsection-label">{copy.impressions}</span>
                   <div className="fact-pills">
                     {summary.primary_impressions.map((imp, i) => (
                       <span key={i} className="fact-pill">{imp}</span>
@@ -153,7 +191,7 @@ export function PostSessionAnalyticsPanel({
               )}
               {summary.differential_diagnoses.length > 0 && (
                 <div className="psa-subsection">
-                  <span className="psa-subsection-label">Дифференциальные диагнозы</span>
+                  <span className="psa-subsection-label">{copy.differential}</span>
                   <div className="fact-pills">
                     {summary.differential_diagnoses.map((dx, i) => (
                       <span key={i} className="fact-pill psa-pill-muted">{dx}</span>
@@ -168,7 +206,7 @@ export function PostSessionAnalyticsPanel({
 
       {analytics.diarization && (
         <div className="psa-section">
-          <h3 className="psa-section-title">Диаризация консультации</h3>
+          <h3 className="psa-section-title">{copy.diarization}</h3>
           <div className="psa-diarization-list">
             {analytics.diarization.segments.length > 0 ? (
               analytics.diarization.segments.map((segment, index) => (
@@ -184,22 +222,21 @@ export function PostSessionAnalyticsPanel({
         </div>
       )}
 
-      {/* Critical insights. */}
       {insights && insights.length > 0 && (
         <div className="psa-section">
-          <h3 className="psa-section-title">Критические замечания</h3>
+          <h3 className="psa-section-title">{copy.insights}</h3>
           <div className="psa-insights-list">
             {insights.map((insight, i) => (
               <div key={i} className="hint-card psa-insight-card">
                 <div className="hint-header">
                   <span className="hint-type">
-                    {CATEGORY_LABELS[insight.category] ?? insight.category}
+                    {categoryLabels[insight.category] ?? insight.category}
                   </span>
                   <span
                     className="hint-severity"
                     style={{ color: SEVERITY_COLORS[insight.severity] ?? '#888' }}
                   >
-                    {SEVERITY_LABELS[insight.severity] ?? insight.severity}
+                    {severityLabels[insight.severity] ?? insight.severity}
                   </span>
                   <span className="hint-confidence">
                     {(insight.confidence * 100).toFixed(0)}%
@@ -215,10 +252,9 @@ export function PostSessionAnalyticsPanel({
         </div>
       )}
 
-      {/* Follow-up recommendations. */}
       {recommendations && recommendations.length > 0 && (
         <div className="psa-section">
-          <h3 className="psa-section-title">Рекомендации к наблюдению</h3>
+          <h3 className="psa-section-title">{copy.recommendations}</h3>
           <div className="psa-recommendations-list">
             {recommendations.map((rec, i) => (
               <div key={i} className="hint-card psa-recommendation-card">
@@ -230,7 +266,7 @@ export function PostSessionAnalyticsPanel({
                       color: PRIORITY_COLORS[rec.priority] ?? '#888',
                     }}
                   >
-                    {PRIORITY_LABELS[rec.priority] ?? rec.priority}
+                    {priorityLabels[rec.priority] ?? rec.priority}
                   </span>
                   <span className="psa-timeframe">{rec.timeframe}</span>
                 </div>
@@ -242,10 +278,9 @@ export function PostSessionAnalyticsPanel({
         </div>
       )}
 
-      {/* Quality assessment. */}
       {quality && (
         <div className="psa-section">
-          <h3 className="psa-section-title">Оценка качества консультации</h3>
+          <h3 className="psa-section-title">{copy.quality}</h3>
           <div className="psa-quality-overview">
             <div className="psa-overall-score">
               <span className="psa-overall-value">{Math.round(quality.overall_score * 100)}</span>
